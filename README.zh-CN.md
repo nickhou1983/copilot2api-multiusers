@@ -63,18 +63,7 @@ docker compose up --build
 
 </details>
 
-首次运行时，Docker 会提示进行 GitHub Device Flow 认证：
-
-```
-🔐 GitHub Authentication Required
-Please visit: https://github.com/login/device
-Enter code: XXXX-XXXX
-
-Waiting for authorization...
-✅ Authentication successful!
-```
-
-服务默认启动在 `http://127.0.0.1:7777`。
+服务默认启动在 `http://127.0.0.1:7777`。打开管理界面 **`http://127.0.0.1:7777/admin/`**，通过浏览器驱动的 Device Flow 新增并认证 GitHub 账号（参见 [多 GitHub 账号](#多-github-账号)）。
 
 ## 安全说明
 

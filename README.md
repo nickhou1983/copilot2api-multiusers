@@ -63,18 +63,7 @@ docker compose up --build
 
 </details>
 
-On first run, Docker prompts GitHub Device Flow authentication:
-
-```
-🔐 GitHub Authentication Required
-Please visit: https://github.com/login/device
-Enter code: XXXX-XXXX
-
-Waiting for authorization...
-✅ Authentication successful!
-```
-
-Server starts on `http://127.0.0.1:7777` by default.
+The server starts on `http://127.0.0.1:7777` by default. Open the admin UI at **`http://127.0.0.1:7777/admin/`** to add and authenticate GitHub accounts via a browser-driven Device Flow (see [Multiple GitHub Accounts](#multiple-github-accounts)).
 
 ## Security
 
