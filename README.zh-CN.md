@@ -69,13 +69,15 @@ docker compose up --build
 
 ⚠️ **本代理仅为本地开发设计。**
 
-- 默认**不**校验 API Key —— 任何请求都会被接受。可通过配置多账号启用按账号的 API Key 校验（参见 [多 GitHub 账号](#多-github-账号)）。
+- 默认即校验 API Key：每个请求都必须携带映射到已配置账号的 Key，否则返回 `401 Unauthorized`（参见 [多 GitHub 账号](#多-github-账号)）。
 - 请勿公网暴露 —— 否则会成为一个开放代理，消耗你的 Copilot 配额。
-- 凭据存储于 `~/.config/copilot2api/credentials.json`。
+- 各账号的凭据存储于 `~/.config/copilot2api/<token_dir>/credentials.json`。
 
 ## 多 GitHub 账号
 
-你可以在 Token 目录下创建 `accounts.json` 文件（默认 `~/.config/copilot2api/accounts.json`，或通过 `COPILOT2API_ACCOUNTS_FILE` 指定），将 API Key 与 GitHub 账号一对一映射：
+代理始终以多账号模式运行，通过 Token 目录下的 `accounts.json` 文件（默认 `~/.config/copilot2api/accounts.json`，或通过 `COPILOT2API_ACCOUNTS_FILE` 指定）将 API Key 与 GitHub 账号一对一映射。**若该文件不存在，首次启动时会自动创建为空配置**（`{"accounts": []}`），因此管理界面开箱即用 —— 直接在界面中新增并认证账号即可（参见 [管理界面](#管理界面)）。
+
+你也可以手动编辑 `accounts.json`：
 
 ```json
 {
@@ -98,11 +100,11 @@ docker compose up --build
 - Anthropic：`x-api-key: <api_key>`
 - Gemini：`x-goog-api-key: <api_key>` 或 `?key=<api_key>`
 
-当存在 `accounts.json` 时，请求**必须**携带有效的 Key，否则返回 `401 Unauthorized`。当该文件不存在时，代理以单账号模式运行，不做 API Key 校验（行为不变）。
+请求**必须**携带有效的 Key，否则返回 `401 Unauthorized`。在尚未配置任何账号之前（例如通过管理界面添加），所有请求都会被拒绝并返回 `401`。
 
 ### 管理界面
 
-在多账号模式下，代理会在 **`http://127.0.0.1:7777/admin/`** 提供一个 Web 界面，无需手动编辑 `accounts.json` 即可维护映射：
+代理会在 **`http://127.0.0.1:7777/admin/`** 提供一个 Web 界面，无需手动编辑 `accounts.json` 即可维护映射：
 
 - 列出账号及其认证状态。
 - 新增账号（id + API Key + 可选 token 目录），并通过浏览器驱动的 GitHub Device Flow 完成认证（显示验证码与验证链接，并轮询直到完成）。
@@ -111,13 +113,7 @@ docker compose up --build
 
 > 注意：OpenAI Chat Completions 流式响应只有在客户端发送 `stream_options.include_usage` 时才会统计 Token 数量；但请求本身始终会被计数。
 
-所有更改都会写回 `accounts.json`，并立即应用到正在运行的代理 —— 无需重启。你可以从一个空文件开始引导：
-
-```json
-{ "accounts": [] }
-```
-
-然后在界面中逐个新增并认证账号。
+所有更改都会写回 `accounts.json`，并立即应用到正在运行的代理 —— 无需重启。
 
 ⚠️ 管理界面可以读取 API Key 并触发 GitHub 认证，请仅在本地使用。若需鉴权，可设置 `COPILOT2API_ADMIN_TOKEN`；此时界面会要求以 `X-Admin-Token` 请求头或 `?admin_token=<token>` 查询参数提供（访问 `http://127.0.0.1:7777/admin/?admin_token=<token>`）。
 

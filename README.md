@@ -69,13 +69,15 @@ The server starts on `http://127.0.0.1:7777` by default. Open the admin UI at **
 
 ⚠️ **This proxy is designed for local development only.**
 
-- Does **not** validate API keys by default — any request is accepted. Enable per-account API key validation by configuring multiple accounts (see [Multiple GitHub Accounts](#multiple-github-accounts)).
+- Validates API keys by default: every request must present a key mapping to a configured account, otherwise it gets `401 Unauthorized` (see [Multiple GitHub Accounts](#multiple-github-accounts)).
 - Do not expose publicly — it becomes an open proxy consuming your Copilot quota
-- Credentials are stored in `~/.config/copilot2api/credentials.json`
+- Each account's credentials are stored under `~/.config/copilot2api/<token_dir>/credentials.json`
 
 ## Multiple GitHub Accounts
 
-You can map API keys to GitHub accounts 1:1 by creating an `accounts.json` file in your token directory (`~/.config/copilot2api/accounts.json` by default, or set `COPILOT2API_ACCOUNTS_FILE`):
+The proxy always runs in multi-account mode and maps API keys to GitHub accounts 1:1 via an `accounts.json` file in your token directory (`~/.config/copilot2api/accounts.json` by default, or set `COPILOT2API_ACCOUNTS_FILE`). **If the file does not exist it is created automatically as an empty config** (`{"accounts": []}`) on first start, so the admin UI is available out of the box — add and authenticate your accounts there (see [Admin UI](#admin-ui)).
+
+You can also edit `accounts.json` by hand:
 
 ```json
 {
@@ -98,11 +100,11 @@ Clients select an account by sending its `api_key`:
 - Anthropic: `x-api-key: <api_key>`
 - Gemini: `x-goog-api-key: <api_key>` or `?key=<api_key>`
 
-When `accounts.json` is present, requests **must** present a valid key or receive `401 Unauthorized`. When the file is absent, the proxy runs in single-account mode with no API key validation (unchanged behavior).
+Requests **must** present a valid key or receive `401 Unauthorized`. Until at least one account is configured (e.g. via the admin UI), every request is rejected with `401`.
 
 ### Admin UI
 
-In multi-account mode the proxy serves a web UI at **`http://127.0.0.1:7777/admin/`** to maintain the mapping without editing `accounts.json` by hand:
+The proxy serves a web UI at **`http://127.0.0.1:7777/admin/`** to maintain the mapping without editing `accounts.json` by hand:
 
 - List accounts and their authentication status.
 - Add an account (id + API key + optional token dir) and authenticate it via a browser-driven GitHub Device Flow (shows the code + verification link, polls until done).
@@ -111,13 +113,7 @@ In multi-account mode the proxy serves a web UI at **`http://127.0.0.1:7777/admi
 
 > Note: OpenAI Chat Completions streaming only contributes token counts when the client sends `stream_options.include_usage`; the request itself is always counted.
 
-All changes are written back to `accounts.json` and applied to the running proxy immediately — no restart needed. You can bootstrap from an empty file:
-
-```json
-{ "accounts": [] }
-```
-
-then add and authenticate every account from the UI.
+All changes are written back to `accounts.json` and applied to the running proxy immediately — no restart needed.
 
 ⚠️ The admin UI can read API keys and trigger GitHub authentication. Keep it local. To require a token, set `COPILOT2API_ADMIN_TOKEN`; the UI then expects it as an `X-Admin-Token` header or `?admin_token=<token>` query parameter (open `http://127.0.0.1:7777/admin/?admin_token=<token>`).
 

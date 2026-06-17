@@ -75,12 +75,12 @@ func buildAccount(ctx context.Context, id, apiKey, tokenDirRaw, tokenDirAbs stri
 	return acct, nil
 }
 
-// buildRegistry loads the accounts config (if any) and builds an account
-// registry. When no config file exists it falls back to legacy single-account
-// mode using baseTokenDir directly (no API key validation). In multi-account
-// mode it also returns an admin Manager for maintaining the mapping at runtime.
-// The returned stats.Store accumulates token usage and must be closed by the
-// caller to flush counters to disk.
+// buildRegistry loads the accounts config and builds an account registry. The
+// proxy always runs in multi-account mode: when no config file exists it is
+// auto-created as an empty config so the admin UI is available out of the box.
+// It returns an admin Manager for maintaining the mapping at runtime. The
+// returned stats.Store accumulates token usage and must be closed by the caller
+// to flush counters to disk.
 func buildRegistry(ctx context.Context, baseTokenDir string, transport *http.Transport) (*accounts.Registry, *accounts.Manager, *stats.Store, error) {
 	statsStore := stats.NewStore(filepath.Join(baseTokenDir, "stats.json"))
 	if err := statsStore.Load(); err != nil {
@@ -94,14 +94,14 @@ func buildRegistry(ctx context.Context, baseTokenDir string, transport *http.Tra
 		return nil, nil, nil, err
 	}
 
-	// Legacy single-account mode (no admin UI).
+	// No config file yet: bootstrap an empty one and enter multi-account mode so
+	// the admin UI is available out of the box to add and authenticate accounts.
 	if cfg == nil {
-		acct, err := buildAccount(ctx, "", "", "", baseTokenDir, transport, statsStore.Recorder(""))
-		if err != nil {
-			return nil, nil, nil, err
+		cfg = &accounts.Config{Accounts: []accounts.AccountConfig{}}
+		if err := accounts.SaveConfig(cfgPath, cfg); err != nil {
+			return nil, nil, nil, fmt.Errorf("failed to bootstrap accounts config: %w", err)
 		}
-		slog.Info("running in single-account mode (no accounts config found)", "config_path", cfgPath)
-		return accounts.NewLegacyRegistry(acct), nil, statsStore, nil
+		slog.Info("no accounts config found; created an empty one and enabled the admin UI", "config_path", cfgPath)
 	}
 
 	slog.Info("running in multi-account mode", "config_path", cfgPath, "accounts", len(cfg.Accounts))

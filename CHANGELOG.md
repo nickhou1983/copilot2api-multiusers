@@ -12,7 +12,7 @@
 
 ### Compatibility
 
-- When an `accounts.json` config is present, requests must present a valid API key or receive `401 Unauthorized`. When no config file exists, behavior is unchanged: a single account serves all requests with no API key validation.
+- The proxy now always runs in multi-account mode: when no `accounts.json` exists at startup it is auto-created as an empty config (`{"accounts": []}`) and the admin UI is enabled out of the box. Requests must present a valid API key or receive `401 Unauthorized`; until at least one account is configured (e.g. via the admin UI), every request is rejected with `401`. This replaces the previous single-account, no-validation fallback that ran when the config file was absent.
 
 ### Docs
 
