@@ -1,0 +1,344 @@
+# copilot2api
+
+[English](README.md) | [简体中文](README.zh-CN.md)
+
+一个轻量级的 Go 代理，将 GitHub Copilot 暴露为兼容 OpenAI、Anthropic、Gemini 以及 AmpCode 的 API 端点。
+
+## 功能特性
+
+- **兼容 OpenAI API**：`/v1/chat/completions`、`/v1/models`、`/v1/embeddings`、`/v1/responses`
+- **支持 Embeddings**：原生兼容 OpenAI 的 `/v1/embeddings` 端点
+- **兼容 Anthropic API**：`/v1/messages`
+- **兼容 Gemini API**：`/v1beta/models`、`/v1beta/models/{model}:generateContent`、`/v1beta/models/{model}:streamGenerateContent`、`/v1beta/models/{model}:countTokens`
+- **兼容 AmpCode**：`/amp/v1/*` 路由用于对话，`/api/provider/*` 用于特定 provider 的调用，管理类请求反向代理到 `ampcode.com`
+- **流式支持**：OpenAI 与 Anthropic 格式均支持完整的 SSE 流式输出
+- **Anthropic 智能路由**：模型原生支持时使用 `/v1/messages`，否则通过 `/responses` 或 `/chat/completions` 转发
+- **多账号支持**：将 API Key 与 GitHub 账号一对一映射，各账号使用独立的凭据存储（详见 [多 GitHub 账号](#多-github-账号)）
+- **Web 管理界面**：在 `/admin/` 管理账号并查看 Token 使用统计（多账号模式）
+- **自动认证**：GitHub Device Flow OAuth，自动刷新 Token
+- **用量监控**：内置 `/usage` 端点用于配额追踪
+- **模型缓存**：`/v1/models` 与 Anthropic 模型能力查询结果缓存 5 分钟
+
+## 快速开始
+
+### Docker
+
+```bash
+docker run -it --rm \
+  -p 127.0.0.1:7777:7777 \
+  -v ~/.config/copilot2api:/root/.config/copilot2api \
+  ghcr.io/whtsky/copilot2api:latest
+```
+
+挂载卷可在容器重启后保留你的 GitHub 凭据。示例仅在 `127.0.0.1` 上发布端口，使代理默认只在本地可用。
+
+<details>
+<summary>Docker Compose</summary>
+
+```yaml
+services:
+  copilot2api:
+    image: ghcr.io/whtsky/copilot2api:latest
+    ports:
+      - "127.0.0.1:7777:7777"
+    volumes:
+      - ${HOME}/.config/copilot2api:/root/.config/copilot2api
+```
+
+启动：
+
+```bash
+docker compose up
+```
+
+</details>
+
+### 下载发行版二进制文件
+
+```bash
+# 示例：macOS Apple Silicon
+curl -L -o copilot2api \
+  https://github.com/whtsky/copilot2api/releases/latest/download/copilot2api-darwin-arm64
+
+# 示例：Linux x64
+# curl -L -o copilot2api \
+#   https://github.com/whtsky/copilot2api/releases/latest/download/copilot2api-linux-amd64
+
+chmod +x copilot2api
+./copilot2api
+```
+
+请从 [GitHub Releases](https://github.com/whtsky/copilot2api/releases/latest) 下载与你平台匹配的文件。发行的二进制文件命名形如 `copilot2api-linux-amd64`、`copilot2api-linux-arm64`、`copilot2api-darwin-amd64`、`copilot2api-darwin-arm64`、`copilot2api-windows-amd64.exe`、`copilot2api-windows-arm64.exe`。
+
+首次运行时，Docker 与下载的二进制文件都会提示进行 GitHub Device Flow 认证：
+
+```
+🔐 GitHub Authentication Required
+Please visit: https://github.com/login/device
+Enter code: XXXX-XXXX
+
+Waiting for authorization...
+✅ Authentication successful!
+```
+
+服务默认启动在 `http://127.0.0.1:7777`。
+
+## 安全说明
+
+⚠️ **本代理仅为本地开发设计。**
+
+- 默认**不**校验 API Key —— 任何请求都会被接受。可通过配置多账号启用按账号的 API Key 校验（参见 [多 GitHub 账号](#多-github-账号)）。
+- 请勿公网暴露 —— 否则会成为一个开放代理，消耗你的 Copilot 配额。
+- 凭据存储于 `~/.config/copilot2api/credentials.json`。
+
+## 多 GitHub 账号
+
+你可以在 Token 目录下创建 `accounts.json` 文件（默认 `~/.config/copilot2api/accounts.json`，或通过 `COPILOT2API_ACCOUNTS_FILE` 指定），将 API Key 与 GitHub 账号一对一映射：
+
+```json
+{
+  "accounts": [
+    { "id": "alice", "api_key": "sk-alice-...", "token_dir": "alice" },
+    { "id": "bob",   "api_key": "sk-bob-...",   "token_dir": "bob" }
+  ]
+}
+```
+
+- `id` —— 唯一的账号标识（用于日志；默认作为 Token 子目录名）。
+- `api_key` —— 客户端需提供的 Key，各账号之间必须唯一。
+- `token_dir` —— 该账号 `credentials.json` 的存放位置。相对路径基于基础 Token 目录解析；默认为 `id`。
+
+启动时，代理会对每个尚无存储 Token 的账号**逐个**执行一次 GitHub Device Flow。每个账号拥有独立的凭据存储与模型缓存，因此 Token 刷新与基于能力的路由相互独立。
+
+客户端通过发送对应的 `api_key` 选择账号：
+
+- OpenAI：`Authorization: Bearer <api_key>`
+- Anthropic：`x-api-key: <api_key>`
+- Gemini：`x-goog-api-key: <api_key>` 或 `?key=<api_key>`
+
+当存在 `accounts.json` 时，请求**必须**携带有效的 Key，否则返回 `401 Unauthorized`。当该文件不存在时，代理以单账号模式运行，不做 API Key 校验（行为不变）。
+
+### 管理界面
+
+在多账号模式下，代理会在 **`http://127.0.0.1:7777/admin/`** 提供一个 Web 界面，无需手动编辑 `accounts.json` 即可维护映射：
+
+- 列出账号及其认证状态。
+- 新增账号（id + API Key + 可选 token 目录），并通过浏览器驱动的 GitHub Device Flow 完成认证（显示验证码与验证链接，并轮询直到完成）。
+- 轮换账号的 API Key，或删除账号。
+- **Stats 标签页**：查看按账号、按模型的 Token 用量 —— 输入、输出、缓存命中（prompt-cache）、缓存写入以及请求总数 —— 覆盖所有 OpenAI、Anthropic、Gemini 端点。用量数据持久化到 `<token-dir>/stats.json`，重启后仍保留（由 `GET /admin/api/stats` 提供，`DELETE /admin/api/stats/{id}` 可重置单个账号）。
+
+> 注意：OpenAI Chat Completions 流式响应只有在客户端发送 `stream_options.include_usage` 时才会统计 Token 数量；但请求本身始终会被计数。
+
+所有更改都会写回 `accounts.json`，并立即应用到正在运行的代理 —— 无需重启。你可以从一个空文件开始引导：
+
+```json
+{ "accounts": [] }
+```
+
+然后在界面中逐个新增并认证账号。
+
+⚠️ 管理界面可以读取 API Key 并触发 GitHub 认证，请仅在本地使用。若需鉴权，可设置 `COPILOT2API_ADMIN_TOKEN`；此时界面会要求以 `X-Admin-Token` 请求头或 `?admin_token=<token>` 查询参数提供（访问 `http://127.0.0.1:7777/admin/?admin_token=<token>`）。
+
+## 配合 Claude Code 使用
+
+添加到 `~/.claude/settings.json`：
+
+```json
+{
+  "env": {
+    "ANTHROPIC_BASE_URL": "http://127.0.0.1:7777",
+    "ANTHROPIC_API_KEY": "dummy",
+    "ANTHROPIC_MODEL": "claude-opus-4.6",
+    "ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4.5",
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"
+  },
+  "permissions": {
+    "deny": [
+      "WebSearch"
+    ]
+  }
+}
+```
+
+### 1M 上下文窗口
+
+copilot2api 支持 Claude 的 1M 上下文模型。当 Claude Code 发送 `anthropic-beta: context-1m-...` 请求头时，代理会自动在模型 ID 后追加 `-1m`（例如 `claude-opus-4.6` → `claude-opus-4.6-1m`），让 Copilot 路由到 1M 变体。
+
+使用时，在 Claude Code 中通过 `/model` 命令选择 1M 模型变体（如 `Opus (1M)`）。否则 Claude Code 默认使用标准的 200K 上下文窗口。
+
+## 配合 Codex 使用
+
+添加到 `~/.codex/config.toml`：
+
+```toml
+model = "gpt-5.3-codex"
+model_provider = "copilot2api"
+model_reasoning_effort = "high"
+web_search = "disabled"
+
+[model_providers.copilot2api]
+name = "copilot2api"
+base_url = "http://127.0.0.1:7777/v1"
+wire_api = "responses"
+api_key = "dummy"
+```
+
+## 配合 Gemini CLI 使用
+
+添加到 `~/.gemini/.env`：
+
+```env
+GOOGLE_GEMINI_BASE_URL=http://127.0.0.1:7777
+GEMINI_API_KEY=dummy
+GEMINI_MODEL=claude-opus-4.6-1m
+```
+
+## 配合 AmpCode 使用
+
+设置 `AMP_URL` 环境变量指向 copilot2api：
+
+```bash
+AMP_URL=http://127.0.0.1:7777/amp amp
+```
+
+或添加到 `~/.config/amp/settings.json`：
+
+```json
+{
+  "amp.url": "http://127.0.0.1:7777/amp"
+}
+```
+
+对话补全、工具调用和图片输入都会经由 Copilot API。登录与管理类路由（threads、telemetry）会被代理到 `ampcode.com` —— 需要一个免费的 amp 账号用于认证。
+
+<details>
+<summary>使用 curl</summary>
+
+```bash
+# OpenAI 对话补全
+curl http://localhost:7777/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model":"gpt-5.3-codex","messages":[{"role":"user","content":"Hello!"}]}'
+
+# Anthropic 消息
+curl http://localhost:7777/v1/messages \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: dummy" \
+  -d '{"model":"claude-sonnet-4.6","messages":[{"role":"user","content":"Hello!"}],"max_tokens":100}'
+
+# 列出模型
+curl http://localhost:7777/v1/models
+
+# 查看用量/配额
+curl http://localhost:7777/usage
+```
+
+</details>
+
+<details>
+<summary>使用 SDK</summary>
+
+### OpenAI Python SDK
+
+```python
+import openai
+
+client = openai.OpenAI(
+    api_key="dummy",
+    base_url="http://127.0.0.1:7777/v1"
+)
+
+response = client.chat.completions.create(
+    model="gpt-5.3-codex",
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+```
+
+### Anthropic Python SDK
+
+```python
+import anthropic
+
+client = anthropic.Anthropic(
+    api_key="dummy",
+    base_url="http://127.0.0.1:7777"
+)
+
+message = client.messages.create(
+    model="claude-sonnet-4.6",
+    max_tokens=1024,
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+```
+
+</details>
+
+## API 端点
+
+| 端点 | 方法 | 说明 |
+|----------|--------|-------------|
+| `/v1/chat/completions` | POST | OpenAI Chat Completions（流式与非流式） |
+| `/v1/responses` | POST | OpenAI Responses API |
+| `/v1/models` | GET | 列出可用模型（缓存 5 分钟） |
+| `/v1/embeddings` | POST | 生成 Embeddings（支持字符串或数组输入） |
+| `/v1/messages` | POST | Anthropic Messages API（流式与非流式） |
+| `/v1beta/models` | GET | 列出 Gemini 兼容模型 |
+| `/v1beta/models/{model}:generateContent` | POST | Gemini Generate Content |
+| `/v1beta/models/{model}:streamGenerateContent` | POST | Gemini Generate Content 流式 SSE |
+| `/v1beta/models/{model}:countTokens` | POST | Gemini Token 计数估算 |
+| `/amp/v1/chat/completions` | POST | AmpCode 对话补全（经由 Copilot API） |
+| `/amp/v1/models` | GET | AmpCode 模型列表 |
+| `/api/provider/*` | POST | AmpCode 特定 provider 路由 |
+| `/api/*` | ANY | AmpCode 管理类反向代理到 ampcode.com |
+| `/usage` | GET | Copilot 用量与配额信息 |
+| `/admin/` | GET | Web 管理界面（仅多账号模式） |
+| `/admin/api/stats` | GET | 按账号 / 按模型的 Token 用量统计 |
+| `/admin/api/stats/{id}` | DELETE | 重置单个账号的用量统计 |
+
+## 配置
+
+### 命令行参数
+
+```
+./copilot2api [options]
+
+  -host string       服务监听地址（默认 "127.0.0.1"）
+  -port int          服务端口（默认 7777）
+  -token-dir string  Token 存储目录（默认 ~/.config/copilot2api）
+  -debug             开启调试日志
+  -version           显示版本并退出
+```
+
+### 环境变量
+
+当未提供命令行参数时，环境变量将作为默认值：
+
+| 变量 | 说明 | 默认值 |
+|----------|-------------|---------|
+| `COPILOT2API_HOST` | 服务监听地址 | `127.0.0.1` |
+| `COPILOT2API_PORT` | 服务端口 | `7777` |
+| `COPILOT2API_TOKEN_DIR` | Token 存储目录 | `~/.config/copilot2api` |
+| `COPILOT2API_ACCOUNTS_FILE` | 多账号配置文件路径（参见 [多 GitHub 账号](#多-github-账号)） | `<token-dir>/accounts.json` |
+| `COPILOT2API_ADMIN_TOKEN` | 若设置，`/admin/` 界面将要求此 Token（`X-Admin-Token` 请求头或 `?admin_token=`） | _（未设置，无鉴权）_ |
+| `COPILOT2API_DEBUG` | 开启调试日志（`true`/`false`、`1`/`0`） | `false` |
+
+命令行参数优先级高于环境变量。
+
+## 工作原理
+
+1. 通过 Device Flow OAuth 与 GitHub 认证
+2. 将 GitHub Token 换取 Copilot API Token（自动刷新）
+3. 将 OpenAI 格式请求直接转发到 Copilot API
+4. 根据模型能力路由 Anthropic Messages 请求（原生 `/v1/messages`、转换为 `/responses` 或转换为 `/chat/completions`）
+5. 自动从 Token 检测 API 端点（个人版/商业版/企业版）
+
+## 开发
+
+```bash
+go test ./...              # 运行测试
+go build -o copilot2api .  # 构建
+```
+
+## 许可证
+
+MIT

@@ -14,6 +14,10 @@
 
 - When an `accounts.json` config is present, requests must present a valid API key or receive `401 Unauthorized`. When no config file exists, behavior is unchanged: a single account serves all requests with no API key validation.
 
+### Docs
+
+- Document multi-account, admin UI, and token-usage stats in the README, and add a Simplified Chinese translation (`README.zh-CN.md`) with language switch links.
+
 ## [0.3.1] - 2026-04-26
 
 ### Bug Fixes

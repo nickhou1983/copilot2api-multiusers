@@ -1,5 +1,7 @@
 # copilot2api
 
+[English](README.md) | [简体中文](README.zh-CN.md)
+
 A lightweight Go proxy that exposes GitHub Copilot as OpenAI-compatible, Anthropic-compatible, Gemini-compatible, and AmpCode-compatible API endpoints.
 
 ## Features
@@ -11,6 +13,8 @@ A lightweight Go proxy that exposes GitHub Copilot as OpenAI-compatible, Anthrop
 - **AmpCode Compatible**: `/amp/v1/*` routes for chat, `/api/provider/*` for provider-specific calls, management proxied to `ampcode.com`
 - **Streaming Support**: Full SSE streaming for both OpenAI and Anthropic formats
 - **Anthropic Routing**: Uses native `/v1/messages` when the model supports it, otherwise routes via `/responses` or `/chat/completions`
+- **Multi-Account**: Map API keys to GitHub accounts 1:1 with isolated credential stores (see [Multiple GitHub Accounts](#multiple-github-accounts))
+- **Web Admin UI**: Manage accounts and view token-usage statistics at `/admin/` (multi-account mode)
 - **Auto Authentication**: GitHub Device Flow OAuth with automatic token refresh
 - **Usage Monitoring**: Built-in `/usage` endpoint for quota tracking
 - **Models Cache**: 5-minute cache for `/v1/models` and Anthropic model capability lookups
@@ -121,6 +125,9 @@ In multi-account mode the proxy serves a web UI at **`http://127.0.0.1:7777/admi
 - List accounts and their authentication status.
 - Add an account (id + API key + optional token dir) and authenticate it via a browser-driven GitHub Device Flow (shows the code + verification link, polls until done).
 - Rotate an account's API key, or delete an account.
+- **Stats tab**: view per-account, per-model token counts — input, output, cached (prompt-cache hits), cache-write, and request totals — across all OpenAI, Anthropic, and Gemini endpoints. Usage is persisted to `<token-dir>/stats.json` and survives restarts (backed by `GET /admin/api/stats`, with `DELETE /admin/api/stats/{id}` to reset one account).
+
+> Note: OpenAI Chat Completions streaming only contributes token counts when the client sends `stream_options.include_usage`; the request itself is always counted.
 
 All changes are written back to `accounts.json` and applied to the running proxy immediately — no restart needed. You can bootstrap from an empty file:
 
@@ -284,6 +291,9 @@ message = client.messages.create(
 | `/api/provider/*` | POST | AmpCode provider-specific routes |
 | `/api/*` | ANY | AmpCode management proxy to ampcode.com |
 | `/usage` | GET | Copilot usage and quota info |
+| `/admin/` | GET | Web admin UI (multi-account mode only) |
+| `/admin/api/stats` | GET | Per-account / per-model token-usage statistics |
+| `/admin/api/stats/{id}` | DELETE | Reset usage statistics for one account |
 
 ## Configuration
 
