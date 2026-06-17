@@ -83,9 +83,54 @@ Server starts on `http://127.0.0.1:7777` by default.
 
 ⚠️ **This proxy is designed for local development only.**
 
-- Does **not** implement API key validation — any request is accepted
+- Does **not** validate API keys by default — any request is accepted. Enable per-account API key validation by configuring multiple accounts (see [Multiple GitHub Accounts](#multiple-github-accounts)).
 - Do not expose publicly — it becomes an open proxy consuming your Copilot quota
 - Credentials are stored in `~/.config/copilot2api/credentials.json`
+
+## Multiple GitHub Accounts
+
+You can map API keys to GitHub accounts 1:1 by creating an `accounts.json` file in your token directory (`~/.config/copilot2api/accounts.json` by default, or set `COPILOT2API_ACCOUNTS_FILE`):
+
+```json
+{
+  "accounts": [
+    { "id": "alice", "api_key": "sk-alice-...", "token_dir": "alice" },
+    { "id": "bob",   "api_key": "sk-bob-...",   "token_dir": "bob" }
+  ]
+}
+```
+
+- `id` — unique account identifier (used in logs; defaults the token sub-directory name).
+- `api_key` — the key clients must present. Must be unique across accounts.
+- `token_dir` — where this account's `credentials.json` is stored. Relative paths resolve under the base token directory; defaults to `id`.
+
+On startup the proxy runs the GitHub Device Flow once **per account** (sequentially) for any account that has no stored token. Each account keeps an isolated credential store and its own models cache, so token refresh and capability-based routing stay independent.
+
+Clients select an account by sending its `api_key`:
+
+- OpenAI: `Authorization: Bearer <api_key>`
+- Anthropic: `x-api-key: <api_key>`
+- Gemini: `x-goog-api-key: <api_key>` or `?key=<api_key>`
+
+When `accounts.json` is present, requests **must** present a valid key or receive `401 Unauthorized`. When the file is absent, the proxy runs in single-account mode with no API key validation (unchanged behavior).
+
+### Admin UI
+
+In multi-account mode the proxy serves a web UI at **`http://127.0.0.1:7777/admin/`** to maintain the mapping without editing `accounts.json` by hand:
+
+- List accounts and their authentication status.
+- Add an account (id + API key + optional token dir) and authenticate it via a browser-driven GitHub Device Flow (shows the code + verification link, polls until done).
+- Rotate an account's API key, or delete an account.
+
+All changes are written back to `accounts.json` and applied to the running proxy immediately — no restart needed. You can bootstrap from an empty file:
+
+```json
+{ "accounts": [] }
+```
+
+then add and authenticate every account from the UI.
+
+⚠️ The admin UI can read API keys and trigger GitHub authentication. Keep it local. To require a token, set `COPILOT2API_ADMIN_TOKEN`; the UI then expects it as an `X-Admin-Token` header or `?admin_token=<token>` query parameter (open `http://127.0.0.1:7777/admin/?admin_token=<token>`).
 
 ## Usage with Claude Code
 
@@ -263,6 +308,8 @@ Environment variables are used as defaults when flags are not provided:
 | `COPILOT2API_HOST` | Server host | `127.0.0.1` |
 | `COPILOT2API_PORT` | Server port | `7777` |
 | `COPILOT2API_TOKEN_DIR` | Token storage directory | `~/.config/copilot2api` |
+| `COPILOT2API_ACCOUNTS_FILE` | Multi-account config file path (see [Multiple GitHub Accounts](#multiple-github-accounts)) | `<token-dir>/accounts.json` |
+| `COPILOT2API_ADMIN_TOKEN` | If set, the `/admin/` UI requires this token (`X-Admin-Token` header or `?admin_token=`) | _(unset, no auth)_ |
 | `COPILOT2API_DEBUG` | Enable debug logging (`true`/`false`, `1`/`0`) | `false` |
 
 CLI flags take precedence over environment variables.

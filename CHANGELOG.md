@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+### Features
+
+- Add multi-account support: map API keys to GitHub accounts 1:1 via an `accounts.json` config file. Each account uses an isolated credential store and its own models cache, so token refresh and capability-based routing stay per-account. Configure the file path with `COPILOT2API_ACCOUNTS_FILE` (defaults to `<token-dir>/accounts.json`).
+- API keys are extracted from `Authorization: Bearer`, `x-api-key`, `x-goog-api-key`, or the `?key=` query parameter, covering OpenAI, Anthropic, and Gemini clients.
+- Add a web admin UI at `/admin/` (multi-account mode only) to maintain the API key ↔ GitHub account mapping: list, add, rotate keys, and delete accounts, plus authenticate accounts via a browser-driven GitHub Device Flow. Changes are saved to `accounts.json` and applied live without a restart. Optionally protect it with `COPILOT2API_ADMIN_TOKEN` (sent as `X-Admin-Token` header or `?admin_token=`).
+- Bootstrap multi-account mode from an empty `accounts.json` (`{"accounts":[]}`) and populate it entirely through the admin UI.
+- Add a token-usage statistics page to the admin UI (new "Stats" tab) showing per-account, per-model token counts — input, output, cached (prompt-cache hits), cache-write, and request totals — across all OpenAI, Anthropic, and Gemini endpoints. Usage is persisted to `<token-dir>/stats.json` and survives restarts. Backed by a new `GET /admin/api/stats` endpoint, with `DELETE /admin/api/stats/{id}` to reset one account. Note: OpenAI Chat Completions streaming only contributes token counts when the client sends `stream_options.include_usage`; the request is always counted.
+
+### Compatibility
+
+- When an `accounts.json` config is present, requests must present a valid API key or receive `401 Unauthorized`. When no config file exists, behavior is unchanged: a single account serves all requests with no API key validation.
+
 ## [0.3.1] - 2026-04-26
 
 ### Bug Fixes

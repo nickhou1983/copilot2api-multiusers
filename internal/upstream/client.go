@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/whtsky/copilot2api/internal/copilot"
+	"github.com/whtsky/copilot2api/internal/stats"
 )
 
 // TokenProvider abstracts the auth.Client methods needed by Client.
@@ -156,6 +157,9 @@ func (c *Client) Do(ctx context.Context, r Request) (*http.Response, []byte, err
 	}
 
 	if r.Stream {
+		if rec := stats.FromContext(ctx); rec != nil {
+			resp.Body = stats.NewUsageScanner(rec, r.Endpoint, resp.Body)
+		}
 		return resp, nil, nil
 	}
 	defer resp.Body.Close()
@@ -167,5 +171,12 @@ func (c *Client) Do(ctx context.Context, r Request) (*http.Response, []byte, err
 	if len(respData) > maxRespBody {
 		return nil, nil, fmt.Errorf("upstream response too large (exceeds %d bytes)", maxRespBody)
 	}
+
+	if rec := stats.FromContext(ctx); rec != nil {
+		if model, u, ok := stats.ParseUsage(r.Endpoint, respData); ok {
+			rec.Record(model, u)
+		}
+	}
+
 	return nil, respData, nil
 }

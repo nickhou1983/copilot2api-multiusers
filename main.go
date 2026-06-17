@@ -15,12 +15,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/whtsky/copilot2api/anthropic"
-	"github.com/whtsky/copilot2api/auth"
-	"github.com/whtsky/copilot2api/gemini"
-	"github.com/whtsky/copilot2api/internal/models"
+	"github.com/whtsky/copilot2api/internal/accounts"
 	"github.com/whtsky/copilot2api/internal/upstream"
-	"github.com/whtsky/copilot2api/proxy"
 )
 
 var version = "dev"
@@ -93,61 +89,60 @@ func main() {
 		*tokenDir = filepath.Join(homeDir, ".config", "copilot2api")
 	}
 
-	// Initialize auth client
-	authClient, err := auth.NewClient(*tokenDir)
-	if err != nil {
-		slog.Error("failed to initialize auth client", "error", err)
-		os.Exit(1)
-	}
-
-	// Ensure we're authenticated before starting the server. This runs the
-	// interactive device flow if needed and verifies a valid Copilot token.
-	ctx := context.Background()
-	if err := authClient.EnsureAuthenticated(ctx); err != nil {
-		slog.Error("authentication failed", "error", err)
-		os.Exit(1)
-	}
-
 	// Shared HTTP transport for all upstream requests
 	transport := upstream.NewTransport()
 
-	// Shared models cache — a single fetch populates both raw JSON (for
-	// proxying GET /v1/models) and parsed model info (for capability detection).
-	upstreamClient := upstream.NewClient(authClient, transport)
-	modelsCache := models.NewCache(upstreamClient, 5*time.Minute)
+	// Build the account registry. In multi-account mode each API key maps to a
+	// GitHub account with its own isolated auth/token and models caches; in
+	// legacy single-account mode a single account serves all requests. This
+	// runs the interactive device flow per account as needed.
+	ctx := context.Background()
+	registry, adminManager, statsStore, err := buildRegistry(ctx, *tokenDir, transport)
+	if err != nil {
+		slog.Error("failed to initialize accounts", "error", err)
+		os.Exit(1)
+	}
+	defer statsStore.Close()
 
-	// Initialize proxy handler
-	proxyHandler := proxy.NewHandler(authClient, transport, modelsCache)
-
-	// Initialize Anthropic handler
-	anthropicHandler := anthropic.NewHandler(authClient, transport, modelsCache)
-
-	// Initialize Gemini handler
-	geminiHandler := gemini.NewHandler(authClient, transport, modelsCache)
+	// Per-protocol dispatchers resolve the account from the request's API key
+	// and delegate to that account's handler.
+	openaiHandler := registry.Handler(accounts.ProtoOpenAI)
+	anthropicHandler := registry.Handler(accounts.ProtoAnthropic)
+	geminiHandler := registry.Handler(accounts.ProtoGemini)
+	usageHandler := registry.Handler(accounts.ProtoUsage)
 
 	// Set up routes
 	mux := http.NewServeMux()
 
 	// Core routes
-	mux.Handle("/v1/chat/completions", proxyHandler)
-	mux.Handle("/v1/models", proxyHandler)
-	mux.Handle("/v1/embeddings", proxyHandler)
-	mux.Handle("/v1/responses", proxyHandler)
+	mux.Handle("/v1/chat/completions", openaiHandler)
+	mux.Handle("/v1/models", openaiHandler)
+	mux.Handle("/v1/embeddings", openaiHandler)
+	mux.Handle("/v1/responses", openaiHandler)
 	mux.Handle("/v1/messages", anthropicHandler)
 	mux.Handle("/v1beta/models", geminiHandler)
 	mux.Handle("/v1beta/models/", geminiHandler)
-	mux.HandleFunc("/usage", proxyHandler.HandleUsage)
+	mux.Handle("/usage", usageHandler)
+
+	// Admin UI for maintaining the API key ↔ GitHub account mapping (multi-account mode only).
+	if adminManager != nil {
+		mux.Handle("/admin/", adminManager.Handler())
+		mux.HandleFunc("/admin", func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, "/admin/", http.StatusFound)
+		})
+		slog.Info("admin UI enabled", "path", "/admin/", "token_protected", os.Getenv("COPILOT2API_ADMIN_TOKEN") != "")
+	}
 
 	// AmpCode routes — strip /amp prefix so existing handlers see /v1/...
-	mux.Handle("/amp/v1/chat/completions", http.StripPrefix("/amp", proxyHandler))
-	mux.Handle("/amp/v1/models", http.StripPrefix("/amp", proxyHandler))
-	mux.Handle("/amp/v1/responses", http.StripPrefix("/amp", proxyHandler))
-	mux.Handle("/amp/v1/embeddings", http.StripPrefix("/amp", proxyHandler))
+	mux.Handle("/amp/v1/chat/completions", http.StripPrefix("/amp", openaiHandler))
+	mux.Handle("/amp/v1/models", http.StripPrefix("/amp", openaiHandler))
+	mux.Handle("/amp/v1/responses", http.StripPrefix("/amp", openaiHandler))
+	mux.Handle("/amp/v1/embeddings", http.StripPrefix("/amp", openaiHandler))
 
 	// AmpCode provider-specific routes
-	mux.Handle("/api/provider/openai/v1/chat/completions", http.StripPrefix("/api/provider/openai", proxyHandler))
-	mux.Handle("/api/provider/openai/v1/responses", http.StripPrefix("/api/provider/openai", proxyHandler))
-	mux.Handle("/api/provider/openai/v1/models", http.StripPrefix("/api/provider/openai", proxyHandler))
+	mux.Handle("/api/provider/openai/v1/chat/completions", http.StripPrefix("/api/provider/openai", openaiHandler))
+	mux.Handle("/api/provider/openai/v1/responses", http.StripPrefix("/api/provider/openai", openaiHandler))
+	mux.Handle("/api/provider/openai/v1/models", http.StripPrefix("/api/provider/openai", openaiHandler))
 	mux.Handle("/api/provider/anthropic/v1/messages", http.StripPrefix("/api/provider/anthropic", anthropicHandler))
 	mux.Handle("/api/provider/google/v1beta/models", http.StripPrefix("/api/provider/google", geminiHandler))
 	mux.Handle("/api/provider/google/v1beta/models/", http.StripPrefix("/api/provider/google", geminiHandler))
@@ -167,13 +162,6 @@ func main() {
 		}
 		http.Redirect(w, r, target, http.StatusFound)
 	})
-
-	// Pre-warm models cache to avoid cold-cache latency on first request
-	go func() {
-		slog.Debug("warming models cache")
-		modelsCache.Warm(ctx)
-		slog.Info("models cache warmed")
-	}()
 
 	// Create server
 	server := &http.Server{
