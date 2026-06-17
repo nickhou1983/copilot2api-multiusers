@@ -23,14 +23,24 @@ A lightweight Go proxy that exposes GitHub Copilot as OpenAI-compatible, Anthrop
 
 ### Docker
 
+Build the image from source (this fork includes multi-account and usage-stats features not in the upstream image):
+
+```bash
+docker build -t copilot2api-multiusers .
+```
+
+Run it:
+
 ```bash
 docker run -it --rm \
   -p 127.0.0.1:7777:7777 \
   -v ~/.config/copilot2api:/root/.config/copilot2api \
-  ghcr.io/whtsky/copilot2api:latest
+  copilot2api-multiusers
 ```
 
 The volume mount persists your GitHub credentials across container restarts. The examples publish the port on `127.0.0.1` only so the proxy stays local by default.
+
+> Tip: when running the admin UI / multi-account mode, you connect from your host browser to `http://127.0.0.1:7777/admin/`. The container listens on `0.0.0.0:7777` internally (set via `COPILOT2API_HOST`), so the published `127.0.0.1` port stays local-only.
 
 <details>
 <summary>Docker Compose</summary>
@@ -38,39 +48,22 @@ The volume mount persists your GitHub credentials across container restarts. The
 ```yaml
 services:
   copilot2api:
-    image: ghcr.io/whtsky/copilot2api:latest
+    build: .
     ports:
       - "127.0.0.1:7777:7777"
     volumes:
       - ${HOME}/.config/copilot2api:/root/.config/copilot2api
 ```
 
-Start it with:
+Build and start it with:
 
 ```bash
-docker compose up
+docker compose up --build
 ```
 
 </details>
 
-### Download a release binary
-
-```bash
-# Example: macOS Apple Silicon
-curl -L -o copilot2api \
-  https://github.com/whtsky/copilot2api/releases/latest/download/copilot2api-darwin-arm64
-
-# Example: Linux x64
-# curl -L -o copilot2api \
-#   https://github.com/whtsky/copilot2api/releases/latest/download/copilot2api-linux-amd64
-
-chmod +x copilot2api
-./copilot2api
-```
-
-Download the asset that matches your platform from [GitHub Releases](https://github.com/whtsky/copilot2api/releases/latest). Published binaries use names like `copilot2api-linux-amd64`, `copilot2api-linux-arm64`, `copilot2api-darwin-amd64`, `copilot2api-darwin-arm64`, `copilot2api-windows-amd64.exe`, and `copilot2api-windows-arm64.exe`.
-
-On first run, both Docker and downloaded binaries prompt GitHub Device Flow authentication:
+On first run, Docker prompts GitHub Device Flow authentication:
 
 ```
 🔐 GitHub Authentication Required

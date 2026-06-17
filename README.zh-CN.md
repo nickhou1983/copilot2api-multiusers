@@ -23,14 +23,24 @@
 
 ### Docker
 
+从源码构建镜像（本 fork 包含上游镜像没有的多账号与用量统计功能）：
+
+```bash
+docker build -t copilot2api-multiusers .
+```
+
+运行：
+
 ```bash
 docker run -it --rm \
   -p 127.0.0.1:7777:7777 \
   -v ~/.config/copilot2api:/root/.config/copilot2api \
-  ghcr.io/whtsky/copilot2api:latest
+  copilot2api-multiusers
 ```
 
 挂载卷可在容器重启后保留你的 GitHub 凭据。示例仅在 `127.0.0.1` 上发布端口，使代理默认只在本地可用。
+
+> 提示：使用管理界面 / 多账号模式时，从宿主机浏览器访问 `http://127.0.0.1:7777/admin/` 即可。容器内部监听 `0.0.0.0:7777`（由 `COPILOT2API_HOST` 设置），因此发布到 `127.0.0.1` 的端口仍仅限本地访问。
 
 <details>
 <summary>Docker Compose</summary>
@@ -38,39 +48,22 @@ docker run -it --rm \
 ```yaml
 services:
   copilot2api:
-    image: ghcr.io/whtsky/copilot2api:latest
+    build: .
     ports:
       - "127.0.0.1:7777:7777"
     volumes:
       - ${HOME}/.config/copilot2api:/root/.config/copilot2api
 ```
 
-启动：
+构建并启动：
 
 ```bash
-docker compose up
+docker compose up --build
 ```
 
 </details>
 
-### 下载发行版二进制文件
-
-```bash
-# 示例：macOS Apple Silicon
-curl -L -o copilot2api \
-  https://github.com/whtsky/copilot2api/releases/latest/download/copilot2api-darwin-arm64
-
-# 示例：Linux x64
-# curl -L -o copilot2api \
-#   https://github.com/whtsky/copilot2api/releases/latest/download/copilot2api-linux-amd64
-
-chmod +x copilot2api
-./copilot2api
-```
-
-请从 [GitHub Releases](https://github.com/whtsky/copilot2api/releases/latest) 下载与你平台匹配的文件。发行的二进制文件命名形如 `copilot2api-linux-amd64`、`copilot2api-linux-arm64`、`copilot2api-darwin-amd64`、`copilot2api-darwin-arm64`、`copilot2api-windows-amd64.exe`、`copilot2api-windows-arm64.exe`。
-
-首次运行时，Docker 与下载的二进制文件都会提示进行 GitHub Device Flow 认证：
+首次运行时，Docker 会提示进行 GitHub Device Flow 认证：
 
 ```
 🔐 GitHub Authentication Required
