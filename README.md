@@ -2,6 +2,8 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
+> This is a fork of [whtsky/copilot2api](https://github.com/whtsky/copilot2api) that adds multi-account support, a web admin UI, and token-usage statistics. All credit for the original project goes to the upstream authors.
+
 A lightweight Go proxy that exposes GitHub Copilot as OpenAI-compatible, Anthropic-compatible, Gemini-compatible, and AmpCode-compatible API endpoints.
 
 ## Features
@@ -316,6 +318,10 @@ CLI flags take precedence over environment variables.
 go test ./...              # Run tests
 go build -o copilot2api .  # Build
 ```
+
+## Acknowledgements
+
+This project is a fork of [whtsky/copilot2api](https://github.com/whtsky/copilot2api). The core proxy, protocol conversion, and authentication originate from the upstream repository; this fork builds on it with multi-account support, the web admin UI, and token-usage statistics. Thanks to the original authors and contributors.
 
 ## License
 

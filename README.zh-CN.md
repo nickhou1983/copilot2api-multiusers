@@ -2,6 +2,8 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
+> 本项目 fork 自 [whtsky/copilot2api](https://github.com/whtsky/copilot2api)，在其基础上新增了多账号支持、Web 管理界面以及 Token 用量统计。原项目的所有贡献归于上游作者。
+
 一个轻量级的 Go 代理，将 GitHub Copilot 暴露为兼容 OpenAI、Anthropic、Gemini 以及 AmpCode 的 API 端点。
 
 ## 功能特性
@@ -316,6 +318,10 @@ message = client.messages.create(
 go test ./...              # 运行测试
 go build -o copilot2api .  # 构建
 ```
+
+## 致谢
+
+本项目 fork 自 [whtsky/copilot2api](https://github.com/whtsky/copilot2api)。核心代理、协议转换与认证都来自上游仓库；本 fork 在其基础上增加了多账号支持、Web 管理界面以及 Token 用量统计。感谢原作者与各位贡献者。
 
 ## 许可证
 
