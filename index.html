@@ -233,6 +233,7 @@
         <span class="pill">多账户</span>
         <span class="pill">能力差异</span>
         <span class="pill">Extended Thinking</span>
+        <span class="pill">Claude 能力实测</span>
       </div>
     </section>
 
@@ -248,6 +249,7 @@
         <a href="#" data-goto="9"><span class="idx">5</span> 多账户映射与管理</a>
         <a href="#" data-goto="11"><span class="idx">6</span> Copilot vs 原生 Anthropic 能力差异</a>
         <a href="#" data-goto="14"><span class="idx">7</span> Extended Thinking 支持机制</a>
+        <a href="#" data-goto="16"><span class="idx">8</span> Claude 模型能力实测（API 直连）</a>
       </div>
     </section>
 
@@ -495,7 +497,32 @@
       <div class="callout warn"><b>注意：</b>非原生路径把精确 <code>budget_tokens</code> 压成 low/medium/high 三档；<code>/responses</code> 还会覆盖你的 temperature 与小 max_tokens（抬到 ≥12800）；<code>signature</code> 被复用为加密推理载体，语义与原生不同。</div>
     </section>
 
-    <!-- Slide 17: End -->
+    <!-- Slide 17: Claude capability (live API) -->
+    <section class="slide">
+      <div class="kicker"><span class="dot"></span> 08 · Claude 能力实测</div>
+      <h2>直连 Copilot API 实测的 Claude 能力</h2>
+      <p class="note">数据来自 <code>GET api.enterprise.githubcopilot.com/models</code>（企业账户实时拉取）。5 个 Claude 模型全部暴露原生 <code>/v1/messages</code> 端点。</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>能力</th><th>Haiku 4.5</th><th>Sonnet 4.6</th><th>Opus 4.6</th><th>Opus 4.7</th><th>Opus 4.8</th></tr></thead>
+          <tbody>
+            <tr><td>picker 分类</td><td>lightweight</td><td>versatile</td><td>powerful</td><td>powerful</td><td>powerful</td></tr>
+            <tr><td>上下文窗口</td><td>200K</td><td>1M</td><td>1M</td><td>1M</td><td>1M</td></tr>
+            <tr><td>max_output</td><td>64K</td><td>64K</td><td>64K</td><td>64K</td><td>64K</td></tr>
+            <tr><td>structured_outputs</td><td><span class="badge weak">❌</span></td><td><span class="badge best">✅</span></td><td><span class="badge best">✅</span></td><td><span class="badge best">✅</span></td><td><span class="badge best">✅</span></td></tr>
+            <tr><td>adaptive_thinking</td><td><span class="badge weak">❌</span></td><td><span class="badge best">✅</span></td><td><span class="badge best">✅</span></td><td><span class="badge best">✅</span></td><td><span class="badge best">✅</span></td></tr>
+            <tr><td>thinking budget</td><td>1024–32000</td><td>1024–32000</td><td>1024–32000</td><td>1024–32000</td><td>1024–32000</td></tr>
+            <tr><td>reasoning_effort</td><td><span class="badge weak">—</span></td><td>low/med/high/max</td><td>low/med/high/max</td><td>+<span class="badge best">xhigh</span></td><td>+<span class="badge best">xhigh</span></td></tr>
+            <tr><td>vision 格式</td><td>jpg/png/webp/pdf</td><td>+gif</td><td>+gif</td><td>+gif</td><td>+gif</td></tr>
+            <tr><td>最大图片数</td><td>5</td><td>5</td><td><span class="badge mid">1</span></td><td><span class="badge mid">1</span></td><td><span class="badge mid">1</span></td></tr>
+            <tr><td>tool / parallel / streaming</td><td><span class="badge best">✅</span></td><td><span class="badge best">✅</span></td><td><span class="badge best">✅</span></td><td><span class="badge best">✅</span></td><td><span class="badge best">✅</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout warn"><b>实测要点：</b>全部模型支持 <code>/v1/messages</code> 原生透传；Opus 系列单次仅 1 张图，多图选 Sonnet/Haiku；<code>xhigh</code> effort 仅 Opus 4.7/4.8 独有；Haiku 4.5 为精简档（无 structured_outputs / adaptive_thinking / gif）。上游模型声明里 <b>PDF 是被支持的</b>——只是代理未建模 document 块而丢弃。</div>
+    </section>
+
+    <!-- Slide 18: End -->
     <section class="slide">
       <div class="kicker"><span class="dot"></span> 小结</div>
       <h1>一句话总结</h1>
