@@ -232,6 +232,7 @@
         <span class="pill">工具转换</span>
         <span class="pill">多账户</span>
         <span class="pill">能力差异</span>
+        <span class="pill">Extended Thinking</span>
       </div>
     </section>
 
@@ -246,6 +247,7 @@
         <a href="#" data-goto="7"><span class="idx">4</span> 工具调用</a>
         <a href="#" data-goto="9"><span class="idx">5</span> 多账户映射与管理</a>
         <a href="#" data-goto="11"><span class="idx">6</span> Copilot vs 原生 Anthropic 能力差异</a>
+        <a href="#" data-goto="14"><span class="idx">7</span> Extended Thinking 支持机制</a>
       </div>
     </section>
 
@@ -455,7 +457,45 @@
       <div class="callout warn"><b>建议：</b>需要最强工具 / 缓存能力时，让客户端走原生 Anthropic <code>/v1/messages</code> 入口；不要依赖 Copilot 提供 Claude 的服务端内置工具。</div>
     </section>
 
-    <!-- Slide 15: End -->
+    <!-- Slide 15: Extended Thinking intro + request mapping -->
+    <section class="slide">
+      <div class="kicker"><span class="dot"></span> 07 · Extended Thinking</div>
+      <h2>三路径都支持，但保真度不同</h2>
+      <p class="note">只有原生 <code>/v1/messages</code> 是真正的 Anthropic thinking 透传；另两条路径把 <code>thinking{budget_tokens}</code> 降级映射成各自的 reasoning 机制，再逆向重建回 thinking 块。</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>路径</th><th>请求侧：thinking 如何下发</th></tr></thead>
+          <tbody>
+            <tr><td>native <code>/v1/messages</code></td><td>原始字节透传，<code>thinking{type,budget_tokens}</code> 原样发给 Copilot <span class="badge best">最完整</span></td></tr>
+            <tr><td>via <code>/responses</code></td><td><code>budget_tokens</code> → <code>reasoning.effort</code> 分桶：≥16000=high，≥8000=medium，否则 low；强制 <code>temperature=1</code>、<code>summary=detailed</code> <span class="badge mid">降级</span></td></tr>
+            <tr><td>via <code>/chat/completions</code></td><td><code>budget_tokens</code> → OpenAI <code>thinking_budget</code> 扩展字段；effort 不映射 <span class="badge weak">最简</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Slide 16: Extended Thinking response + streaming + caveats -->
+    <section class="slide">
+      <div class="kicker"><span class="dot"></span> 07 · Extended Thinking</div>
+      <h2>响应还原、流式与注意点</h2>
+      <div class="grid two">
+        <div class="card">
+          <h3>响应侧还原成 thinking 块</h3>
+          <p><b>native：</b>透传。<br>
+          <b>/responses：</b><code>reasoning</code> 项 → thinking；<code>encrypted_content+id</code> 编码进 <code>signature</code>（<code>enc@id</code>），多轮可拆回续接。<br>
+          <b>/chat：</b><code>reasoning_text</code> → 文本，<code>reasoning_opaque</code> → signature。</p>
+        </div>
+        <div class="card">
+          <h3>流式增量</h3>
+          <p><b>native：</b>SSE 原样透传。<br>
+          <b>/responses：</b><code>reasoning_summary_text.delta</code> → <code>thinking_delta</code>。<br>
+          <b>/chat：</b><code>reasoning_text</code> 增量 → <code>thinking_delta</code>，块尾 <code>signature_delta</code>。</p>
+        </div>
+      </div>
+      <div class="callout warn"><b>注意：</b>非原生路径把精确 <code>budget_tokens</code> 压成 low/medium/high 三档；<code>/responses</code> 还会覆盖你的 temperature 与小 max_tokens（抬到 ≥12800）；<code>signature</code> 被复用为加密推理载体，语义与原生不同。</div>
+    </section>
+
+    <!-- Slide 17: End -->
     <section class="slide">
       <div class="kicker"><span class="dot"></span> 小结</div>
       <h1>一句话总结</h1>
