@@ -234,6 +234,7 @@
         <span class="pill">能力差异</span>
         <span class="pill">Extended Thinking</span>
         <span class="pill">Claude 能力实测</span>
+        <span class="pill">PDF 差异</span>
       </div>
     </section>
 
@@ -250,6 +251,7 @@
         <a href="#" data-goto="11"><span class="idx">6</span> Copilot vs 原生 Anthropic 能力差异</a>
         <a href="#" data-goto="14"><span class="idx">7</span> Extended Thinking 支持机制</a>
         <a href="#" data-goto="16"><span class="idx">8</span> Claude 模型能力实测（API 直连）</a>
+        <a href="#" data-goto="17"><span class="idx">9</span> 原生 PDF vs Copilot PDF 差异</a>
       </div>
     </section>
 
@@ -433,7 +435,8 @@
           <tbody>
             <tr><td>文本对话 / 流式</td><td><span class="badge best">✅</span></td><td><span class="badge best">✅</span></td></tr>
             <tr><td>自定义 function 工具</td><td><span class="badge best">✅</span></td><td><span class="badge best">✅ 转换</span></td></tr>
-            <tr><td>视觉图像</td><td>base64 + URL + PDF</td><td><span class="badge mid">仅 base64</span></td></tr>
+            <tr><td>视觉图像</td><td>base64 + URL</td><td><span class="badge mid">仅 base64</span></td></tr>
+            <tr><td>PDF 文档</td><td>独立 <code>document</code> 块 / 32MB / 600 页 / citations</td><td><span class="badge mid">当图像处理 · 3MiB · Opus 仅 1 份</span> / <span class="badge weak">代理仅原生路径透传</span></td></tr>
             <tr><td>Extended Thinking</td><td>原生 thinking 块（精确 budget_tokens）</td><td><span class="badge best">✅ native 透传</span> / <span class="badge mid">非原生降级为 effort 分桶</span></td></tr>
             <tr><td>内置 Web Search</td><td><span class="badge best">✅</span></td><td><span class="badge weak">❌ 上游 400</span></td></tr>
             <tr><td>computer use / bash / code exec</td><td><span class="badge best">✅</span></td><td><span class="badge weak">❌ 未建模</span></td></tr>
@@ -522,7 +525,29 @@
       <div class="callout warn"><b>实测要点：</b>全部模型支持 <code>/v1/messages</code> 原生透传；Opus 系列单次仅 1 张图，多图选 Sonnet/Haiku；<code>xhigh</code> effort 仅 Opus 4.7/4.8 独有；Haiku 4.5 为精简档（无 structured_outputs / adaptive_thinking / gif）。上游模型声明里 <b>PDF 是被支持的</b>——只是代理未建模 document 块而丢弃。</div>
     </section>
 
-    <!-- Slide 18: End -->
+    <!-- Slide 18: PDF native vs Copilot -->
+    <section class="slide">
+      <div class="kicker"><span class="dot"></span> 09 · PDF 差异</div>
+      <h2>原生 PDF vs Copilot Claude PDF</h2>
+      <p class="note">两者并不一致:Anthropic 把 PDF 当一等公民的 <code>document</code> 块,Copilot 把 PDF 折进 vision 媒体类型当「图像」处理,套用小限额。</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>维度</th><th>Anthropic 原生</th><th>Copilot Claude（实测）</th></tr></thead>
+          <tbody>
+            <tr><td>输入模型</td><td>独立 <code>document</code> 块</td><td><span class="badge mid">归入 vision，当图像</span></td></tr>
+            <tr><td>来源方式</td><td>URL / base64 / <code>file_id</code></td><td><span class="badge weak">仅 base64</span></td></tr>
+            <tr><td>请求体上限</td><td>32 MB</td><td><span class="badge weak">3 MiB（图像限额）</span></td></tr>
+            <tr><td>页数上限</td><td>600（200k 模型 100）</td><td><span class="badge weak">无字段，受大小约束</span></td></tr>
+            <tr><td>数量</td><td>按 32MB / 页数</td><td>Opus <span class="badge weak">1</span> · Sonnet/Haiku 5</td></tr>
+            <tr><td>Citations 引用</td><td><span class="badge best">✅</span></td><td><span class="badge weak">未暴露</span></td></tr>
+            <tr><td>处理方式</td><td>每页 = 文本+图像</td><td><span class="badge best">同（vision）</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout warn"><b>代理实现:</b><code>anthropic/types.go</code> 不建模 <code>document</code> 块 → 走 <code>/chat</code>·<code>/responses</code> 转换路径时 PDF 被静默丢弃;<b>仅原生 <code>/v1/messages</code> 透传</b>才能送达上游,且仍受 Copilot 的 3 MiB / 数量小限额。需要完整 PDF 能力请直连 Anthropic 原生。</div>
+    </section>
+
+    <!-- Slide 19: End -->
     <section class="slide">
       <div class="kicker"><span class="dot"></span> 小结</div>
       <h1>一句话总结</h1>
