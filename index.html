@@ -1,0 +1,504 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Copilot2API · 幻灯片</title>
+  <script>
+    (() => {
+      const param = new URLSearchParams(window.location.search).get("scoutTheme");
+      const theme =
+        param || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+      document.documentElement.setAttribute("data-theme", theme);
+    })();
+  </script>
+  <style>
+    :root {
+      color-scheme: light;
+      --cp-bg: #f7f4ef;
+      --cp-bg-elevated: #fcfbf8;
+      --cp-surface: #ffffff;
+      --cp-surface-soft: #f5f5f5;
+      --cp-border: #dedede;
+      --cp-border-strong: #919191;
+      --cp-text: #242424;
+      --cp-text-muted: #5c5c5c;
+      --cp-text-soft: #6f6f6f;
+      --cp-accent: #b11f4b;
+      --cp-accent-hover: #9a1a41;
+      --cp-accent-soft: rgba(177, 31, 75, 0.08);
+      --cp-accent-fg: #ffffff;
+      --cp-success: #16a34a;
+      --cp-danger: #dc2626;
+      --cp-warning: #f59e0b;
+      --cp-link: #0078d4;
+      --cp-shadow: 0 18px 48px rgba(0, 0, 0, 0.12);
+      --cp-overlay: rgba(255, 255, 255, 0.8);
+      --cp-panel: rgba(255, 255, 255, 0.86);
+      --cp-panel-strong: rgba(255, 255, 255, 0.96);
+      --cp-sheen: rgba(255, 255, 255, 0.55);
+      --cp-highlight: rgba(177, 31, 75, 0.12);
+    }
+    html[data-theme="dark"] {
+      color-scheme: dark;
+      --cp-bg: #3d3b3a;
+      --cp-bg-elevated: #343231;
+      --cp-surface: #292929;
+      --cp-surface-soft: #2e2e2e;
+      --cp-border: #474747;
+      --cp-border-strong: #5f5f5f;
+      --cp-text: #dedede;
+      --cp-text-muted: #919191;
+      --cp-text-soft: #b0b0b0;
+      --cp-accent: #fd8ea1;
+      --cp-accent-hover: #fb7b91;
+      --cp-accent-soft: rgba(253, 142, 161, 0.14);
+      --cp-accent-fg: #1a1a1a;
+      --cp-success: #4ade80;
+      --cp-danger: #f87171;
+      --cp-warning: #fbbf24;
+      --cp-link: #4da6ff;
+      --cp-shadow: 0 18px 48px rgba(0, 0, 0, 0.32);
+      --cp-overlay: rgba(41, 41, 41, 0.88);
+      --cp-panel: rgba(41, 41, 41, 0.72);
+      --cp-panel-strong: rgba(41, 41, 41, 0.96);
+      --cp-sheen: rgba(255, 255, 255, 0.04);
+      --cp-highlight: rgba(253, 142, 161, 0.12);
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background: var(--cp-bg);
+      color: var(--cp-text);
+      font-family: "Segoe UI", Aptos, Calibri, -apple-system, BlinkMacSystemFont, sans-serif;
+      line-height: 1.5;
+    }
+
+    code { font-family: Consolas, "Courier New", Courier, monospace; background: var(--cp-accent-soft); color: var(--cp-accent); border-radius: 0.5rem; padding: 2px 6px; font-size: 0.9em; }
+    pre { font-family: Consolas, "Courier New", Courier, monospace; margin: 0; padding: 14px 16px; border: 1px solid var(--cp-border); border-radius: 12px; background: var(--cp-bg-elevated); color: var(--cp-text); overflow: auto; font-size: 15px; }
+
+    .deck {
+      position: relative;
+      height: 100vh;
+      width: 100vw;
+      background:
+        radial-gradient(circle at top right, var(--cp-accent-soft), var(--cp-bg) 40rem),
+        linear-gradient(180deg, var(--cp-bg-elevated), var(--cp-bg));
+    }
+
+    .slide {
+      position: absolute;
+      inset: 0;
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      padding: clamp(28px, 6vw, 84px);
+      opacity: 0;
+      transition: opacity 0.35s ease, transform 0.35s ease;
+      transform: translateY(14px);
+    }
+    .slide.active { display: flex; opacity: 1; transform: translateY(0); animation: slideIn 0.4s ease; }
+    @keyframes slideIn { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
+
+    .kicker {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      align-self: flex-start;
+      border: 1px solid var(--cp-border);
+      border-radius: 999px;
+      background: var(--cp-surface);
+      color: var(--cp-text-muted);
+      padding: 6px 14px;
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 22px;
+    }
+    .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--cp-accent); }
+
+    h1 { margin: 0; font-size: clamp(36px, 6.5vw, 76px); letter-spacing: -0.03em; line-height: 1.05; max-width: 18ch; }
+    h2 { margin: 0 0 18px; font-size: clamp(28px, 4.4vw, 46px); letter-spacing: -0.02em; line-height: 1.1; }
+    .sub { margin: 24px 0 0; font-size: clamp(17px, 2.1vw, 23px); color: var(--cp-text-muted); max-width: 60ch; }
+    .note { color: var(--cp-text-muted); margin: 0 0 22px; font-size: clamp(15px, 1.7vw, 19px); max-width: 70ch; }
+
+    .grid { display: grid; gap: 16px; }
+    .grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .grid.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+    .card { border: 1px solid var(--cp-border); border-radius: 16px; background: var(--cp-surface); padding: 18px 20px; box-shadow: 0 0 2px var(--cp-border), 0 1px 2px var(--cp-border); }
+    .card h3 { margin: 0 0 8px; font-size: clamp(17px, 1.9vw, 21px); }
+    .card p { margin: 0; color: var(--cp-text-muted); font-size: clamp(14px, 1.5vw, 16px); }
+    .card .num { display: block; color: var(--cp-accent); font-size: clamp(30px, 4vw, 44px); font-weight: 800; line-height: 1; margin-bottom: 6px; }
+
+    .flow { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; margin-top: 6px; }
+    .flow-step { position: relative; border: 1px solid var(--cp-border); border-radius: 12px; background: var(--cp-surface); padding: 14px 12px; }
+    .flow-step span { color: var(--cp-accent); font-weight: 800; font-size: 14px; }
+    .flow-step p { margin: 6px 0 0; color: var(--cp-text-muted); font-size: 14px; }
+    .flow-step:not(:last-child)::after { content: "→"; position: absolute; right: -13px; top: 50%; transform: translateY(-50%); color: var(--cp-accent); font-weight: 800; z-index: 2; }
+
+    table { width: 100%; border-collapse: collapse; font-size: clamp(14px, 1.5vw, 17px); }
+    th, td { padding: 11px 14px; border-bottom: 1px solid var(--cp-border); text-align: left; vertical-align: top; }
+    th { background: var(--cp-surface-soft); font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; }
+    td { color: var(--cp-text-muted); }
+    tr:last-child td { border-bottom: 0; }
+    .table-wrap { border: 1px solid var(--cp-border); border-radius: 16px; overflow: auto; background: var(--cp-surface); max-height: 56vh; }
+
+    .badge { display: inline-flex; align-items: center; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 700; border: 1px solid var(--cp-border); }
+    .badge.best { color: var(--cp-success); border-color: var(--cp-success); }
+    .badge.mid { color: var(--cp-warning); border-color: var(--cp-warning); }
+    .badge.weak { color: var(--cp-danger); border-color: var(--cp-danger); }
+
+    .callout { border-left: 4px solid var(--cp-accent); border-radius: 10px; background: var(--cp-accent-soft); padding: 14px 18px; color: var(--cp-text); margin-top: 20px; font-size: clamp(14px, 1.6vw, 18px); }
+    .callout.warn { border-left-color: var(--cp-warning); background: var(--cp-surface-soft); }
+
+    ul.big { margin: 8px 0 0; padding-left: 0; list-style: none; display: grid; gap: 12px; }
+    ul.big li { border: 1px solid var(--cp-border); border-radius: 12px; background: var(--cp-surface); padding: 12px 16px; font-size: clamp(15px, 1.7vw, 19px); }
+    ul.big li b { color: var(--cp-accent); }
+
+    .agenda { display: grid; gap: 12px; margin-top: 10px; }
+    .agenda a { display: flex; align-items: center; gap: 14px; border: 1px solid var(--cp-border); border-radius: 12px; background: var(--cp-surface); padding: 14px 18px; color: var(--cp-text); text-decoration: none; font-size: clamp(16px, 1.9vw, 21px); }
+    .agenda a:hover { border-color: var(--cp-accent); color: var(--cp-accent); }
+    .agenda .idx { width: 34px; height: 34px; flex: none; display: grid; place-items: center; border-radius: 50%; background: var(--cp-accent); color: var(--cp-accent-fg); font-weight: 800; }
+
+    .tag-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    .pill { border: 1px solid var(--cp-border); background: var(--cp-surface); color: var(--cp-text); border-radius: 999px; padding: 6px 12px; font-size: 14px; font-weight: 600; }
+
+    /* Controls */
+    .hud {
+      position: fixed;
+      bottom: 18px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      border: 1px solid var(--cp-border);
+      border-radius: 999px;
+      background: var(--cp-panel-strong);
+      box-shadow: var(--cp-shadow);
+      z-index: 50;
+      backdrop-filter: blur(8px);
+    }
+    .hud button {
+      border: 1px solid var(--cp-border);
+      background: var(--cp-surface);
+      color: var(--cp-text);
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      font-size: 16px;
+      cursor: pointer;
+      display: grid; place-items: center;
+    }
+    .hud button:hover { border-color: var(--cp-accent); color: var(--cp-accent); }
+    .hud .count { font-size: 14px; font-weight: 700; color: var(--cp-text-muted); min-width: 56px; text-align: center; font-variant-numeric: tabular-nums; }
+
+    .progress { position: fixed; top: 0; left: 0; height: 4px; background: var(--cp-accent); width: 0; z-index: 60; transition: width 0.3s ease; }
+
+    .hint { position: fixed; top: 16px; right: 18px; font-size: 13px; color: var(--cp-text-muted); border: 1px solid var(--cp-border); background: var(--cp-panel); border-radius: 999px; padding: 6px 12px; z-index: 50; }
+    .hint b { color: var(--cp-accent); }
+
+    .brand { position: fixed; top: 16px; left: 18px; font-size: 13px; font-weight: 700; color: var(--cp-text-muted); z-index: 50; display: flex; align-items: center; gap: 8px; }
+
+    @media (max-width: 880px) {
+      .grid.two, .grid.three, .grid.four { grid-template-columns: 1fr; }
+      .flow { grid-template-columns: 1fr; }
+      .flow-step:not(:last-child)::after { content: "↓"; right: 50%; top: auto; bottom: -13px; transform: translateX(50%); }
+      .hint { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="progress" id="progress"></div>
+  <div class="brand"><span class="dot"></span> Copilot2API</div>
+  <div class="hint">翻页：<b>← →</b> / 空格 · 首尾：<b>Home/End</b> · 全屏：<b>F</b></div>
+
+  <div class="deck" id="deck">
+
+    <!-- Slide 1: Cover -->
+    <section class="slide">
+      <div class="kicker"><span class="dot"></span> 技术分享 · GitHub Copilot 多协议代理</div>
+      <h1>Copilot2API 能力总览</h1>
+      <p class="sub">把 GitHub Copilot 上游模型适配为 OpenAI / Anthropic / Gemini / AmpCode 兼容接口的本地协议网关。</p>
+      <div class="tag-row" style="margin-top: 28px;">
+        <span class="pill">协议网关</span>
+        <span class="pill">智能路由</span>
+        <span class="pill">模型缓存</span>
+        <span class="pill">工具转换</span>
+        <span class="pill">多账户</span>
+      </div>
+    </section>
+
+    <!-- Slide 2: Agenda -->
+    <section class="slide">
+      <div class="kicker"><span class="dot"></span> 目录</div>
+      <h2>本次分享内容</h2>
+      <div class="agenda">
+        <a href="#" data-goto="2"><span class="idx">1</span> 核心功能</a>
+        <a href="#" data-goto="3"><span class="idx">2</span> 支持的 Copilot API Endpoint</a>
+        <a href="#" data-goto="5"><span class="idx">3</span> 模型 Cache 支持</a>
+        <a href="#" data-goto="7"><span class="idx">4</span> 工具调用</a>
+        <a href="#" data-goto="9"><span class="idx">5</span> 多账户映射与管理</a>
+      </div>
+    </section>
+
+    <!-- Slide 3: Core functions -->
+    <section class="slide">
+      <div class="kicker"><span class="dot"></span> 01 · 核心功能</div>
+      <h2>Copilot2API 是协议适配层，不做模型推理</h2>
+      <div class="grid four">
+        <div class="card"><span class="num">4</span><h3>多协议兼容</h3><p>OpenAI、Anthropic、Gemini、AmpCode。</p></div>
+        <div class="card"><span class="num">3</span><h3>智能路由</h3><p>Messages / Responses / Chat 自动择优。</p></div>
+        <div class="card"><span class="num">5m</span><h3>模型缓存</h3><p>缓存 <code>/models</code>，加速路由判断。</p></div>
+        <div class="card"><span class="num">N</span><h3>多账户</h3><p>每个 API Key 映射独立 GitHub 账号。</p></div>
+      </div>
+      <p class="sub">附加能力：协议与 SSE 流式互转、GitHub Device Flow 认证刷新、按账号/模型的用量统计、Web 管理界面。</p>
+    </section>
+
+    <!-- Slide 4: Request flow -->
+    <section class="slide">
+      <div class="kicker"><span class="dot"></span> 01 · 核心功能</div>
+      <h2>一次请求的处理链路</h2>
+      <div class="flow">
+        <div class="flow-step"><span>01</span><p>客户端请求</p></div>
+        <div class="flow-step"><span>02</span><p>解析 API Key</p></div>
+        <div class="flow-step"><span>03</span><p>选择账号</p></div>
+        <div class="flow-step"><span>04</span><p>刷新 Token</p></div>
+        <div class="flow-step"><span>05</span><p>查模型能力</p></div>
+        <div class="flow-step"><span>06</span><p>转换协议</p></div>
+        <div class="flow-step"><span>07</span><p>请求 Copilot</p></div>
+      </div>
+      <div class="callout">Registry 用 API Key 找到账号 → 委派给该账号的 OpenAI / Anthropic / Gemini handler → 按模型能力选目标 endpoint。</div>
+    </section>
+
+    <!-- Slide 5: Endpoints -->
+    <section class="slide">
+      <div class="kicker"><span class="dot"></span> 02 · API Endpoint</div>
+      <h2>对外路由与上游目标</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>协议</th><th>本地路由</th><th>上游目标</th></tr></thead>
+          <tbody>
+            <tr><td>OpenAI</td><td><code>POST /v1/chat/completions</code></td><td><code>/chat/completions</code> 或 <code>/responses</code></td></tr>
+            <tr><td>OpenAI</td><td><code>POST /v1/responses</code></td><td><code>/responses</code> 或 <code>/chat/completions</code></td></tr>
+            <tr><td>OpenAI</td><td><code>GET /v1/models</code> · <code>POST /v1/embeddings</code></td><td><code>/models</code> · <code>/embeddings</code></td></tr>
+            <tr><td>Anthropic</td><td><code>POST /v1/messages</code></td><td><code>/v1/messages</code> → <code>/responses</code> → <code>/chat/completions</code></td></tr>
+            <tr><td>Gemini</td><td><code>:generateContent</code> / <code>:streamGenerateContent</code></td><td><code>/chat/completions</code> 或 <code>/responses</code></td></tr>
+            <tr><td>Gemini</td><td><code>/v1beta/models</code> · <code>:countTokens</code></td><td><code>/models</code> · 本地估算</td></tr>
+            <tr><td>AmpCode</td><td><code>/amp/v1/*</code> · <code>/api/provider/*</code></td><td>复用上述 handler / 反代 ampcode.com</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Slide 6: Smart routing -->
+    <section class="slide">
+      <div class="kicker"><span class="dot"></span> 02 · API Endpoint</div>
+      <h2>智能路由：按模型能力择优</h2>
+      <p class="note">读取上游 <code>/models</code> 的 <code>supported_endpoints</code>，决定真正请求哪个路径。</p>
+      <ul class="big">
+        <li><b>Claude 优先级</b> ：<code>/v1/messages</code> → <code>/responses</code> → <code>/chat/completions</code></li>
+        <li><b>OpenAI Chat</b> ：模型不支持 Chat 时自动转 Responses</li>
+        <li><b>OpenAI Responses</b> ：模型不支持 Responses 时回退 Chat</li>
+        <li><b>Gemini</b> ：先转 OpenAI Chat，再按能力路由；<code>countTokens</code> 本地估算不走上游</li>
+      </ul>
+    </section>
+
+    <!-- Slide 7: Cache -->
+    <section class="slide">
+      <div class="kicker"><span class="dot"></span> 03 · 模型 Cache</div>
+      <h2>两层缓存：能力缓存 + Prompt Cache</h2>
+      <div class="grid two">
+        <div class="card"><h3>模型能力缓存</h3><p>每账号独立缓存 <code>/models</code>，TTL 5 分钟，用于快速判断支持的 endpoint。</p></div>
+        <div class="card"><h3>Claude Prompt Cache</h3><p>代理只转发 <code>cache_control</code> 标记并映射 usage，不落地任何 prompt 内容。</p></div>
+      </div>
+      <div class="table-wrap" style="margin-top: 16px;">
+        <table>
+          <thead><tr><th>Claude 路径</th><th>cache_control</th><th>缓存用量映射</th><th>兼容性</th></tr></thead>
+          <tbody>
+            <tr><td>native <code>/v1/messages</code></td><td>保留 type/ttl，删 scope</td><td>保留 cache_read / cache_creation</td><td><span class="badge best">最好</span></td></tr>
+            <tr><td>via <code>/responses</code></td><td>转换时不保留</td><td>cached_tokens → cache_read</td><td><span class="badge mid">中等</span></td></tr>
+            <tr><td>via <code>/chat/completions</code></td><td>转换时不保留</td><td>cached_tokens → cache_read</td><td><span class="badge weak">较弱</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout warn">只有走原生 <code>/v1/messages</code> 时 Prompt Cache 标记才最可能完整传给上游；转 Responses / Chat 后标记丢失，仅保留 usage 命中统计。</div>
+    </section>
+
+    <!-- Slide 8: Tools -->
+    <section class="slide">
+      <div class="kicker"><span class="dot"></span> 04 · 工具调用</div>
+      <h2>代理只转换工具，不执行工具</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Anthropic</th><th>Responses</th><th>OpenAI Chat</th></tr></thead>
+          <tbody>
+            <tr><td><code>tools[].input_schema</code></td><td><code>parameters</code></td><td><code>function.parameters</code></td></tr>
+            <tr><td><code>tool_choice: any</code></td><td><code>required</code></td><td><code>required</code></td></tr>
+            <tr><td><code>tool_choice: tool</code></td><td><code>{type:function,name}</code></td><td><code>{type:function,function:{name}}</code></td></tr>
+            <tr><td><code>disable_parallel_tool_use</code></td><td colspan="2"><code>parallel_tool_calls</code> 取反</td></tr>
+            <tr><td>assistant <code>tool_use</code></td><td><code>function_call</code></td><td><code>tool_calls[]</code></td></tr>
+            <tr><td>user <code>tool_result</code></td><td><code>function_call_output</code></td><td><code>role: tool</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout warn"><b>Web Search 实测：</b>Claude 内置 <code>web_search_20250305</code> 经集成测试返回 <code>unsupported_value</code>，当前 Copilot 上游不支持。</div>
+    </section>
+
+    <!-- Slide 9: Tool path comparison -->
+    <section class="slide">
+      <div class="kicker"><span class="dot"></span> 04 · 工具调用</div>
+      <h2>三条路径的工具语义保真度</h2>
+      <div class="grid three">
+        <div class="card"><h3>Native Messages <span class="badge best">最完整</span></h3><p>原生透传，保留 Anthropic tool 语义与流式事件最完整。</p></div>
+        <div class="card"><h3>Responses <span class="badge mid">良好</span></h3><p>转 function tool，保留 <code>function_call_output</code> 与错误状态。</p></div>
+        <div class="card"><h3>Chat Completions <span class="badge weak">基础</span></h3><p>转 OpenAI <code>tools</code> / <code>tool_calls</code>，丢失部分语义。</p></div>
+      </div>
+      <p class="sub">结论：需要最强工具与缓存能力时，让客户端走原生 Anthropic <code>/v1/messages</code> 入口。</p>
+    </section>
+
+    <!-- Slide 10: Multi-account -->
+    <section class="slide">
+      <div class="kicker"><span class="dot"></span> 05 · 多账户</div>
+      <h2>每个 API Key 映射一个 GitHub 账号</h2>
+      <div class="grid two">
+        <pre><code>{
+  "accounts": [
+    { "id": "alice", "api_key": "sk-alice" },
+    { "id": "bob",   "api_key": "sk-bob" }
+  ]
+}</code></pre>
+        <div class="card">
+          <h3>每账号独立持有</h3>
+          <div class="tag-row">
+            <span class="pill">GitHub Token</span>
+            <span class="pill">Copilot Token</span>
+            <span class="pill">Models Cache</span>
+            <span class="pill">Usage Recorder</span>
+          </div>
+          <p style="margin-top:12px;">配置：<code>~/.config/copilot2api/accounts.json</code> 或 <code>COPILOT2API_ACCOUNTS_FILE</code>。鉴权来源：<code>Bearer</code> / <code>x-api-key</code> / <code>x-goog-api-key</code> / <code>?key=</code>。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Slide 11: Admin -->
+    <section class="slide">
+      <div class="kicker"><span class="dot"></span> 05 · 多账户</div>
+      <h2>Web 管理界面与统计</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>接口</th><th>方法</th><th>用途</th></tr></thead>
+          <tbody>
+            <tr><td><code>/admin/</code></td><td>GET</td><td>打开管理界面</td></tr>
+            <tr><td><code>/admin/api/accounts</code></td><td>GET / POST</td><td>列出或新增账号</td></tr>
+            <tr><td><code>/admin/api/accounts/{id}</code></td><td>PUT / DELETE</td><td>更新或删除账号</td></tr>
+            <tr><td><code>/admin/api/accounts/{id}/auth/start</code></td><td>POST</td><td>启动 Device Flow 认证</td></tr>
+            <tr><td><code>/admin/api/stats</code></td><td>GET / DELETE</td><td>查看或清空统计</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout warn"><b>安全：</b>面向本地，勿公网暴露；可设 <code>COPILOT2API_ADMIN_TOKEN</code> 保护管理界面。</div>
+    </section>
+
+    <!-- Slide 12: End -->
+    <section class="slide">
+      <div class="kicker"><span class="dot"></span> 小结</div>
+      <h1>一句话总结</h1>
+      <p class="sub">Copilot2API = GitHub Copilot 的「多协议适配 + 智能路由 + 多账户 + 用量统计」本地网关；缓存与工具能力在原生 Anthropic 路径下最完整，Web Search 暂不受上游支持。</p>
+      <div class="tag-row" style="margin-top: 28px;">
+        <span class="pill">← → 翻页</span>
+        <span class="pill">Home / End 跳首尾</span>
+        <span class="pill">F 全屏</span>
+      </div>
+    </section>
+
+  </div>
+
+  <div class="hud">
+    <button id="prev" aria-label="上一页">‹</button>
+    <span class="count"><span id="cur">1</span> / <span id="total">1</span></span>
+    <button id="next" aria-label="下一页">›</button>
+  </div>
+
+  <script>
+    (() => {
+      const slides = Array.from(document.querySelectorAll(".slide"));
+      const total = slides.length;
+      let idx = 0;
+
+      const curEl = document.getElementById("cur");
+      const totalEl = document.getElementById("total");
+      const progress = document.getElementById("progress");
+      totalEl.textContent = total;
+
+      function render() {
+        slides.forEach((s, i) => s.classList.toggle("active", i === idx));
+        curEl.textContent = idx + 1;
+        progress.style.width = ((idx + 1) / total) * 100 + "%";
+        if (location.hash !== "#" + idx) {
+          history.replaceState(null, "", "#" + idx);
+        }
+      }
+
+      function go(n) {
+        idx = Math.max(0, Math.min(total - 1, n));
+        render();
+      }
+      const next = () => go(idx + 1);
+      const prev = () => go(idx - 1);
+
+      document.getElementById("next").addEventListener("click", next);
+      document.getElementById("prev").addEventListener("click", prev);
+
+      document.querySelectorAll("[data-goto]").forEach((a) => {
+        a.addEventListener("click", (e) => {
+          e.preventDefault();
+          go(parseInt(a.getAttribute("data-goto"), 10));
+        });
+      });
+
+      document.addEventListener("keydown", (e) => {
+        switch (e.key) {
+          case "ArrowRight":
+          case "ArrowDown":
+          case "PageDown":
+          case " ":
+            e.preventDefault(); next(); break;
+          case "ArrowLeft":
+          case "ArrowUp":
+          case "PageUp":
+            e.preventDefault(); prev(); break;
+          case "Home":
+            e.preventDefault(); go(0); break;
+          case "End":
+            e.preventDefault(); go(total - 1); break;
+          case "f":
+          case "F":
+            if (document.fullscreenElement) document.exitFullscreen();
+            else document.documentElement.requestFullscreen?.();
+            break;
+        }
+      });
+
+      // Touch / swipe
+      let startX = null;
+      document.addEventListener("touchstart", (e) => { startX = e.touches[0].clientX; }, { passive: true });
+      document.addEventListener("touchend", (e) => {
+        if (startX === null) return;
+        const dx = e.changedTouches[0].clientX - startX;
+        if (Math.abs(dx) > 50) (dx < 0 ? next : prev)();
+        startX = null;
+      }, { passive: true });
+
+      const fromHash = parseInt((location.hash || "").replace("#", ""), 10);
+      if (!isNaN(fromHash)) idx = Math.max(0, Math.min(total - 1, fromHash));
+      render();
+    })();
+  </script>
+</body>
+</html>
