@@ -10,6 +10,10 @@
 - Bootstrap multi-account mode from an empty `accounts.json` (`{"accounts":[]}`) and populate it entirely through the admin UI.
 - Add a token-usage statistics page to the admin UI (new "Stats" tab) showing per-account, per-model token counts — input, output, cached (prompt-cache hits), cache-write, and request totals — across all OpenAI, Anthropic, and Gemini endpoints. Usage is persisted to `<token-dir>/stats.json` and survives restarts. Backed by a new `GET /admin/api/stats` endpoint, with `DELETE /admin/api/stats/{id}` to reset one account. Note: OpenAI Chat Completions streaming only contributes token counts when the client sends `stream_options.include_usage`; the request is always counted.
 
+### Bug Fixes
+
+- Fix 1M context handling for the `anthropic-beta: context-1m` header (used by Claude Code): the proxy no longer blindly appends a `-1m` suffix to the model ID. It now only switches to a `-1m` variant when the base model doesn't already advertise a 1M context window and that variant actually exists upstream. Newer Claude models (e.g. `claude-sonnet-4.6`, `claude-opus-4.6/4.7/4.8`) expose 1M on the base model ID, so requesting the 1M context no longer produces a non-existent `-1m` model ID that broke capability detection and routing.
+
 ### Compatibility
 
 - The proxy now always runs in multi-account mode: when no `accounts.json` exists at startup it is auto-created as an empty config (`{"accounts": []}`) and the admin UI is enabled out of the box. Requests must present a valid API key or receive `401 Unauthorized`; until at least one account is configured (e.g. via the admin UI), every request is rejected with `401`. This replaces the previous single-account, no-validation fallback that ran when the config file was absent.

@@ -65,12 +65,19 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	resolvedModel := resolveModelAlias(anthropicReq.Model)
 
 	// Detect 1M context variant: Claude Code signals this via the anthropic-beta
-	// header (e.g. "context-1m-2025-08-07"). Copilot exposes these as separate
-	// model IDs with a "-1m" suffix (e.g. "claude-opus-4.6-1m"), so we append it.
-	if betaHeader := r.Header.Get("anthropic-beta"); betaHeader != "" {
-		if context1mRe.MatchString(betaHeader) && !strings.HasSuffix(resolvedModel, "-1m") {
-			slog.Debug("detected context-1m beta header, appending -1m suffix", "model", resolvedModel)
-			resolvedModel += "-1m"
+	// header (e.g. "context-1m-2025-08-07"). Copilot historically exposed the 1M
+	// variant as a separate "-1m" model ID, but newer models advertise a 1M
+	// context window on the base ID directly. resolve1MContextModel only switches
+	// to a "-1m" variant when the base model isn't already 1M and the variant
+	// actually exists upstream, avoiding fabricated model IDs.
+	if betaHeader := r.Header.Get("anthropic-beta"); betaHeader != "" && context1mRe.MatchString(betaHeader) {
+		if infoMap, err := h.models.GetInfo(r.Context()); err == nil {
+			if adjusted := resolve1MContextModel(resolvedModel, infoMap); adjusted != resolvedModel {
+				slog.Debug("context-1m beta header: selected 1M variant", "from", resolvedModel, "to", adjusted)
+				resolvedModel = adjusted
+			} else {
+				slog.Debug("context-1m beta header: base model already 1M or no variant", "model", resolvedModel)
+			}
 		}
 	}
 
