@@ -441,7 +441,8 @@
             <tr><td>PDF 文档</td><td>独立 <code>document</code> 块 / 32MB / 600 页 / citations</td><td><span class="badge mid">当图像处理 · 3MiB · Opus 仅 1 份</span> / <span class="badge weak">代理仅原生路径透传</span></td></tr>
             <tr><td>Extended Thinking</td><td>原生 thinking 块（精确 budget_tokens）</td><td><span class="badge best">✅ native 透传</span> / <span class="badge mid">非原生降级为 effort 分桶</span></td></tr>
             <tr><td>内置 Web Search</td><td><span class="badge best">✅</span></td><td><span class="badge weak">❌ 上游 400</span></td></tr>
-            <tr><td>computer use / bash / code exec</td><td><span class="badge best">✅</span></td><td><span class="badge weak">❌ 未建模</span></td></tr>
+            <tr><td>Computer Use（<code>computer_*</code>）</td><td><span class="badge best">✅</span></td><td><span class="badge weak">❌ 上游 400（不在白名单）</span></td></tr>
+            <tr><td>bash / text_editor / memory / tool_search</td><td><span class="badge best">✅</span></td><td><span class="badge best">✅ 上游白名单</span> / <span class="badge mid">仅原生路径，转换路径丢 type</span></td></tr>
             <tr><td>Prompt Cache <code>cache_control</code></td><td>完整（含 scope）</td><td><span class="badge mid">仅原生路径，删 scope</span></td></tr>
             <tr><td><code>context_management</code></td><td><span class="badge best">✅</span></td><td><span class="badge weak">❌ 被剥离</span></td></tr>
             <tr><td>Citations 引用</td><td><span class="badge best">✅</span></td><td><span class="badge weak">❌ 未建模</span></td></tr>
@@ -458,11 +459,11 @@
       <div class="kicker"><span class="dot"></span> 06 · 能力差异</div>
       <h2>三点关键结论</h2>
       <div class="grid three">
-        <div class="card"><h3>① 只转售推理</h3><p>Anthropic 服务器端执行的内置工具（web_search、computer use、code exec）Copilot 一律不支持；自定义 function 因由客户端执行而可用。</p></div>
+        <div class="card"><h3>① 按白名单放行工具</h3><p>上游对 server 工具按白名单放行:<code>bash</code>、<code>text_editor</code>、<code>memory</code>、<code>tool_search</code> 实测可用;但 <b>Computer Use（<code>computer_*</code>）与 web_search 被明确拒绝（400）</b>。自定义 function 由客户端执行,始终可用。</p></div>
         <div class="card"><h3>② 路径决定保真度</h3><p>只有命中原生 <code>/v1/messages</code>（原始字节透传）才可能传递未建模字段；回退到 Responses / Chat 后，结构体重序列化会静默丢字段。</p></div>
         <div class="card"><h3>③ 代理也收窄能力</h3><p>即便上游支持，代理仅解析 <code>supported_endpoints</code>、图像只接受 base64、thinking 被降级——属代理层简化。</p></div>
       </div>
-      <div class="callout warn"><b>建议：</b>需要最强工具 / 缓存能力时，让客户端走原生 Anthropic <code>/v1/messages</code> 入口；不要依赖 Copilot 提供 Claude 的服务端内置工具。</div>
+      <div class="callout warn"><b>建议：</b>server 工具务必走原生 <code>/v1/messages</code> 入口（转换路径会因 <code>AnthropicTool</code> 未建模 <code>type</code> 而降级丢弃）；Computer Use 与 web_search 在 Copilot 上游不可用，需要时请直连原生 Anthropic。</div>
     </section>
 
     <!-- Slide 15: Extended Thinking intro + request mapping -->
