@@ -446,10 +446,10 @@
             <tr><td>bash / text_editor / memory / tool_search</td><td><span class="badge best">✅</span></td><td><span class="badge best">✅ 上游支持</span>（白名单 · bash 实测 <code>tool_use</code>）</td><td><span class="badge mid">通过 <code>/v1/messages</code> 路由，转换路径丢 type</span></td></tr>
             <tr><td>Prompt Cache <code>cache_control</code></td><td>完整（含 scope）</td><td><span class="badge best">✅ 上游支持</span>（实测写入缓存 2402 tok）</td><td><span class="badge mid">通过 <code>/v1/messages</code> 路由，删 scope</span></td></tr>
             <tr><td><code>context_management</code> 上下文编辑</td><td><span class="badge best">✅ <code>context-management-2025-06-27</code></span></td><td><span class="badge best">✅ 上游支持</span>（<code>applied_edits</code> 实测触发，需 beta 头）</td><td><span class="badge weak">代理 strip 字段 + 不转发 beta 头</span></td></tr>
-            <tr><td>Citations 引用</td><td><span class="badge best">✅</span></td><td><span class="badge best">✅ 上游支持</span>（返回 <code>cited_text</code> + <code>page_location</code>）</td><td><span class="badge weak">❌ 未建模</span></td></tr>
+            <tr><td>Citations 引用</td><td><span class="badge best">✅</span></td><td><span class="badge best">✅ 上游支持</span>（返回 <code>cited_text</code> + <code>page_location</code>）</td><td><span class="badge mid">通过 <code>/v1/messages</code> 路由透传，转换路径未建模</span></td></tr>
             <tr><td>1M 上下文</td><td>beta header <code>context-1m</code></td><td><span class="badge best">✅ 上游支持</span> 基础模型原生 1M（4.6+ 无需 <code>-1m</code>）</td><td><span class="badge best">✅ 能力感知解析</span></td></tr>
-            <tr><td><code>count_tokens</code> 计数</td><td><span class="badge best">✅ <code>/v1/messages/count_tokens</code></span></td><td><span class="badge best">✅ 上游支持</span>（HTTP 200 <code>input_tokens</code>）</td><td><span class="badge best">✅</span></td></tr>
-            <tr><td>模型能力发现</td><td>vision / max_tokens / tool…</td><td><span class="badge best">✅ 上游支持</span> <code>/models</code> 全量 capabilities</td><td><span class="badge mid">仅 supported_endpoints</span></td></tr>
+            <tr><td><code>count_tokens</code> 计数</td><td><span class="badge best">✅ <code>/v1/messages/count_tokens</code></span></td><td><span class="badge best">✅ 上游支持</span>（HTTP 200 <code>input_tokens</code>）</td><td><span class="badge weak">代理暂未路由 <code>/v1/messages/count_tokens</code>（404）</span></td></tr>
+            <tr><td>模型能力发现</td><td>vision / max_tokens / tool…</td><td><span class="badge best">✅ 上游支持</span> <code>/models</code> 全量 capabilities</td><td><span class="badge mid"><code>/v1/models</code> 透传 capabilities；内部路由主要用 supported_endpoints</span></td></tr>
           </tbody>
         </table>
       </div>
@@ -462,9 +462,9 @@
       <div class="grid three">
         <div class="card"><h3>① 上游能力远超「转售」</h3><p>直连实测:文本/流式、function（含并行）、vision base64、<b>PDF 原生 <code>document</code> 块</b>、thinking、cache_control、<b>context_management</b>、<b>citations</b>（带 <code>page_location</code>）、count_tokens、1M 全部<b>上游支持</b>。仅 <b>Computer Use 与 web_search 被拒（400）</b>,URL 图像不支持。</p></div>
         <div class="card"><h3>② 路径决定保真度</h3><p>只有命中原生 <code>/v1/messages</code>（原始字节透传）才可能传递未建模字段；回退到 Responses / Chat 后，结构体重序列化会静默丢字段。</p></div>
-        <div class="card"><h3>③ 瓶颈在代理，不在上游</h3><p>citations、PDF document 块、context_management 上游都支持，却因代理<b>未建模 / 主动 strip / 不转发 beta 头</b>而在代理后不可用——差距来自代理层简化，而非 Copilot 上游缺能力。</p></div>
+        <div class="card"><h3>③ 瓶颈在代理，不在上游</h3><p>PDF document 块与 citations 可通过 <code>/v1/messages</code> 透传；<code>context_management</code> 仍因代理主动 strip 且不转发 beta 头而失效；<code>count_tokens</code> 上游已支持但代理暂未路由。</p></div>
       </div>
-      <div class="callout warn"><b>建议：</b>需要 PDF document 块、citations、context_management、server 工具等高级能力时务必走原生 <code>/v1/messages</code> 入口（转换路径会因 <code>AnthropicTool</code> 未建模 <code>type</code>、document 块未建模而降级丢弃）；Computer Use 与 web_search 在 Copilot 上游确不可用，需要时请直连原生 Anthropic。</div>
+      <div class="callout warn"><b>建议：</b>需要 PDF document 块、citations、server 工具等高级能力时务必走 <code>/v1/messages</code> 路由（转换路径会因 <code>AnthropicTool</code> 未建模 <code>type</code>、document 块未建模而降级丢弃）；context_management 与 count_tokens 需补代理透传/路由；Computer Use 与 web_search 在 Copilot 上游确不可用。</div>
     </section>
 
     <!-- Slide 15: Extended Thinking intro + request mapping -->
@@ -527,29 +527,29 @@
           </tbody>
         </table>
       </div>
-      <div class="callout warn"><b>实测要点：</b>全部模型支持 <code>/v1/messages</code> 原生透传；Opus 系列单次仅 1 张图，多图选 Sonnet/Haiku；<code>xhigh</code> effort 仅 Opus 4.7/4.8 独有；Haiku 4.5 为精简档（无 structured_outputs / adaptive_thinking / gif）。上游模型声明里 <b>PDF 是被支持的</b>——只是代理未建模 document 块而丢弃。</div>
+      <div class="callout warn"><b>实测要点：</b>全部模型支持 <code>/v1/messages</code> 原生透传；Opus 系列单次仅 1 张图，多图选 Sonnet/Haiku；<code>xhigh</code> effort 仅 Opus 4.7/4.8 独有；Haiku 4.5 为精简档（无 structured_outputs / adaptive_thinking / gif）。上游 <b>PDF document 块与 citations 均已支持</b>；经代理时需走 <code>/v1/messages</code> 路由，转换路径仍会丢弃未建模结构。</div>
     </section>
 
     <!-- Slide 18: PDF native vs Copilot -->
     <section class="slide">
       <div class="kicker"><span class="dot"></span> 09 · PDF 差异</div>
-      <h2>原生 PDF vs Copilot Claude PDF</h2>
-      <p class="note">两者并不一致:Anthropic 把 PDF 当一等公民的 <code>document</code> 块,Copilot 把 PDF 折进 vision 媒体类型当「图像」处理,套用小限额。</p>
+      <h2>PDF document 块与代理路径差异</h2>
+      <p class="note">复测修正:Copilot Claude 上游已支持 Anthropic 风格的 <code>document</code> PDF 块与 citations；差异主要发生在代理转换路径，而不是上游缺能力。</p>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>维度</th><th>Anthropic 原生</th><th>Copilot Claude（实测）</th></tr></thead>
+          <thead><tr><th>维度</th><th>Anthropic 原生</th><th>Copilot Claude 上游/代理实测</th></tr></thead>
           <tbody>
-            <tr><td>输入模型</td><td>独立 <code>document</code> 块</td><td><span class="badge mid">归入 vision，当图像</span></td></tr>
-            <tr><td>来源方式</td><td>URL / base64 / <code>file_id</code></td><td><span class="badge weak">仅 base64</span></td></tr>
-            <tr><td>请求体上限</td><td>32 MB</td><td><span class="badge weak">3 MiB（图像限额）</span></td></tr>
-            <tr><td>页数上限</td><td>600（200k 模型 100）</td><td><span class="badge weak">无字段，受大小约束</span></td></tr>
-            <tr><td>数量</td><td>按 32MB / 页数</td><td>Opus <span class="badge weak">1</span> · Sonnet/Haiku 5</td></tr>
-            <tr><td>Citations 引用</td><td><span class="badge best">✅</span></td><td><span class="badge weak">未暴露</span></td></tr>
-            <tr><td>处理方式</td><td>每页 = 文本+图像</td><td><span class="badge best">同（vision）</span></td></tr>
+            <tr><td>输入模型</td><td>独立 <code>document</code> 块</td><td><span class="badge best">✅ 上游支持</span>；代理 <code>/v1/messages</code> 可透传</td></tr>
+            <tr><td>来源方式</td><td>URL / base64 / <code>file_id</code></td><td><span class="badge best">base64 PDF 实测可用</span>；URL/file_id 未验证</td></tr>
+            <tr><td>请求体上限</td><td>32 MB</td><td><span class="badge mid">仍需按 Copilot 上游限额实测</span></td></tr>
+            <tr><td>页数上限</td><td>600（200k 模型 100）</td><td><span class="badge best">页数识别可用</span>；最大页数未验证</td></tr>
+            <tr><td>数量</td><td>按 32MB / 页数</td><td><span class="badge mid">受上游模型限额约束，未做上限压测</span></td></tr>
+            <tr><td>Citations 引用</td><td><span class="badge best">✅</span></td><td><span class="badge best">✅ 返回 <code>cited_text</code> + <code>page_location</code></span></td></tr>
+            <tr><td>代理转换路径</td><td>原生无转换</td><td><span class="badge weak">Chat/Responses 转换路径未建模 document/citations，可能丢弃</span></td></tr>
           </tbody>
         </table>
       </div>
-      <div class="callout warn"><b>代理实现:</b><code>anthropic/types.go</code> 不建模 <code>document</code> 块 → 走 <code>/chat</code>·<code>/responses</code> 转换路径时 PDF 被静默丢弃;<b>仅原生 <code>/v1/messages</code> 透传</b>才能送达上游,且仍受 Copilot 的 3 MiB / 数量小限额。需要完整 PDF 能力请直连 Anthropic 原生。</div>
+      <div class="callout warn"><b>代理实现:</b><code>anthropic/types.go</code> 不建模 <code>document</code> 块和 citations → 走 <code>/chat</code>·<code>/responses</code> 转换路径时可能被丢弃；但通过 <code>/v1/messages</code> 路由会原始字节透传，复测确认 PDF 与 citations 都能到达 Copilot 上游。</div>
     </section>
 
     <!-- Slide 19: Upstream behavior corrections (count_tokens + 1M) -->
@@ -565,7 +565,7 @@
         <div class="card">
           <h3>② count_tokens 上游已支持</h3>
           <p>Anthropic 原生有 <code>POST /v1/messages/count_tokens</code> 预计 token 数;<b>Copilot 上游现已提供该接口</b>。</p>
-          <p class="note">→ 实测 <code>POST /v1/messages/count_tokens</code> 返回 <span class="badge best">HTTP 200</span> <code>{"input_tokens":15}</code>,与原生 Anthropic 行为一致。需要预估 token 的客户端可直接经代理调用,无需本地估算。</p>
+          <p class="note">→ 直连上游实测 <code>POST /v1/messages/count_tokens</code> 返回 <span class="badge best">HTTP 200</span> <code>{"input_tokens":15}</code>,与原生 Anthropic 行为一致；但当前 copilot2api 本地代理尚未注册该路由,代理侧复测为 <span class="badge weak">HTTP 404</span>,需补路由后才能经代理调用。</p>
         </div>
         <div class="card">
           <h3>③ context_management 上游支持，代理丢弃</h3>
@@ -573,7 +573,7 @@
           <p class="note">→ 但代理在 <code>normalizeNativeMessagesBody()</code> 里 <code>delete(obj,"context_management")</code> 主动剥离该字段,且上游 client 不转发客户端的 <code>anthropic-beta</code> 头 → 经代理后功能<b>失效</b>。现上游已支持,可改代理放行。</p>
         </div>
       </div>
-      <div class="callout warn"><b>结论:</b>1M 现已下沉为基础能力(代理已去除多余的 <code>-1m</code> 逻辑),<code>count_tokens</code> 与 <code>context_management</code> 等上游均已支持——差距收窄的瓶颈已从「上游缺能力」转移到「<b>代理未透传</b>」:context_management 被代理 strip、beta 头不外传,需放行后才能用上。</div>
+      <div class="callout warn"><b>结论:</b>1M 现已下沉为基础能力(代理已去除多余的 <code>-1m</code> 逻辑),<code>count_tokens</code> 与 <code>context_management</code> 等上游均已支持——差距收窄的瓶颈已从「上游缺能力」转移到「<b>代理未透传/未路由</b>」:context_management 被代理 strip、beta 头不外传；count_tokens 上游可用但代理尚无路由。</div>
     </section>
 
     <!-- Slide 20: End -->
