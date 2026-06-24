@@ -446,7 +446,7 @@
             <tr><td><code>context_management</code></td><td><span class="badge best">✅</span></td><td><span class="badge weak">❌ 被剥离</span></td></tr>
             <tr><td>Citations 引用</td><td><span class="badge best">✅</span></td><td><span class="badge weak">❌ 未建模</span></td></tr>
             <tr><td>1M 上下文</td><td>beta header <code>context-1m</code></td><td><span class="badge best">✅ 基础模型原生 1M</span>（4.6+ 无需 <code>-1m</code> ID）</td></tr>
-            <tr><td><code>count_tokens</code> 计数</td><td><span class="badge best">✅ <code>/v1/messages/count_tokens</code></span></td><td><span class="badge weak">❌ 上游不支持</span></td></tr>
+            <tr><td><code>count_tokens</code> 计数</td><td><span class="badge best">✅ <code>/v1/messages/count_tokens</code></span></td><td><span class="badge best">✅ 上游已支持</span></td></tr>
             <tr><td>模型能力发现</td><td>vision / max_tokens / tool…</td><td><span class="badge mid">仅 supported_endpoints</span></td></tr>
           </tbody>
         </table>
@@ -561,12 +561,12 @@
           <p class="note">→ 不再需要 <code>anthropic-beta: context-1m</code> 触发独立模型;代理盲拼 <code>-1m</code> 后缀反而会构造出上游不存在的 ID,导致能力探测落空。已修正为能力感知:基础模型已 1M 则不拼后缀。</p>
         </div>
         <div class="card">
-          <h3>② count_tokens 上游不支持</h3>
-          <p>Anthropic 原生有 <code>POST /v1/messages/count_tokens</code> 预计 token 数;<b>Copilot 上游未提供该接口</b>。</p>
-          <p class="note">→ 经代理调用 count_tokens 会失败(上游 404/400)。需要预估 token 的客户端(如某些 Claude 客户端的计数探针)应禁用该调用,或在本地用 <code>o200k_base</code> 分词器自行估算。</p>
+          <h3>② count_tokens 上游已支持</h3>
+          <p>Anthropic 原生有 <code>POST /v1/messages/count_tokens</code> 预计 token 数;<b>Copilot 上游现已提供该接口</b>。</p>
+          <p class="note">→ 实测 <code>POST /v1/messages/count_tokens</code> 返回 <span class="badge best">HTTP 200</span> <code>{"input_tokens":15}</code>,与原生 Anthropic 行为一致。需要预估 token 的客户端可直接经代理调用,无需本地估算。</p>
         </div>
       </div>
-      <div class="callout warn"><b>结论:</b>这两点都属于「上游真实行为 ≠ 原生 Anthropic 假设」——1M 现已下沉为基础能力(代理已去除多余的 <code>-1m</code> 逻辑),而 <code>count_tokens</code> 这类辅助端点在 Copilot 侧缺失。</div>
+      <div class="callout warn"><b>结论:</b>1M 现已下沉为基础能力(代理已去除多余的 <code>-1m</code> 逻辑),<code>count_tokens</code> 这类辅助端点上游也已补齐——Copilot 侧与原生 Anthropic 的行为差距正在收窄。</div>
     </section>
 
     <!-- Slide 20: End -->
