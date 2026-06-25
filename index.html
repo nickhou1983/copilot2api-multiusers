@@ -431,7 +431,7 @@
     <section class="slide">
       <div class="kicker"><span class="dot"></span> 06 · 能力差异</div>
       <h2>能力对比表</h2>
-      <p class="note">中间列为<b>直连上游实测</b>(<code>api.enterprise.githubcopilot.com</code>,绕过代理);凡上游确认可用均标<span class="badge best">✅ 上游支持</span>。右列为经 copilot2api 代理后的实际可用度。</p>
+      <p class="note">中间列为<b>直连上游实测</b>(<code>api.enterprise.githubcopilot.com</code>,绕过代理);凡上游确认可用均标<span class="badge best">✅ 上游支持</span>。右列为经 copilot2api 代理后的实际可用度。<b>本轮把测试矩阵从 20 项扩展到 36 项</b>(新增采样参数、<code>tool_choice</code> 变体、<code>structured_outputs</code>、<code>search_result</code> 等),原生 <code>/v1/messages</code> 路径与直连基本零差异。</p>
       <div class="table-wrap">
         <table>
           <thead><tr><th>能力</th><th>原生 Anthropic</th><th>上游 Copilot（直连实测）</th><th>经代理后</th></tr></thead>
@@ -445,11 +445,25 @@
             <tr><td>Computer Use（<code>computer_*</code>）</td><td><span class="badge best">✅</span></td><td><span class="badge weak">❌ 上游 400（不在白名单）</span></td><td><span class="badge weak">❌</span></td></tr>
             <tr><td>bash / text_editor / memory / tool_search</td><td><span class="badge best">✅</span></td><td><span class="badge best">✅ 上游支持</span>（白名单 · bash 实测 <code>tool_use</code>）</td><td><span class="badge mid">通过 <code>/v1/messages</code> 路由，转换路径丢 type</span></td></tr>
             <tr><td>Prompt Cache <code>cache_control</code></td><td>完整（含 scope）</td><td><span class="badge best">✅ 上游支持</span>（实测写入缓存 2402 tok）</td><td><span class="badge mid">通过 <code>/v1/messages</code> 路由，删 scope</span></td></tr>
-            <tr><td><code>context_management</code> 上下文编辑</td><td><span class="badge best">✅ <code>context-management-2025-06-27</code></span></td><td><span class="badge best">✅ 上游支持</span>（<code>applied_edits</code> 实测触发，需 beta 头）</td><td><span class="badge weak">代理 strip 字段 + 不转发 beta 头</span></td></tr>
+            <tr><td><code>context_management</code> 上下文编辑</td><td><span class="badge best">✅ <code>context-management-2025-06-27</code></span></td><td><span class="badge best">✅ 上游支持</span>（<code>applied_edits</code> 实测触发，需 beta 头）</td><td><span class="badge best">✅ 已透传</span> 保留字段 + 自动加 beta 头（<code>applied_edits</code> 与直连一致）</td></tr>
             <tr><td>Citations 引用</td><td><span class="badge best">✅</span></td><td><span class="badge best">✅ 上游支持</span>（返回 <code>cited_text</code> + <code>page_location</code>）</td><td><span class="badge mid">通过 <code>/v1/messages</code> 路由透传，转换路径未建模</span></td></tr>
             <tr><td>1M 上下文</td><td>beta header <code>context-1m</code></td><td><span class="badge best">✅ 上游支持</span> 基础模型原生 1M（4.6+ 无需 <code>-1m</code>）</td><td><span class="badge best">✅ 能力感知解析</span></td></tr>
-            <tr><td><code>count_tokens</code> 计数</td><td><span class="badge best">✅ <code>/v1/messages/count_tokens</code></span></td><td><span class="badge best">✅ 上游支持</span>（HTTP 200 <code>input_tokens</code>）</td><td><span class="badge weak">代理暂未路由 <code>/v1/messages/count_tokens</code>（404）</span></td></tr>
+            <tr><td><code>count_tokens</code> 计数</td><td><span class="badge best">✅ <code>/v1/messages/count_tokens</code></span></td><td><span class="badge best">✅ 上游支持</span>（HTTP 200 <code>input_tokens</code>）</td><td><span class="badge best">✅ 已路由</span> <code>/v1/messages/count_tokens</code>（<code>input_tokens</code> 与直连一致）</td></tr>
             <tr><td>模型能力发现</td><td>vision / max_tokens / tool…</td><td><span class="badge best">✅ 上游支持</span> <code>/models</code> 全量 capabilities</td><td><span class="badge mid"><code>/v1/models</code> 透传 capabilities；内部路由主要用 supported_endpoints</span></td></tr>
+            <tr><td colspan="4" style="background:var(--cp-accent-soft);color:var(--cp-accent);font-weight:700;text-transform:uppercase;letter-spacing:.04em;font-size:12px;">── 本轮新增实测（采样 / tool_choice / 高级特性，2026-06-25）──</td></tr>
+            <tr><td>采样参数 <code>temperature</code> / <code>top_k</code></td><td><span class="badge best">✅</span></td><td><span class="badge best">✅ 上游支持</span></td><td><span class="badge best">✅ 全路径一致</span></td></tr>
+            <tr><td>采样参数 <code>top_p</code></td><td><span class="badge best">✅</span></td><td><span class="badge best">✅ 上游支持</span></td><td><span class="badge best">✅ 原生一致</span> / <span class="badge weak"><code>/responses</code> 路径 400</span></td></tr>
+            <tr><td><code>stop_sequences</code> 停止序列</td><td><span class="badge best">✅</span></td><td><span class="badge best">✅ 上游支持</span>（实测 <code>stop_reason=stop_sequence</code>）</td><td><span class="badge best">✅ 原生一致</span> / <span class="badge weak"><code>/responses</code> 未生效·<code>/chat</code> 400</span></td></tr>
+            <tr><td><code>metadata</code> / <code>service_tier</code></td><td><span class="badge best">✅</span></td><td><span class="badge best">✅ 上游支持</span></td><td><span class="badge best">✅ 全路径一致</span></td></tr>
+            <tr><td><code>tool_choice</code>（auto / any / tool / none）</td><td><span class="badge best">✅</span></td><td><span class="badge best">✅ 上游支持</span></td><td><span class="badge best">✅ 全路径一致</span></td></tr>
+            <tr><td><code>tool_choice</code> 禁并行（<code>disable_parallel_tool_use</code>）</td><td><span class="badge best">✅</span></td><td><span class="badge best">✅ 上游支持</span></td><td><span class="badge best">✅ 原生一致</span> / <span class="badge weak"><code>/chat</code> 未生效（仍并行）</span></td></tr>
+            <tr><td><code>structured_outputs</code> 结构化输出</td><td><span class="badge best">✅</span></td><td><span class="badge best">✅ 上游支持</span>（<code>valid_json</code>）</td><td><span class="badge best">✅ 与直连一致</span></td></tr>
+            <tr><td><code>interleaved_thinking</code> 交错思考</td><td><span class="badge best">✅</span></td><td><span class="badge best">✅ 上游支持</span></td><td><span class="badge best">✅ 与直连一致</span></td></tr>
+            <tr><td><code>token_efficient_tools</code> 高效工具</td><td><span class="badge best">✅</span></td><td><span class="badge best">✅ 上游支持</span></td><td><span class="badge best">✅ 与直连一致</span></td></tr>
+            <tr><td><code>fine_grained_tool_streaming</code> 细粒度流式</td><td><span class="badge best">✅</span></td><td><span class="badge best">✅ 上游支持</span>（<code>tool_stream</code>）</td><td><span class="badge best">✅ 与直连一致</span></td></tr>
+            <tr><td>扩展缓存 TTL（1h <code>extended_cache_ttl</code>）</td><td><span class="badge best">✅</span></td><td><span class="badge best">✅ 上游支持</span>（写入缓存 1601 tok）</td><td><span class="badge best">✅ 与直连一致</span></td></tr>
+            <tr><td><code>search_result</code> 内容块</td><td><span class="badge best">✅</span></td><td><span class="badge best">✅ 上游支持</span>（直连 HTTP 200）</td><td><span class="badge best">✅ 已修复</span> 原 400 → 现 <code>citations=1</code>（<code>fix: search_result</code>，已部署 7777）</td></tr>
+            <tr><td><code>web_fetch</code> / <code>code_execution</code></td><td><span class="badge best">✅</span></td><td><span class="badge weak">❌ 上游 400 不支持</span>（beta 头被拒）</td><td><span class="badge weak">❌</span></td></tr>
           </tbody>
         </table>
       </div>
@@ -462,9 +476,9 @@
       <div class="grid three">
         <div class="card"><h3>① 上游能力远超「转售」</h3><p>直连实测:文本/流式、function（含并行）、vision base64、<b>PDF 原生 <code>document</code> 块</b>、thinking、cache_control、<b>context_management</b>、<b>citations</b>（带 <code>page_location</code>）、count_tokens、1M 全部<b>上游支持</b>。仅 <b>Computer Use 与 web_search 被拒（400）</b>,URL 图像不支持。</p></div>
         <div class="card"><h3>② 路径决定保真度</h3><p>只有命中原生 <code>/v1/messages</code>（原始字节透传）才可能传递未建模字段；回退到 Responses / Chat 后，结构体重序列化会静默丢字段。</p></div>
-        <div class="card"><h3>③ 瓶颈在代理，不在上游</h3><p>PDF document 块与 citations 可通过 <code>/v1/messages</code> 透传；<code>context_management</code> 仍因代理主动 strip 且不转发 beta 头而失效；<code>count_tokens</code> 上游已支持但代理暂未路由。</p></div>
+        <div class="card"><h3>③ 代理已补齐缺口</h3><p>PDF document 块与 citations 可通过 <code>/v1/messages</code> 透传；<code>context_management</code> 与 <code>count_tokens</code> 已在代理侧补齐(保留字段 + 自动加 beta 头 / 注册 <code>count_tokens</code> 路由)，经代理与直连结果一致。仅剩 <code>cache_control.scope</code> 因上游不支持被代理静默剥离。</p></div>
       </div>
-      <div class="callout warn"><b>建议：</b>需要 PDF document 块、citations、server 工具等高级能力时务必走 <code>/v1/messages</code> 路由（转换路径会因 <code>AnthropicTool</code> 未建模 <code>type</code>、document 块未建模而降级丢弃）；context_management 与 count_tokens 需补代理透传/路由；Computer Use 与 web_search 在 Copilot 上游确不可用。</div>
+      <div class="callout warn"><b>建议：</b>需要 PDF document 块、citations、server 工具等高级能力时务必走 <code>/v1/messages</code> 路由（转换路径会因 <code>AnthropicTool</code> 未建模 <code>type</code>、document 块未建模而降级丢弃）；<code>context_management</code> 与 <code>count_tokens</code> 现已透传/路由,经代理与直连等价；Computer Use 与 web_search 在 Copilot 上游确不可用。</div>
     </section>
 
     <!-- Slide 15: Extended Thinking intro + request mapping -->
@@ -563,17 +577,17 @@
           <p class="note">→ 不再需要 <code>anthropic-beta: context-1m</code> 触发独立模型;代理盲拼 <code>-1m</code> 后缀反而会构造出上游不存在的 ID,导致能力探测落空。已修正为能力感知:基础模型已 1M 则不拼后缀。</p>
         </div>
         <div class="card">
-          <h3>② count_tokens 上游已支持</h3>
+          <h3>② count_tokens 上游 + 代理均已支持</h3>
           <p>Anthropic 原生有 <code>POST /v1/messages/count_tokens</code> 预计 token 数;<b>Copilot 上游现已提供该接口</b>。</p>
-          <p class="note">→ 直连上游实测 <code>POST /v1/messages/count_tokens</code> 返回 <span class="badge best">HTTP 200</span> <code>{"input_tokens":15}</code>,与原生 Anthropic 行为一致；但当前 copilot2api 本地代理尚未注册该路由,代理侧复测为 <span class="badge weak">HTTP 404</span>,需补路由后才能经代理调用。</p>
+          <p class="note">→ 直连上游实测 <code>POST /v1/messages/count_tokens</code> 返回 <span class="badge best">HTTP 200</span> <code>{"input_tokens":14}</code>,与原生 Anthropic 行为一致；代理<b>已注册该路由</b>(<code>main.go</code> + <code>handleCountTokens</code>),复测同样返回 <span class="badge best">HTTP 200 <code>input_tokens=14</code></span>,与直连一致。</p>
         </div>
         <div class="card">
-          <h3>③ context_management 上游支持，代理丢弃</h3>
+          <h3>③ context_management 上游 + 代理均已支持</h3>
           <p>实测上游<b>原生支持 Anthropic 上下文编辑</b>:带 <code>anthropic-beta: context-management-2025-06-27</code> + <code>clear_tool_uses_20250919</code> 触发器,服务端<b>真的裁剪</b>了 tool_use(<code>applied_edits:[{cleared_tool_uses:1}]</code>,HTTP 200)。不带 beta 头则 <code>context_management</code> 回显为 <code>null</code>。</p>
-          <p class="note">→ 但代理在 <code>normalizeNativeMessagesBody()</code> 里 <code>delete(obj,"context_management")</code> 主动剥离该字段,且上游 client 不转发客户端的 <code>anthropic-beta</code> 头 → 经代理后功能<b>失效</b>。现上游已支持,可改代理放行。</p>
+          <p class="note">→ 代理已修正:<code>normalizeNativeMessagesBody()</code> <b>保留</b> <code>context_management</code> 字段,并在检测到该字段时<b>自动注入</b> <code>anthropic-beta: context-management-2025-06-27</code> 上游头 → 经代理复测同样返回 <code>applied_edits:[{cleared_tool_uses:1, cleared_input_tokens:1211}]</code>,与直连一致。</p>
         </div>
       </div>
-      <div class="callout warn"><b>结论:</b>1M 现已下沉为基础能力(代理已去除多余的 <code>-1m</code> 逻辑),<code>count_tokens</code> 与 <code>context_management</code> 等上游均已支持——差距收窄的瓶颈已从「上游缺能力」转移到「<b>代理未透传/未路由</b>」:context_management 被代理 strip、beta 头不外传；count_tokens 上游可用但代理尚无路由。</div>
+      <div class="callout warn"><b>结论:</b>1M 现已下沉为基础能力(代理已去除多余的 <code>-1m</code> 逻辑),<code>count_tokens</code> 与 <code>context_management</code> 上游与代理<b>均已支持且经代理与直连等价</b>。19 项能力对比中代理仅剩 1 处刻意差异:<code>cache_control.scope</code> 上游不支持(400),代理会静默剥离该字段使请求通过。</div>
     </section>
 
     <!-- Slide 20: End -->
