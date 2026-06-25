@@ -373,6 +373,101 @@ def _err_msg(r):
     return ""
 
 
+# --- A group: sampling / request parameters -------------------------------- #
+def insp_stop_sequence(r):
+    # stop_sequences must truncate generation: a passing response reports
+    # stop_reason="stop_sequence" with the matched sequence echoed back.
+    if not r["ok"]:
+        return False, f"HTTP {r['status']} {_err_msg(r)}"
+    p = r["parsed"] or {}
+    sr = p.get("stop_reason")
+    ss = p.get("stop_sequence")
+    return (sr == "stop_sequence"), f"HTTP 200 stop_reason={sr} stop_sequence={ss!r}"
+
+
+# --- B group: tool_choice variants ----------------------------------------- #
+def _tool_use_names(parsed):
+    return [b.get("name") for b in (parsed or {}).get("content", [])
+            if isinstance(b, dict) and b.get("type") == "tool_use"]
+
+
+def insp_tool_choice_auto(r):
+    # auto: model may or may not call a tool; any 200 is acceptable.
+    if not r["ok"]:
+        return False, f"HTTP {r['status']} {_err_msg(r)}"
+    p = r["parsed"] or {}
+    return True, f"HTTP 200 content={_content_types(p)} tool_use={_tool_use_names(p)} stop={p.get('stop_reason')}"
+
+
+def insp_tool_choice_any(r):
+    # any: model is forced to call at least one tool.
+    if not r["ok"]:
+        return False, f"HTTP {r['status']} {_err_msg(r)}"
+    names = _tool_use_names(r["parsed"])
+    return (len(names) >= 1), f"HTTP 200 tool_use={names} stop={(r['parsed'] or {}).get('stop_reason')}"
+
+
+def insp_tool_choice_forced(r):
+    # tool: model must call the named tool (get_weather).
+    if not r["ok"]:
+        return False, f"HTTP {r['status']} {_err_msg(r)}"
+    names = _tool_use_names(r["parsed"])
+    return ("get_weather" in names), f"HTTP 200 tool_use={names}"
+
+
+def insp_tool_choice_none(r):
+    # none: tools provided but tool use forbidden -> expect no tool_use block.
+    if not r["ok"]:
+        return False, f"HTTP {r['status']} {_err_msg(r)}"
+    types = _content_types(r["parsed"])
+    return ("tool_use" not in types), f"HTTP 200 content={types} stop={(r['parsed'] or {}).get('stop_reason')}"
+
+
+def insp_tool_choice_no_parallel(r):
+    # any + disable_parallel_tool_use: forced to call a tool, but only one.
+    if not r["ok"]:
+        return False, f"HTTP {r['status']} {_err_msg(r)}"
+    names = _tool_use_names(r["parsed"])
+    return (len(names) == 1), f"HTTP 200 tool_use_count={len(names)} tool_use={names}"
+
+
+# --- D group: newer Anthropic capabilities --------------------------------- #
+def insp_structured_outputs(r):
+    # JSON outputs (output_config.format): the assistant text must be valid JSON
+    # matching the requested schema (city + temp_c). Copilot advertises
+    # structured_outputs=true, and native passthrough forwards output_config.
+    if not r["ok"]:
+        return False, f"HTTP {r['status']} {_err_msg(r)}"
+    parts = [b.get("text", "") for b in (r["parsed"] or {}).get("content", [])
+             if isinstance(b, dict) and b.get("type") == "text"]
+    txt = "".join(parts).strip()
+    try:
+        obj = json.loads(txt)
+    except Exception:  # noqa: BLE001
+        return False, f"HTTP 200 non-JSON output: {txt[:80]!r}"
+    ok = isinstance(obj, dict) and "city" in obj and "temp_c" in obj
+    keys = sorted(obj.keys()) if isinstance(obj, dict) else None
+    return ok, f"HTTP 200 valid_json={ok} json_keys={keys}"
+
+
+def insp_fine_grained_stream(r):
+    # fine-grained tool streaming: the SSE stream must carry tool-call input,
+    # i.e. a tool_use content_block_start and/or input_json_delta events.
+    if not r["ok"]:
+        return False, f"HTTP {r['status']} {_err_msg(r)}"
+    evs = r["events"] or []
+    kinds = sorted({e.get("type") for e in evs})
+    has_tool = any(
+        (e.get("type") == "content_block_start"
+         and isinstance(e.get("content_block"), dict)
+         and e["content_block"].get("type") == "tool_use")
+        or (e.get("type") == "content_block_delta"
+            and isinstance(e.get("delta"), dict)
+            and e["delta"].get("type") == "input_json_delta")
+        for e in evs)
+    return has_tool, f"HTTP 200 events={len(evs)} tool_stream={has_tool} kinds={kinds[:6]}"
+
+
 def build_tests(model: str):
     user = lambda t: [{"role": "user", "content": t}]  # noqa: E731
     weather_tool = {
@@ -529,6 +624,160 @@ def build_tests(model: str):
         beta=["context-1m-2025-08-07"], expect="support",
         body=base(messages=user("Reply with exactly: pong")),
         inspect=insp_context_1m))
+
+    # ----------------------------------------------------------------------- #
+    # A 组: 采样 / 请求参数 (proxy converts these on the chat/responses paths;
+    # native passthrough forwards them verbatim). These verify the upstream
+    # accepts each field and the proxy preserves it.
+    # ----------------------------------------------------------------------- #
+    tests.append(dict(
+        name="temperature", kind="messages", stream=False, beta=[], expect="support",
+        body=base(temperature=0.0, messages=user("Reply with exactly: pong")),
+        inspect=insp_text))
+
+    tests.append(dict(
+        name="top_p", kind="messages", stream=False, beta=[], expect="support",
+        body=base(top_p=0.5, messages=user("Reply with exactly: pong")),
+        inspect=insp_text))
+
+    tests.append(dict(
+        name="top_k", kind="messages", stream=False, beta=[], expect="support",
+        body=base(top_k=10, messages=user("Reply with exactly: pong")),
+        inspect=insp_text))
+
+    tests.append(dict(
+        name="stop_sequences", kind="messages", stream=False, beta=[], expect="support",
+        body=base(stop_sequences=["STOP"],
+                  messages=user('Repeat this text verbatim and nothing else: alpha bravo STOP charlie delta')),
+        inspect=insp_stop_sequence))
+
+    tests.append(dict(
+        name="metadata", kind="messages", stream=False, beta=[], expect="support",
+        body=base(metadata={"user_id": "capability-test-user"},
+                  messages=user("Reply with exactly: pong")),
+        inspect=insp_text))
+
+    tests.append(dict(
+        name="service_tier", kind="messages", stream=False, beta=[], expect="support",
+        body=base(service_tier="auto", messages=user("Reply with exactly: pong")),
+        inspect=insp_text))
+
+    # ----------------------------------------------------------------------- #
+    # B 组: tool_choice 变体 (mapToolChoice handles auto/any/tool/none plus
+    # disable_parallel_tool_use). Each variant asserts the routing behaviour.
+    # ----------------------------------------------------------------------- #
+    tests.append(dict(
+        name="tool_choice_auto", kind="messages", stream=False, beta=[], expect="support",
+        body=base(tools=[weather_tool], tool_choice={"type": "auto"},
+                  messages=user("What's the weather in Paris?")),
+        inspect=insp_tool_choice_auto))
+
+    tests.append(dict(
+        name="tool_choice_any", kind="messages", stream=False, beta=[], expect="support",
+        body=base(tools=[weather_tool, time_tool], tool_choice={"type": "any"},
+                  messages=user("Help me plan a trip to Paris.")),
+        inspect=insp_tool_choice_any))
+
+    tests.append(dict(
+        name="tool_choice_tool", kind="messages", stream=False, beta=[], expect="support",
+        body=base(tools=[weather_tool, time_tool],
+                  tool_choice={"type": "tool", "name": "get_weather"},
+                  messages=user("Do something useful for Paris.")),
+        inspect=insp_tool_choice_forced))
+
+    tests.append(dict(
+        name="tool_choice_none", kind="messages", stream=False, beta=[], expect="support",
+        body=base(tools=[weather_tool], tool_choice={"type": "none"},
+                  messages=user("What's the weather in Paris? Answer in plain text, do not call any tool.")),
+        inspect=insp_tool_choice_none))
+
+    tests.append(dict(
+        name="tool_choice_no_parallel", kind="messages", stream=False, beta=[], expect="support",
+        body=base(tools=[weather_tool, time_tool],
+                  tool_choice={"type": "any", "disable_parallel_tool_use": True},
+                  messages=user("Get BOTH the weather in Paris and the time in Asia/Tokyo.")),
+        inspect=insp_tool_choice_no_parallel))
+
+    # ----------------------------------------------------------------------- #
+    # D 组: 较新的 Anthropic 能力 (矩阵缺口). Most are Anthropic server-side
+    # features the Copilot upstream may not implement. These establish a
+    # baseline and surface upstream/proxy divergence. Header-only betas
+    # (interleaved/token-efficient/fine-grained) are usually ignored rather than
+    # rejected, so they expect "support" with the underlying feature still
+    # working; genuine server tools (web_fetch/code_execution) expect "reject".
+    # ----------------------------------------------------------------------- #
+    tests.append(dict(
+        name="structured_outputs", kind="messages", stream=False, beta=[], expect="support",
+        body=base(
+            messages=user("Extract structured data: it is 22 degrees Celsius in Paris right now."),
+            output_config={"format": {"type": "json_schema", "schema": {
+                "type": "object",
+                "properties": {"city": {"type": "string"}, "temp_c": {"type": "number"}},
+                "required": ["city", "temp_c"],
+                "additionalProperties": False,
+            }}}),
+        inspect=insp_structured_outputs))
+
+    tests.append(dict(
+        name="web_fetch", kind="messages", stream=False,
+        beta=["web-fetch-2025-09-10"], expect="reject",
+        body=base(tools=[{"type": "web_fetch_20250910", "name": "web_fetch"}],
+                  messages=user("Fetch https://example.com and summarize it.")),
+        inspect=insp_reject))
+
+    tests.append(dict(
+        name="code_execution", kind="messages", stream=False,
+        beta=["code-execution-2025-08-25"], expect="reject",
+        body=base(tools=[{"type": "code_execution_20250825", "name": "code_execution"}],
+                  messages=user("Use code execution to compute the mean of [1,2,3,4,5].")),
+        inspect=insp_reject))
+
+    tests.append(dict(
+        name="search_result", kind="messages", stream=False,
+        beta=["search-results-2025-06-09"], expect="support",
+        body=base(messages=[{"role": "user", "content": [
+            {"type": "search_result",
+             "source": "https://example.com/doc",
+             "title": "Capability Test Doc",
+             "content": [{"type": "text", "text": "The secret marker is BANANA-42."}],
+             "citations": {"enabled": True}},
+            {"type": "text", "text": "What is the secret marker? Cite the source."},
+        ]}]),
+        inspect=insp_citations))
+
+    tests.append(dict(
+        name="interleaved_thinking", kind="messages", stream=False,
+        beta=["interleaved-thinking-2025-05-14"], expect="support",
+        variants=[
+            base(max_tokens=2048, thinking={"type": "enabled", "budget_tokens": 1024},
+                 messages=user("Think briefly, then answer: what is 12 * 12?")),
+            base(max_tokens=2048, thinking={"type": "adaptive"}, output_config={"effort": "high"},
+                 messages=user("Think briefly, then answer: what is 12 * 12?")),
+        ],
+        inspect=insp_thinking))
+
+    tests.append(dict(
+        name="token_efficient_tools", kind="messages", stream=False,
+        beta=["token-efficient-tools-2025-02-19"], expect="support",
+        body=base(tools=[weather_tool],
+                  messages=user("What's the weather in Paris? Use the tool.")),
+        inspect=insp_function))
+
+    tests.append(dict(
+        name="fine_grained_tool_streaming", kind="messages", stream=True,
+        beta=["fine-grained-tool-streaming-2025-05-14"], expect="support",
+        body=base(stream=True, tools=[weather_tool],
+                  messages=user("What's the weather in Paris? Use the tool.")),
+        inspect=insp_fine_grained_stream))
+
+    cache_text_1h = ("You are a helpful caching assistant. " * 200).strip()
+    tests.append(dict(
+        name="extended_cache_ttl", kind="messages", stream=False,
+        beta=["extended-cache-ttl-2025-04-11"], expect="support",
+        body=base(system=[{"type": "text", "text": cache_text_1h,
+                           "cache_control": {"type": "ephemeral", "ttl": "1h"}}],
+                  messages=user("Say hi.")),
+        inspect=insp_cache))
 
     tests.append(dict(
         name="model_discovery", kind="models", stream=False, beta=[], expect="support",

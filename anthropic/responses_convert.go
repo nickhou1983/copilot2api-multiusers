@@ -256,6 +256,10 @@ func convertUserBlockToResponsesContent(block AnthropicContentBlock) *ResponseIn
 			url := imageDataURL(block.Source.MediaType, block.Source.Data)
 			return &ResponseInputContent{Type: "input_image", ImageURL: url, Detail: "auto"}
 		}
+	case "search_result":
+		if t := searchResultText(block); t != "" {
+			return &ResponseInputContent{Type: "input_text", Text: t}
+		}
 	}
 	return nil
 }

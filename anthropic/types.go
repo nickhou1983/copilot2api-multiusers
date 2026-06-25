@@ -143,13 +143,43 @@ type AnthropicContentBlock struct {
 	// Thinking block fields
 	Thinking  string `json:"thinking,omitempty"`
 	Signature string `json:"signature,omitempty"`
+
+	// Search result block fields (RAG citations); Content holds the result text.
+	Title string `json:"title,omitempty"`
 }
 
-// AnthropicImageSource represents image data
+// AnthropicImageSource represents an image/document source.
+//
+// It is normally a JSON object: {"type":"base64","media_type":...,"data":...}
+// for inline data or {"type":"url","url":...} for a URL source. search_result
+// content blocks instead carry a bare string source (a URL or identifier), so
+// UnmarshalJSON accepts both an object and a string. Without this, a string
+// source made the whole content array fail to parse ("content must be string
+// or array of blocks"), which rejected search_result blocks the upstream
+// otherwise supports.
 type AnthropicImageSource struct {
-	Type      string `json:"type"`       // "base64"
-	MediaType string `json:"media_type"` // "image/jpeg", "image/png", etc.
-	Data      string `json:"data"`       // base64 encoded data
+	Type      string `json:"type"`                 // "base64", "url"
+	MediaType string `json:"media_type,omitempty"` // "image/jpeg", "image/png", etc.
+	Data      string `json:"data,omitempty"`       // base64 encoded data
+	URL       string `json:"url,omitempty"`        // url source, or search_result string source
+}
+
+// UnmarshalJSON accepts either an object source or a bare string source
+// (used by search_result content blocks).
+func (s *AnthropicImageSource) UnmarshalJSON(data []byte) error {
+	var str string
+	if err := json.Unmarshal(data, &str); err == nil {
+		s.Type = "url"
+		s.URL = str
+		return nil
+	}
+	type alias AnthropicImageSource
+	var a alias
+	if err := json.Unmarshal(data, &a); err != nil {
+		return err
+	}
+	*s = AnthropicImageSource(a)
+	return nil
 }
 
 // AnthropicTool represents a tool definition

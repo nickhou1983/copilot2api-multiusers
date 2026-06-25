@@ -63,12 +63,43 @@ Environment fallbacks: `COPILOT2API_ACCOUNT`, `COPILOT2API_TEST_URL`,
 
 ## Capability matrix
 
+Core / content / tools:
+
 `text`, `streaming`, `function_calling`, `parallel_tools`, `vision_base64`,
 `vision_url` (expect reject), `pdf_document`, `extended_thinking`,
 `server_tool_bash` / `server_tool_text_editor` / `server_tool_memory`,
 `prompt_cache`, `cache_control_scope`, `context_management`, `citations`,
 `web_search` (expect reject), `computer_use` (expect reject), `count_tokens`,
-`model_discovery`.
+`context_1m`, `model_discovery`.
+
+Sampling / request parameters (group A):
+
+`temperature`, `top_p`, `top_k`, `stop_sequences`, `metadata`, `service_tier`.
+
+`tool_choice` variants (group B):
+
+`tool_choice_auto`, `tool_choice_any`, `tool_choice_tool` (forced
+`get_weather`), `tool_choice_none`, `tool_choice_no_parallel`
+(`any` + `disable_parallel_tool_use`).
+
+Newer Anthropic capabilities (group D):
+
+`structured_outputs` (`output_config.format` JSON schema), `web_fetch` (expect
+reject), `code_execution` (expect reject), `search_result` blocks,
+`interleaved_thinking`, `token_efficient_tools`, `fine_grained_tool_streaming`,
+`extended_cache_ttl` (1h cache).
+
+The proxy only forwards the `context-management` beta header upstream and
+strips every other `anthropic-beta` value, so the header-only D features
+(`interleaved_thinking` / `token_efficient_tools` /
+`fine_grained_tool_streaming` / `extended_cache_ttl`) reach the upstream as
+plain requests and succeed, while `web_fetch` / `code_execution` server tools
+are rejected by the upstream. `structured_outputs` works end-to-end (Copilot
+advertises it and native passthrough forwards `output_config.format`).
+`search_result` content blocks also work end-to-end: the Copilot upstream
+returns `search_result_location` citations, and the proxy now parses their bare
+string `source` (it previously rejected these blocks with `400 "content must be
+string or array of blocks"` before the request reached upstream).
 
 `reject` tests pass when the upstream returns a `4xx` (capability absent).
 
@@ -76,6 +107,22 @@ The `extended_thinking` test is shape-aware: it tries the legacy
 `thinking.type=enabled` + `budget_tokens` form first, then falls back to the
 newer `thinking.type=adaptive` + `output_config.effort` form (required by
 `claude-opus-4.6/4.7/4.8`), so the capability is detected regardless of model.
+
+### Route coverage note
+
+Claude models advertise `/v1/messages`, so they take the **native passthrough**
+route where group A/B fields are forwarded verbatim — run the matrix with the
+default `--model claude-sonnet-4.6` to verify that. To also exercise the
+**conversion** routes (where the proxy translates the request), point `--model`
+at a model that lacks native messages support:
+
+- `--model gpt-5.4` → `/responses` route. Observed: `top_p` is rejected with
+  `400` for reasoning models (forwarded despite `temperature` being pinned to
+  `1`), and `stop_sequences` is dropped (the Responses API has no stop param).
+- `--model gemini-3.5-flash` → `/chat/completions` route. `temperature` /
+  `top_p` / `stop_sequences` / `metadata` map across; `top_k` / `service_tier`
+  are dropped; `disable_parallel_tool_use` is wired but may be ignored by the
+  model.
 
 ## Output
 

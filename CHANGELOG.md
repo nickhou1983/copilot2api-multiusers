@@ -14,6 +14,7 @@
 
 ### Bug Fixes
 
+- Fix `search_result` content blocks being rejected with `400 "content must be string or array of blocks"`. Search-result blocks carry a bare string `source`, but the proxy only modeled the object image `source`, so parsing the whole content array failed before the request ever reached upstream. `AnthropicImageSource` now accepts both an object source and a bare string source, restoring native passthrough of `search_result` blocks — which the Copilot upstream supports, returning `search_result_location` citations. The Chat Completions and Responses conversion paths downgrade `search_result` blocks to plain text (preserving the content, dropping citation metadata that those APIs can't express).
 - Fix 1M context handling for the `anthropic-beta: context-1m` header (used by Claude Code): the proxy no longer blindly appends a `-1m` suffix to the model ID. It now only switches to a `-1m` variant when the base model doesn't already advertise a 1M context window and that variant actually exists upstream. Newer Claude models (e.g. `claude-sonnet-4.6`, `claude-opus-4.6/4.7/4.8`) expose 1M on the base model ID, so requesting the 1M context no longer produces a non-existent `-1m` model ID that broke capability detection and routing.
 
 ### Compatibility
