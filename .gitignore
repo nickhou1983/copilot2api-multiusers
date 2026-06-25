@@ -40,3 +40,5 @@ copilot2api-darwin-arm64
 
 # Capability test artifacts
 scripts/out/
+__pycache__/
+*.pyc
