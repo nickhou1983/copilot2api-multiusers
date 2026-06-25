@@ -329,6 +329,18 @@ def insp_count_tokens(r):
     return (it is not None), f"HTTP 200 input_tokens={it}"
 
 
+def insp_context_1m(r):
+    # 1M-context case: request carries the context-1m beta header. The proxy must
+    # keep a natively-1M model (e.g. claude-opus-4.8) as-is rather than fabricate
+    # a non-existent "-1m" variant, which would 404/400 upstream. The echoed
+    # model field is the strongest signal the alias resolved correctly.
+    if not r["ok"]:
+        return False, f"HTTP {r['status']} {_err_msg(r)}"
+    types = _content_types(r["parsed"])
+    model = (r["parsed"] or {}).get("model")
+    return ("text" in types), f"HTTP 200 model={model} content={types}"
+
+
 def insp_models(r):
     if not r["ok"]:
         return False, f"HTTP {r['status']}"
@@ -511,6 +523,12 @@ def build_tests(model: str):
         name="count_tokens", kind="count_tokens", stream=False, beta=[], expect="support",
         body={"model": model, "messages": user("How many tokens is this sentence?")},
         inspect=insp_count_tokens))
+
+    tests.append(dict(
+        name="context_1m", kind="messages", stream=False,
+        beta=["context-1m-2025-08-07"], expect="support",
+        body=base(messages=user("Reply with exactly: pong")),
+        inspect=insp_context_1m))
 
     tests.append(dict(
         name="model_discovery", kind="models", stream=False, beta=[], expect="support",
