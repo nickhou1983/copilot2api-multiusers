@@ -10,11 +10,11 @@ A lightweight Go proxy that exposes GitHub Copilot as OpenAI-compatible, Anthrop
 
 - **OpenAI API Compatible**: `/v1/chat/completions`, `/v1/models`, `/v1/embeddings`, `/v1/responses`
 - **Embeddings Support**: Native OpenAI-compatible `/v1/embeddings` endpoint
-- **Anthropic API Compatible**: `/v1/messages`
+- **Anthropic API Compatible**: `/v1/messages`, `/v1/messages/count_tokens`
 - **Gemini API Compatible**: `/v1beta/models`, `/v1beta/models/{model}:generateContent`, `/v1beta/models/{model}:streamGenerateContent`, `/v1beta/models/{model}:countTokens`
 - **AmpCode Compatible**: `/amp/v1/*` routes for chat, `/api/provider/*` for provider-specific calls, management proxied to `ampcode.com`
 - **Streaming Support**: Full SSE streaming for both OpenAI and Anthropic formats
-- **Anthropic Routing**: Uses native `/v1/messages` when the model supports it, otherwise routes via `/responses` or `/chat/completions`
+- **Anthropic Routing**: Uses native `/v1/messages` when the model supports it, otherwise routes via `/responses` or `/chat/completions`. Native passthrough preserves advanced fields such as `context_management` (auto-adding the `context-management-2025-06-27` beta) and `search_result` content blocks.
 - **Multi-Account**: Map API keys to GitHub accounts 1:1 with isolated credential stores (see [Multiple GitHub Accounts](#multiple-github-accounts))
 - **Web Admin UI**: Manage accounts and view token-usage statistics at `/admin/` (multi-account mode)
 - **Auto Authentication**: GitHub Device Flow OAuth with automatic token refresh
@@ -262,6 +262,7 @@ message = client.messages.create(
 | `/v1/models` | GET | List available models (5min cache) |
 | `/v1/embeddings` | POST | Generate embeddings (string or array input) |
 | `/v1/messages` | POST | Anthropic Messages API (streaming & non-streaming) |
+| `/v1/messages/count_tokens` | POST | Anthropic token counting (proxied to upstream) |
 | `/v1beta/models` | GET | List Gemini-compatible models |
 | `/v1beta/models/{model}:generateContent` | POST | Gemini Generate Content |
 | `/v1beta/models/{model}:streamGenerateContent` | POST | Gemini Generate Content streaming SSE |

@@ -1,5 +1,7 @@
 # Changelog
 
+[English](CHANGELOG.md) | [简体中文](CHANGELOG.zh-CN.md)
+
 ## [Unreleased]
 
 ### Features
@@ -23,11 +25,12 @@
 
 ### Docs
 
-- Document multi-account, admin UI, and token-usage stats in the README, and add a Simplified Chinese translation (`README.zh-CN.md`) with language switch links.
+- Document the `/v1/messages/count_tokens` endpoint and native-passthrough fields (`context_management`, `search_result`) in both `README.md` and `README.zh-CN.md` (Features list and API Endpoints table).
+- Document multi-account, admin UI, and token-usage stats in the README, and add Simplified Chinese translations (`README.zh-CN.md`, `CHANGELOG.zh-CN.md`) with language switch links.
 
 ### Tests
 
-- Add `scripts/capability_test.py`, a dependency-free capability comparison tester that runs the same Anthropic Messages API matrix against the live GitHub Copilot upstream and a running copilot2api proxy, then emits a Markdown comparison report plus a sanitized raw-JSON sidecar. Use `--target direct|proxy|both` (with optional `--start-proxy` to auto-launch a local proxy). It surfaces proxy-vs-upstream differences such as `context_management` being stripped, `cache_control.scope` being dropped, and `/v1/messages/count_tokens` returning `404`. Stored tokens are never printed or written to output. See `scripts/README.md`.
+- Add `scripts/capability_test.py`, a dependency-free capability comparison tester that runs the same Anthropic Messages API matrix against the live GitHub Copilot upstream and a running copilot2api proxy, then emits a Markdown comparison report plus a sanitized raw-JSON sidecar. Use `--target direct|proxy|both` (with optional `--start-proxy` to auto-launch a local proxy). The matrix covers ~36 capabilities — text/streaming, function & parallel tools, `tool_choice` variants, sampling params (`temperature`/`top_p`/`top_k`/`stop_sequences`/`metadata`/`service_tier`), vision, PDF documents, extended/interleaved thinking, server tools, prompt cache (incl. 1h `extended_cache_ttl`), `context_management`, `count_tokens`, `structured_outputs`, `search_result`, citations, 1M context, and reject-cases (web search, computer use, web fetch, code execution). It pinpoints where the proxy diverges from upstream; after the fixes in this release the only remaining native-path difference is the intentional `cache_control.scope` strip, while conversion paths (`/responses`, `/chat/completions`) still drop some fields (e.g. `stop_sequences`, `disable_parallel_tool_use`). Stored tokens are never printed or written to output. See `scripts/README.md`.
 
 ## [0.3.1] - 2026-04-26
 
