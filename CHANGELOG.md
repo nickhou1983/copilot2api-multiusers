@@ -4,6 +4,8 @@
 
 ### Features
 
+- Add a native Anthropic token-counting endpoint: `POST /v1/messages/count_tokens` now proxies to the upstream Copilot token counter (previously it returned `404`). The request is forwarded with the same model-alias resolution and `cache_control.scope` stripping as `/v1/messages`, and the upstream `{ "input_tokens": N }` response is returned verbatim.
+- Forward `context_management` on native `/v1/messages` requests instead of stripping it. When a request body includes a `context_management` field, the proxy preserves it and adds the `anthropic-beta: context-management-2025-06-27` header to the upstream call so context edits (e.g. `clear_tool_uses_20250919`) are actually applied and reported back in `usage`/`context_management.applied_edits`.
 - Add multi-account support: map API keys to GitHub accounts 1:1 via an `accounts.json` config file. Each account uses an isolated credential store and its own models cache, so token refresh and capability-based routing stay per-account. Configure the file path with `COPILOT2API_ACCOUNTS_FILE` (defaults to `<token-dir>/accounts.json`).
 - API keys are extracted from `Authorization: Bearer`, `x-api-key`, `x-goog-api-key`, or the `?key=` query parameter, covering OpenAI, Anthropic, and Gemini clients.
 - Add a web admin UI at `/admin/` (multi-account mode only) to maintain the API key ↔ GitHub account mapping: list, add, rotate keys, and delete accounts, plus authenticate accounts via a browser-driven GitHub Device Flow. Changes are saved to `accounts.json` and applied live without a restart. Optionally protect it with `COPILOT2API_ADMIN_TOKEN` (sent as `X-Admin-Token` header or `?admin_token=`).
@@ -21,6 +23,10 @@
 ### Docs
 
 - Document multi-account, admin UI, and token-usage stats in the README, and add a Simplified Chinese translation (`README.zh-CN.md`) with language switch links.
+
+### Tests
+
+- Add `scripts/capability_test.py`, a dependency-free capability comparison tester that runs the same Anthropic Messages API matrix against the live GitHub Copilot upstream and a running copilot2api proxy, then emits a Markdown comparison report plus a sanitized raw-JSON sidecar. Use `--target direct|proxy|both` (with optional `--start-proxy` to auto-launch a local proxy). It surfaces proxy-vs-upstream differences such as `context_management` being stripped, `cache_control.scope` being dropped, and `/v1/messages/count_tokens` returning `404`. Stored tokens are never printed or written to output. See `scripts/README.md`.
 
 ## [0.3.1] - 2026-04-26
 

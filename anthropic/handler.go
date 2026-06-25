@@ -36,6 +36,14 @@ func NewHandler(authClient upstream.TokenProvider, transport *http.Transport, mc
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 
+	// /v1/messages/count_tokens is a distinct upstream endpoint; route it before
+	// the standard Messages handling (which validates max_tokens that
+	// count_tokens requests don't carry).
+	if strings.HasSuffix(r.URL.Path, "/count_tokens") {
+		h.handleCountTokens(w, r)
+		return
+	}
+
 	if r.Method != "POST" {
 		WriteAnthropicError(w, http.StatusMethodNotAllowed, AnthropicErrorTypeInvalidRequest, "Method not allowed")
 		return
@@ -101,8 +109,11 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		slog.Debug("native /messages passthrough request", "model", anthropicReq.Model, "top_level_keys", topLevelInfo.Keys, "has_context_management", topLevelInfo.HasContextManagement, "cache_control_count", cacheControlInfo.Count, "cache_control_scope_count", cacheControlInfo.ScopeCount, "cache_control_paths", cacheControlInfo.Paths, "cache_control_scope_paths", cacheControlInfo.ScopePaths)
 		// Only re-encode the body for native passthrough (the only path that
 		// sends raw reqBody). Responses and Chat Completions paths use the
-		// parsed struct, so they skip this JSON round-trip.
-		if modelChanged || cacheControlInfo.ScopeCount > 0 || topLevelInfo.HasContextManagement {
+		// parsed struct, so they skip this JSON round-trip. context_management
+		// is forwarded as-is (see normalizeNativeMessagesBody); the only body
+		// mutations are the model alias and removing the upstream-rejected
+		// cache_control.scope field.
+		if modelChanged || cacheControlInfo.ScopeCount > 0 {
 			newBody, err := normalizeNativeMessagesBody(reqBody, resolvedModel, modelChanged)
 			if err != nil {
 				WriteAnthropicError(w, http.StatusBadRequest, AnthropicErrorTypeInvalidRequest, fmt.Sprintf("Invalid JSON: %v", err))
@@ -111,12 +122,9 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			if cacheControlInfo.ScopeCount > 0 {
 				slog.Debug("normalized native /messages request", "removed_cache_control_scope_paths", cacheControlInfo.ScopePaths)
 			}
-			if topLevelInfo.HasContextManagement {
-				slog.Debug("normalized native /messages request", "removed_top_level_field", "context_management")
-			}
 			reqBody = newBody
 		}
-		h.handleNativeMessagesPassthrough(w, r, reqBody, anthropicReq.Stream)
+		h.handleNativeMessagesPassthrough(w, r, reqBody, anthropicReq.Stream, topLevelInfo.HasContextManagement)
 		return
 	}
 
@@ -150,9 +158,10 @@ func (h *Handler) validateRequest(req AnthropicMessagesRequest) error {
 	return nil
 }
 
-func (h *Handler) handleNativeMessagesPassthrough(w http.ResponseWriter, r *http.Request, body []byte, stream bool) {
+func (h *Handler) handleNativeMessagesPassthrough(w http.ResponseWriter, r *http.Request, body []byte, stream bool, hasContextManagement bool) {
+	extraHeaders := upstreamBetaHeaders(hasContextManagement)
 	if stream {
-		resp, _, err := h.upstream.Do(r.Context(), upstream.Request{Endpoint: "/v1/messages", Body: body, Stream: true, QueryString: r.URL.RawQuery})
+		resp, _, err := h.upstream.Do(r.Context(), upstream.Request{Endpoint: "/v1/messages", Body: body, Stream: true, QueryString: r.URL.RawQuery, ExtraHeaders: extraHeaders})
 		if err != nil {
 			var upstreamErr *upstream.UpstreamError
 			if errors.As(err, &upstreamErr) {
@@ -202,7 +211,7 @@ func (h *Handler) handleNativeMessagesPassthrough(w http.ResponseWriter, r *http
 		return
 	}
 
-	_, respData, err := h.upstream.Do(r.Context(), upstream.Request{Endpoint: "/v1/messages", Body: body, QueryString: r.URL.RawQuery})
+	_, respData, err := h.upstream.Do(r.Context(), upstream.Request{Endpoint: "/v1/messages", Body: body, QueryString: r.URL.RawQuery, ExtraHeaders: extraHeaders})
 	if err != nil {
 		var upstreamErr *upstream.UpstreamError
 		if errors.As(err, &upstreamErr) {
@@ -678,6 +687,10 @@ func replaceModelInBody(body []byte, newModel string) ([]byte, error) {
 	return json.Marshal(raw)
 }
 
+// normalizeNativeMessagesBody applies the minimal mutations the upstream
+// requires for native /v1/messages passthrough: optionally replacing the model
+// alias and removing the cache_control.scope field that upstream rejects.
+// context_management is intentionally preserved and forwarded as-is.
 func normalizeNativeMessagesBody(body []byte, newModel string, replaceModel bool) ([]byte, error) {
 	var raw interface{}
 	if err := json.Unmarshal(body, &raw); err != nil {
@@ -693,9 +706,96 @@ func normalizeNativeMessagesBody(body []byte, newModel string, replaceModel bool
 		obj["model"] = newModel
 	}
 
-	delete(obj, "context_management")
 	stripCacheControlScope(obj)
 	return json.Marshal(obj)
+}
+
+// contextManagementBeta is the anthropic-beta token that activates the
+// context_management feature upstream. The proxy adds it automatically when a
+// request carries a context_management field so the feature is honored without
+// the client having to set the header (which the proxy does not blindly
+// forward).
+const contextManagementBeta = "context-management-2025-06-27"
+
+// upstreamBetaHeaders returns the ExtraHeaders to attach to an upstream native
+// request. When the request body contains a context_management field, the
+// context-management beta header is added so upstream applies the edits.
+func upstreamBetaHeaders(hasContextManagement bool) map[string]string {
+	if !hasContextManagement {
+		return nil
+	}
+	return map[string]string{"anthropic-beta": contextManagementBeta}
+}
+
+// handleCountTokens proxies POST /v1/messages/count_tokens to the upstream
+// Anthropic-compatible token counting endpoint. It resolves the model alias and
+// strips the upstream-rejected cache_control.scope field, mirroring the native
+// /v1/messages passthrough, then returns the upstream JSON response verbatim.
+func (h *Handler) handleCountTokens(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+
+	if r.Method != "POST" {
+		WriteAnthropicError(w, http.StatusMethodNotAllowed, AnthropicErrorTypeInvalidRequest, "Method not allowed")
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, upstream.MaxRequestBody)
+	reqBody, err := io.ReadAll(r.Body)
+	if err != nil {
+		WriteAnthropicError(w, http.StatusBadRequest, AnthropicErrorTypeInvalidRequest, fmt.Sprintf("Invalid request body: %v", err))
+		return
+	}
+
+	var probe struct {
+		Model string `json:"model"`
+	}
+	if err := json.Unmarshal(reqBody, &probe); err != nil {
+		WriteAnthropicError(w, http.StatusBadRequest, AnthropicErrorTypeInvalidRequest, fmt.Sprintf("Invalid JSON: %v", err))
+		return
+	}
+	if probe.Model == "" {
+		WriteAnthropicError(w, http.StatusBadRequest, AnthropicErrorTypeInvalidRequest, "model is required")
+		return
+	}
+
+	resolvedModel := resolveModelAlias(probe.Model)
+	modelChanged := resolvedModel != probe.Model
+	cacheControlInfo := inspectCacheControl(reqBody)
+	topLevelInfo := inspectTopLevelFields(reqBody)
+
+	defer func() {
+		slog.Info("anthropic request", "endpoint", "/v1/messages/count_tokens", "model", resolvedModel, "route", "native", "duration_ms", time.Since(start).Milliseconds())
+	}()
+
+	body := reqBody
+	if modelChanged || cacheControlInfo.ScopeCount > 0 {
+		newBody, err := normalizeNativeMessagesBody(reqBody, resolvedModel, modelChanged)
+		if err != nil {
+			WriteAnthropicError(w, http.StatusBadRequest, AnthropicErrorTypeInvalidRequest, fmt.Sprintf("Invalid JSON: %v", err))
+			return
+		}
+		body = newBody
+	}
+
+	_, respData, err := h.upstream.Do(r.Context(), upstream.Request{
+		Endpoint:     "/v1/messages/count_tokens",
+		Body:         body,
+		QueryString:  r.URL.RawQuery,
+		ExtraHeaders: upstreamBetaHeaders(topLevelInfo.HasContextManagement),
+	})
+	if err != nil {
+		var upstreamErr *upstream.UpstreamError
+		if errors.As(err, &upstreamErr) {
+			h.writeRawUpstreamError(w, upstreamErr)
+			return
+		}
+		upstream.LogRequestError("native /messages/count_tokens request failed", err)
+		WriteAnthropicError(w, http.StatusInternalServerError, AnthropicErrorTypeAPI, "Upstream request failed")
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(respData)
 }
 
 type topLevelFieldInspection struct {

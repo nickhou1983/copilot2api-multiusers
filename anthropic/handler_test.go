@@ -81,8 +81,10 @@ func TestNormalizeNativeMessagesBody_RemovesCacheControlScope(t *testing.T) {
 	if decoded["model"] != "claude-opus-4.6" {
 		t.Fatalf("model = %v, want claude-opus-4.6", decoded["model"])
 	}
-	if _, ok := decoded["context_management"]; ok {
-		t.Fatalf("context_management still present")
+	if cm, ok := decoded["context_management"].(map[string]interface{}); !ok {
+		t.Fatalf("context_management was dropped, want it preserved")
+	} else if cm["type"] != "auto" {
+		t.Fatalf("context_management.type = %v, want auto", cm["type"])
 	}
 
 	system := decoded["system"].([]interface{})
@@ -102,5 +104,37 @@ func TestNormalizeNativeMessagesBody_RemovesCacheControlScope(t *testing.T) {
 	messageCacheControl := parts[0].(map[string]interface{})["cache_control"].(map[string]interface{})
 	if _, ok := messageCacheControl["scope"]; ok {
 		t.Fatalf("message cache_control.scope still present")
+	}
+}
+
+func TestUpstreamBetaHeaders(t *testing.T) {
+	if h := upstreamBetaHeaders(false); h != nil {
+		t.Fatalf("without context_management, headers = %v, want nil", h)
+	}
+
+	h := upstreamBetaHeaders(true)
+	if got := h["anthropic-beta"]; got != contextManagementBeta {
+		t.Fatalf("anthropic-beta = %q, want %q", got, contextManagementBeta)
+	}
+}
+
+func TestNormalizeNativeMessagesBody_PreservesContextManagement(t *testing.T) {
+	body := []byte(`{"model":"m","context_management":{"edits":[{"type":"clear_tool_uses_20250919"}]},"messages":[],"max_tokens":8}`)
+
+	normalized, err := normalizeNativeMessagesBody(body, "m", false)
+	if err != nil {
+		t.Fatalf("normalizeNativeMessagesBody returned error: %v", err)
+	}
+
+	var decoded map[string]interface{}
+	if err := json.Unmarshal(normalized, &decoded); err != nil {
+		t.Fatalf("failed to decode normalized body: %v", err)
+	}
+	cm, ok := decoded["context_management"].(map[string]interface{})
+	if !ok {
+		t.Fatal("context_management was dropped, want it preserved")
+	}
+	if _, ok := cm["edits"]; !ok {
+		t.Fatal("context_management.edits missing")
 	}
 }

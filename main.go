@@ -120,6 +120,7 @@ func main() {
 	mux.Handle("/v1/embeddings", openaiHandler)
 	mux.Handle("/v1/responses", openaiHandler)
 	mux.Handle("/v1/messages", anthropicHandler)
+	mux.Handle("/v1/messages/count_tokens", anthropicHandler)
 	mux.Handle("/v1beta/models", geminiHandler)
 	mux.Handle("/v1beta/models/", geminiHandler)
 	mux.Handle("/usage", usageHandler)
