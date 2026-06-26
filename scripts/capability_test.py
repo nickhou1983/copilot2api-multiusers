@@ -468,7 +468,70 @@ def insp_fine_grained_stream(r):
     return has_tool, f"HTTP 200 events={len(evs)} tool_stream={has_tool} kinds={kinds[:6]}"
 
 
-def build_tests(model: str):
+def insp_code_execution(r):
+    # code_execution as a *server tool* (no beta header). The Copilot upstream
+    # actually runs it: a passing response carries server_tool_use plus a
+    # bash_code_execution_tool_result block. (The beta *header* is a separate
+    # axis — see insp_code_execution_beta.)
+    if not r["ok"]:
+        return False, f"HTTP {r['status']} {_err_msg(r)}"
+    types = _content_types(r["parsed"])
+    ran = "server_tool_use" in types or any("code_execution" in t for t in types)
+    return ran, f"HTTP 200 content={types}"
+
+
+def insp_code_execution_beta(r):
+    # code_execution *with* the anthropic-beta header. This documents the
+    # upstream beta-header allowlist: direct is rejected (400 "unsupported beta
+    # header(s)") because Copilot doesn't allowlist that token, while the proxy
+    # does not forward client beta headers, so the tool runs (200). Both
+    # outcomes are "expected" for their side — report status + a short note
+    # rather than a single pass/fail, since direct and proxy legitimately differ.
+    types = _content_types(r["parsed"])
+    if r["status"] >= 400:
+        return False, f"HTTP {r['status']} beta rejected: {_err_msg(r)}"
+    ran = "server_tool_use" in types or any("code_execution" in t for t in types)
+    return ran, f"HTTP 200 beta stripped, executed content={types}"
+
+
+def insp_effort_xhigh(r):
+    # xhigh effort is an Opus 4.7/4.8-only level. On supporting models it returns
+    # 200; on others the upstream rejects with a clear message listing the
+    # supported levels. expect is set model-conditionally in build_tests, so this
+    # inspector only needs to confirm a clean 200 on the support path.
+    if not r["ok"]:
+        return False, f"HTTP {r['status']} {_err_msg(r)}"
+    return ("text" in _content_types(r["parsed"])), f"HTTP 200 content={_content_types(r['parsed'])}"
+
+
+def insp_output_cap(r):
+    # Extended output (output-300k beta): the Copilot upstream hard-caps Opus 4.8
+    # at 128k output tokens regardless of the beta header, so max_tokens=200000
+    # is rejected with a "> 128000" message. This is a Copilot limitation (the
+    # 300k beta is an Anthropic-direct feature), so the case expects "reject".
+    msg = _err_msg(r)
+    capped = r["status"] >= 400 and ("128000" in msg or "max_tokens" in msg)
+    return (r["status"] >= 400), f"HTTP {r['status']} {('cap enforced: ' + msg) if capped else msg}".strip()
+
+
+def insp_context_1m_large(r):
+    # Heavy/opt-in 1M case: send a >200k-token input to a natively-1M model. A
+    # 200 with echoed usage.input_tokens > 200000 proves the upstream actually
+    # ingested the full payload (a 200k-context model would truncate it). This
+    # costs ~$1/call, so it only runs under --heavy.
+    if not r["ok"]:
+        return False, f"HTTP {r['status']} {_err_msg(r)}"
+    it = _usage(r["parsed"])["in"]
+    ok = isinstance(it, int) and it > 200000
+    return ok, f"HTTP 200 input_tokens={it} (>200k={ok})"
+
+
+# Opus model IDs that support the xhigh effort level (per Anthropic docs +
+# empirical upstream probe). Used to set expect model-conditionally.
+_XHIGH_MODELS = ("opus-4.7", "opus-4-7", "opus-4.8", "opus-4-8")
+
+
+def build_tests(model: str, *, heavy: bool = False):
     user = lambda t: [{"role": "user", "content": t}]  # noqa: E731
     weather_tool = {
         "name": "get_weather",
@@ -725,12 +788,27 @@ def build_tests(model: str):
                   messages=user("Fetch https://example.com and summarize it.")),
         inspect=insp_reject))
 
+    # code_execution as a server tool. Split into two cases because the upstream
+    # treats the *tool* and the *beta header* on different axes:
+    #  - without the beta header, the Copilot upstream actually runs the tool
+    #    (server_tool_use + bash_code_execution_tool_result) -> expect support.
+    #  - with the beta header, direct is rejected by the upstream beta-header
+    #    allowlist (400), while the proxy strips client beta headers so the tool
+    #    runs (200). This case documents that direct/proxy divergence.
+    code_exec_tool = {"type": "code_execution_20250825", "name": "code_execution"}
     tests.append(dict(
         name="code_execution", kind="messages", stream=False,
-        beta=["code-execution-2025-08-25"], expect="reject",
-        body=base(tools=[{"type": "code_execution_20250825", "name": "code_execution"}],
+        beta=[], expect="support",
+        body=base(tools=[code_exec_tool],
                   messages=user("Use code execution to compute the mean of [1,2,3,4,5].")),
-        inspect=insp_reject))
+        inspect=insp_code_execution))
+
+    tests.append(dict(
+        name="code_execution_beta_header", kind="messages", stream=False,
+        beta=["code-execution-2025-08-25"], expect="support", expect_divergence=True,
+        body=base(tools=[code_exec_tool],
+                  messages=user("Use code execution to compute the mean of [1,2,3,4,5].")),
+        inspect=insp_code_execution_beta))
 
     tests.append(dict(
         name="search_result", kind="messages", stream=False,
@@ -778,6 +856,43 @@ def build_tests(model: str):
                            "cache_control": {"type": "ephemeral", "ttl": "1h"}}],
                   messages=user("Say hi.")),
         inspect=insp_cache))
+
+    # ----------------------------------------------------------------------- #
+    # 4.7/4.8-specific capabilities + extended-output limits. expect for
+    # effort_xhigh is model-conditional: xhigh is only valid on Opus 4.7/4.8;
+    # other models reject it (400 listing the supported levels).
+    # ----------------------------------------------------------------------- #
+    xhigh_supported = any(tag in model for tag in _XHIGH_MODELS)
+    tests.append(dict(
+        name="effort_xhigh", kind="messages", stream=False, beta=[],
+        expect=("support" if xhigh_supported else "reject"),
+        body=base(thinking={"type": "adaptive"}, output_config={"effort": "xhigh"},
+                  messages=user("Reply with exactly: pong")),
+        inspect=(insp_effort_xhigh if xhigh_supported else insp_reject)))
+
+    # Extended output beta: the Copilot upstream hard-caps Opus 4.8 at 128k
+    # output tokens regardless of the output-300k beta header (the 300k beta is
+    # an Anthropic-direct feature), so max_tokens=200000 is rejected. expect
+    # reject — the assertion is that the 128k cap is enforced.
+    tests.append(dict(
+        name="output_300k", kind="messages", stream=False,
+        beta=["output-300k-2026-03-24"], expect="reject",
+        body={"model": model, "max_tokens": 200000,
+              "messages": user("Reply with exactly: pong")},
+        inspect=insp_output_cap))
+
+    # Heavy/opt-in: prove the native 1M context window by actually sending a
+    # >200k-token input. A 200 with echoed input_tokens>200000 means upstream
+    # ingested the whole payload (a 200k-context model would truncate). ~$1/call
+    # at $5/MTok input, so only built under --heavy.
+    if heavy:
+        big_input = ("The quick brown fox jumps over the lazy dog. " * 5 * 2400)
+        tests.append(dict(
+            name="context_1m_large", kind="messages", stream=False,
+            beta=["context-1m-2025-08-07"], expect="support",
+            body=base(max_tokens=16,
+                      messages=user(big_input + "\n\nReply with exactly: pong")),
+            inspect=insp_context_1m_large))
 
     tests.append(dict(
         name="model_discovery", kind="models", stream=False, beta=[], expect="support",
@@ -939,6 +1054,7 @@ def write_report(path, *, target, model, account_type, base_host, proxy_url,
 
     names = [t["name"] for t in tests if not only or t["name"] in only]
     expect_map = {t["name"]: t["expect"] for t in tests}
+    diverge_map = {t["name"]: t.get("expect_divergence", False) for t in tests}
 
     if target == "both":
         lines.append("## 对比矩阵(上游直连 vs 经代理)")
@@ -954,9 +1070,16 @@ def write_report(path, *, target, model, account_type, base_host, proxy_url,
             ps = verdict_symbol(p, exp)
             d_sup = _norm(d, exp)
             p_sup = _norm(p, exp)
-            agree = "✅" if d_sup == p_sup else "⚠️ 差异"
-            if d_sup != p_sup:
-                diffs.append((n, d, p))
+            if diverge_map.get(n):
+                # Direct/proxy are *expected* to differ here (e.g. the upstream
+                # beta-header allowlist rejects direct while the proxy strips the
+                # header and succeeds). Render as an expected divergence, not a
+                # defect, and keep it out of the discrepancy summary.
+                agree = "↔️ 预期差异"
+            else:
+                agree = "✅" if d_sup == p_sup else "⚠️ 差异"
+                if d_sup != p_sup:
+                    diffs.append((n, d, p))
             lines.append(f"| `{n}` | {exp} | {ds}<br><sub>{_md(d)}</sub> | {ps}<br><sub>{_md(p)}</sub> | {agree} |")
         lines.append("")
         lines.append("## 差异汇总")
@@ -1015,11 +1138,13 @@ def main():
     ap.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT)
     ap.add_argument("--start-proxy", action="store_true", help="auto-start a local proxy via `go run .`")
     ap.add_argument("--proxy-port", type=int, default=17777)
+    ap.add_argument("--heavy", action="store_true",
+                    help="include expensive cases (e.g. context_1m_large sends a >200k-token input, ~$1/call)")
     ap.add_argument("--repo-dir", default=str(Path(__file__).resolve().parent.parent))
     args = ap.parse_args()
 
     only = {s.strip() for s in args.only.split(",") if s.strip()}
-    tests = build_tests(args.model)
+    tests = build_tests(args.model, heavy=args.heavy)
 
     direct_results, proxy_results = {}, {}
     base_host, account_type = "-", "-"

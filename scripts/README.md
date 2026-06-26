@@ -39,6 +39,9 @@ python3 scripts/capability_test.py --target proxy --proxy-url http://127.0.0.1:7
 
 # A subset of capabilities:
 python3 scripts/capability_test.py --only citations,count_tokens,context_management
+
+# Include the expensive >200k-token 1M-context probe (~$1/call):
+python3 scripts/capability_test.py --model claude-opus-4.8 --heavy
 ```
 
 ### Flags
@@ -56,6 +59,7 @@ python3 scripts/capability_test.py --only citations,count_tokens,context_managem
 | `--timeout` | `120` | per-request timeout (seconds) |
 | `--start-proxy` | off | auto-start a local proxy via `go run .` |
 | `--proxy-port` | `17777` | port for the auto-started proxy |
+| `--heavy` | off | include expensive cases (`context_1m_large` sends a >200k-token input, ~$1/call) |
 
 Environment fallbacks: `COPILOT2API_ACCOUNT`, `COPILOT2API_TEST_URL`,
 `COPILOT2API_TEST_API_KEY`, `COPILOT2API_TEST_MODEL`,
@@ -85,21 +89,53 @@ Sampling / request parameters (group A):
 Newer Anthropic capabilities (group D):
 
 `structured_outputs` (`output_config.format` JSON schema), `web_fetch` (expect
-reject), `code_execution` (expect reject), `search_result` blocks,
-`interleaved_thinking`, `token_efficient_tools`, `fine_grained_tool_streaming`,
-`extended_cache_ttl` (1h cache).
+reject), `code_execution` / `code_execution_beta_header`, `search_result`
+blocks, `interleaved_thinking`, `token_efficient_tools`,
+`fine_grained_tool_streaming`, `extended_cache_ttl` (1h cache).
 
-The proxy only forwards the `context-management` beta header upstream and
-strips every other `anthropic-beta` value, so the header-only D features
-(`interleaved_thinking` / `token_efficient_tools` /
-`fine_grained_tool_streaming` / `extended_cache_ttl`) reach the upstream as
-plain requests and succeed, while `web_fetch` / `code_execution` server tools
-are rejected by the upstream. `structured_outputs` works end-to-end (Copilot
+4.7/4.8-specific and extended-output cases:
+
+`effort_xhigh` (the `xhigh` effort level — expect support on Opus 4.7/4.8,
+reject on other models), `output_300k` (the `output-300k` extended-output beta),
+and `context_1m_large` (a real >200k-token input, **`--heavy` only**).
+
+The proxy does **not** blindly forward client `anthropic-beta` headers on the
+native route: it auto-injects the `context-management` beta when the body
+carries a `context_management` field, and strips every other client beta value.
+So the header-only D features (`interleaved_thinking` / `token_efficient_tools`
+/ `fine_grained_tool_streaming` / `extended_cache_ttl`) reach the upstream as
+plain requests and succeed. `structured_outputs` works end-to-end (Copilot
 advertises it and native passthrough forwards `output_config.format`).
 `search_result` content blocks also work end-to-end: the Copilot upstream
 returns `search_result_location` citations, and the proxy now parses their bare
 string `source` (it previously rejected these blocks with `400 "content must be
 string or array of blocks"` before the request reached upstream).
+
+`code_execution` is split into two cases because the upstream treats the *tool*
+and the *beta header* on different axes. **Without** the beta header the Copilot
+upstream actually runs the tool (`server_tool_use` +
+`bash_code_execution_tool_result`), so `code_execution` expects **support** on
+both targets. **With** the `code-execution-2025-08-25` beta header,
+`code_execution_beta_header` is an *expected* direct/proxy divergence: direct is
+rejected by the upstream beta-header allowlist (`400 "unsupported beta
+header(s)"`) while the proxy strips the header and the tool runs (`200`). The
+report renders this row as `↔️ 预期差异` and excludes it from the discrepancy
+summary. (`web_fetch` is still a genuine reject — Copilot rejects both its beta
+header and the tool.)
+
+`output_300k` expects **reject**: the Copilot upstream hard-caps Opus 4.8 at
+128k output tokens regardless of the `output-300k` beta (that beta is an
+Anthropic-direct feature), so `max_tokens=200000` returns `400 "> 128000"`.
+
+`effort_xhigh` sets `expect` model-conditionally at build time: `xhigh` is an
+Opus 4.7/4.8-only level, so it expects support on those IDs and reject (`400`
+listing the supported levels) elsewhere. The proxy forwards
+`output_config.effort` verbatim, so both targets agree.
+
+`context_1m_large` (only built with `--heavy`) proves the native 1M window by
+sending a >200k-token input to a 1M model; a `200` with echoed
+`usage.input_tokens > 200000` means the upstream ingested the whole payload (a
+200k-context model would silently truncate). It costs ~$1/call at $5/MTok input.
 
 `reject` tests pass when the upstream returns a `4xx` (capability absent).
 
