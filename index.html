@@ -431,7 +431,7 @@
     <section class="slide">
       <div class="kicker"><span class="dot"></span> 06 · 能力差异</div>
       <h2>能力对比表</h2>
-      <p class="note">中间列为<b>直连上游实测</b>(<code>api.enterprise.githubcopilot.com</code>,绕过代理);凡上游确认可用均标<span class="badge best">✅ 上游支持</span>。右列为经 copilot2api 代理后的实际可用度。<b>本轮把测试矩阵从 20 项扩展到 36 项</b>(新增采样参数、<code>tool_choice</code> 变体、<code>structured_outputs</code>、<code>search_result</code> 等),原生 <code>/v1/messages</code> 路径与直连基本零差异。</p>
+      <p class="note">中间列为<b>直连上游实测</b>(<code>api.enterprise.githubcopilot.com</code>,绕过代理);凡上游确认可用均标<span class="badge best">✅ 上游支持</span>。右列为经 copilot2api 代理后的实际可用度。<b>本轮把测试矩阵从 20 项扩展到 40 项</b>(新增采样参数、<code>tool_choice</code> 变体、<code>structured_outputs</code>、<code>search_result</code>、<code>code_execution</code>、<code>effort_xhigh</code>、1M 大负载等),原生 <code>/v1/messages</code> 路径与直连基本零差异。</p>
       <div class="table-wrap">
         <table>
           <thead><tr><th>能力</th><th>原生 Anthropic</th><th>上游 Copilot（直连实测）</th><th>经代理后</th></tr></thead>
@@ -463,7 +463,13 @@
             <tr><td><code>fine_grained_tool_streaming</code> 细粒度流式</td><td><span class="badge best">✅</span></td><td><span class="badge best">✅ 上游支持</span>（<code>tool_stream</code>）</td><td><span class="badge best">✅ 与直连一致</span></td></tr>
             <tr><td>扩展缓存 TTL（1h <code>extended_cache_ttl</code>）</td><td><span class="badge best">✅</span></td><td><span class="badge best">✅ 上游支持</span>（写入缓存 1601 tok）</td><td><span class="badge best">✅ 与直连一致</span></td></tr>
             <tr><td><code>search_result</code> 内容块</td><td><span class="badge best">✅</span></td><td><span class="badge best">✅ 上游支持</span>（直连 HTTP 200）</td><td><span class="badge best">✅ 已修复</span> 原 400 → 现 <code>citations=1</code>（<code>fix: search_result</code>，已部署 7777）</td></tr>
-            <tr><td><code>web_fetch</code> / <code>code_execution</code></td><td><span class="badge best">✅</span></td><td><span class="badge weak">❌ 上游 400 不支持</span>（beta 头被拒）</td><td><span class="badge weak">❌</span></td></tr>
+            <tr><td><code>web_fetch</code></td><td><span class="badge best">✅</span></td><td><span class="badge weak">❌ 上游 400 不支持</span>（beta 头被拒）</td><td><span class="badge weak">❌</span></td></tr>
+            <tr><td colspan="4" style="background:var(--cp-accent-soft);color:var(--cp-accent);font-weight:700;text-transform:uppercase;letter-spacing:.04em;font-size:12px;">── 最新增补：code_execution 修正 / Opus 4.8 专项 / 1M 大负载（2026-06-27）──</td></tr>
+            <tr><td><code>code_execution</code> 服务端代码执行（无 beta 头）</td><td><span class="badge best">✅</span></td><td><span class="badge best">✅ 上游支持</span>（实测 <code>server_tool_use</code> + <code>bash_code_execution_tool_result</code>）</td><td><span class="badge best">✅ 与直连一致</span></td></tr>
+            <tr><td><code>code_execution</code> 携带 beta 头（<code>code-execution-2025-08-25</code>）</td><td><span class="badge best">✅</span></td><td><span class="badge weak">❌ 上游 400</span>（beta 白名单拒绝）</td><td><span class="badge mid">↔️ 预期差异</span> 代理剥头后 <span class="badge best">200 执行</span></td></tr>
+            <tr><td><code>effort_xhigh</code>（<code>xhigh</code> 思考档，Opus 4.7/4.8 专属）</td><td><span class="badge best">✅</span></td><td><span class="badge best">✅ 上游支持</span>（HTTP 200·他模型 400）</td><td><span class="badge best">✅ 透传一致</span></td></tr>
+            <tr><td><code>output_300k</code> 扩展输出（<code>output-300k</code> beta）</td><td><span class="badge best">✅</span></td><td><span class="badge weak">❌ 上游 400</span> 硬限 128k（<code>&gt; 128000</code>）</td><td><span class="badge weak">❌ 同样 128k 上限</span>（Copilot 不支持 300k）</td></tr>
+            <tr><td><code>context_1m_large</code> 1M 大负载实证（<code>--heavy</code>）</td><td><span class="badge best">✅</span></td><td><span class="badge best">✅ 上游支持</span>（实发 <code>input_tokens=216016</code> 全量 ingest）</td><td><span class="badge best">✅ 与直连一致</span></td></tr>
           </tbody>
         </table>
       </div>
