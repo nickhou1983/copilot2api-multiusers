@@ -431,7 +431,7 @@
     <section class="slide">
       <div class="kicker"><span class="dot"></span> 06 · 能力差异</div>
       <h2>能力对比表</h2>
-      <p class="note">中间列为<b>直连上游实测</b>(<code>api.enterprise.githubcopilot.com</code>,绕过代理);凡上游确认可用均标<span class="badge best">✅ 上游支持</span>。右列为经 copilot2api 代理后的实际可用度。<b>本轮把测试矩阵从 20 项扩展到 40 项</b>(新增采样参数、<code>tool_choice</code> 变体、<code>structured_outputs</code>、<code>search_result</code>、<code>code_execution</code>、<code>effort_xhigh</code>、1M 大负载等),原生 <code>/v1/messages</code> 路径与直连基本零差异。</p>
+      <p class="note">中间列为<b>直连上游实测</b>(<code>api.enterprise.githubcopilot.com</code>,绕过代理);凡上游确认可用均标<span class="badge best">✅ 上游支持</span>。右列为经 copilot2api 代理后的实际可用度。<b>本轮把测试矩阵从 20 项扩展到 47 项</b>,并补做<b>三层对照(① Anthropic 原生官方 / ② Copilot 直连 / ③ 经代理)</b>:47 项里 ②③ 完全一致,唯二差异(<code>cache_control_scope</code>、<code>code_execution_beta_header</code>)均为代理有意剥离;真正的鸿沟在<b>原生 vs Copilot</b> 之间(详见下方采样参数行)。原生 <code>/v1/messages</code> 路径与直连基本零差异。</p>
       <div class="table-wrap">
         <table>
           <thead><tr><th>能力</th><th>原生 Anthropic</th><th>上游 Copilot（直连实测）</th><th>经代理后</th></tr></thead>
@@ -451,8 +451,8 @@
             <tr><td><code>count_tokens</code> 计数</td><td><span class="badge best">✅ <code>/v1/messages/count_tokens</code></span></td><td><span class="badge best">✅ 上游支持</span>（HTTP 200 <code>input_tokens</code>）</td><td><span class="badge best">✅ 已路由</span> <code>/v1/messages/count_tokens</code>（<code>input_tokens</code> 与直连一致）</td></tr>
             <tr><td>模型能力发现</td><td>vision / max_tokens / tool…</td><td><span class="badge best">✅ 上游支持</span> <code>/models</code> 全量 capabilities</td><td><span class="badge mid"><code>/v1/models</code> 透传 capabilities；内部路由主要用 supported_endpoints</span></td></tr>
             <tr><td colspan="4" style="background:var(--cp-accent-soft);color:var(--cp-accent);font-weight:700;text-transform:uppercase;letter-spacing:.04em;font-size:12px;">── 本轮新增实测（采样 / tool_choice / 高级特性，2026-06-25）──</td></tr>
-            <tr><td>采样参数 <code>temperature</code> / <code>top_k</code></td><td><span class="badge best">✅</span></td><td><span class="badge best">✅ 上游支持</span></td><td><span class="badge best">✅ 全路径一致</span></td></tr>
-            <tr><td>采样参数 <code>top_p</code></td><td><span class="badge best">✅</span></td><td><span class="badge best">✅ 上游支持</span></td><td><span class="badge best">✅ 原生一致</span> / <span class="badge weak"><code>/responses</code> 路径 400</span></td></tr>
+            <tr><td>采样参数 <code>temperature</code> / <code>top_k</code></td><td><span class="badge weak">⛔ 原生 400</span>（4.7/4.8 拒非默认采样）</td><td><span class="badge best">✅ 上游支持</span>（Copilot 容忍 200）</td><td><span class="badge best">✅ 全路径一致</span></td></tr>
+            <tr><td>采样参数 <code>top_p</code></td><td><span class="badge weak">⛔ 原生 400</span></td><td><span class="badge best">✅ 上游支持</span>（Copilot 容忍 200）</td><td><span class="badge best">✅ 原生一致</span> / <span class="badge weak"><code>/responses</code> 路径 400</span></td></tr>
             <tr><td><code>stop_sequences</code> 停止序列</td><td><span class="badge best">✅</span></td><td><span class="badge best">✅ 上游支持</span>（实测 <code>stop_reason=stop_sequence</code>）</td><td><span class="badge best">✅ 原生一致</span> / <span class="badge weak"><code>/responses</code> 未生效·<code>/chat</code> 400</span></td></tr>
             <tr><td><code>metadata</code> / <code>service_tier</code></td><td><span class="badge best">✅</span></td><td><span class="badge best">✅ 上游支持</span></td><td><span class="badge best">✅ 全路径一致</span></td></tr>
             <tr><td><code>tool_choice</code>（auto / any / tool / none）</td><td><span class="badge best">✅</span></td><td><span class="badge best">✅ 上游支持</span></td><td><span class="badge best">✅ 全路径一致</span></td></tr>
@@ -470,6 +470,12 @@
             <tr><td><code>effort_xhigh</code>（<code>xhigh</code> 思考档，Opus 4.7/4.8 专属）</td><td><span class="badge best">✅</span></td><td><span class="badge best">✅ 上游支持</span>（HTTP 200·他模型 400）</td><td><span class="badge best">✅ 透传一致</span></td></tr>
             <tr><td><code>output_300k</code> 扩展输出（<code>output-300k</code> beta）</td><td><span class="badge best">✅</span></td><td><span class="badge weak">❌ 上游 400</span> 硬限 128k（<code>&gt; 128000</code>）</td><td><span class="badge weak">❌ 同样 128k 上限</span>（Copilot 不支持 300k）</td></tr>
             <tr><td><code>context_1m_large</code> 1M 大负载实证（<code>--heavy</code>）</td><td><span class="badge best">✅</span></td><td><span class="badge best">✅ 上游支持</span>（实发 <code>input_tokens=216016</code> 全量 ingest）</td><td><span class="badge best">✅ 与直连一致</span></td></tr>
+            <tr><td colspan="4" style="background:var(--cp-accent-soft);color:var(--cp-accent);font-weight:700;text-transform:uppercase;letter-spacing:.04em;font-size:12px;">── Opus 4.8 原生新特性专项（三层对照,2026-06-27）──</td></tr>
+            <tr><td><code>effort_max</code>（<code>max</code> 顶档,Opus 4.7/4.8 专属）</td><td><span class="badge best">✅</span></td><td><span class="badge best">✅ 上游支持</span>（200·他模型 400）</td><td><span class="badge best">✅ 透传一致</span></td></tr>
+            <tr><td><code>mid_conv_system</code> 会话中 system 消息</td><td><span class="badge best">✅ 4.8 新增</span></td><td><span class="badge best">✅ 上游支持</span>（强制占位规则,非法摆放 400）</td><td><span class="badge best">✅ 与直连一致</span></td></tr>
+            <tr><td><code>fast_mode</code>（<code>speed:"fast"</code> + beta）</td><td><span class="badge best">✅ 4.8 研究预览</span></td><td><span class="badge mid">⚠️ 容忍但不实现</span>（200,无真实 2.5× 加速）</td><td><span class="badge mid">⚠️ 同直连（200）</span></td></tr>
+            <tr><td><code>prompt_cache_1024</code> 缓存下限降至 1024</td><td><span class="badge best">✅ 4.8 新增</span>（4.7 为 2048）</td><td><span class="badge best">✅ 上游支持</span>（实测 <code>cc=1362</code> 命中）</td><td><span class="badge best">✅ 与直连一致</span>（<code>cr=1362</code>）</td></tr>
+            <tr><td><code>refusal_stop_details</code> 拒绝元数据</td><td><span class="badge best">✅ 4.8 文档化</span></td><td><span class="badge mid">⚠️ 探针</span>（本轮未触发硬拒绝）</td><td><span class="badge mid">⚠️ 同直连（非确定）</span></td></tr>
           </tbody>
         </table>
       </div>
