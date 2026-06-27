@@ -249,11 +249,11 @@
         <a href="#" data-goto="5"><span class="idx">3</span> 模型 Cache 支持</a>
         <a href="#" data-goto="7"><span class="idx">4</span> 工具调用</a>
         <a href="#" data-goto="9"><span class="idx">5</span> 多账户映射与管理</a>
-        <a href="#" data-goto="11"><span class="idx">6</span> Copilot vs 原生 Anthropic 能力差异</a>
-        <a href="#" data-goto="14"><span class="idx">7</span> Extended Thinking 支持机制</a>
-        <a href="#" data-goto="16"><span class="idx">8</span> Claude 模型能力实测（API 直连）</a>
-        <a href="#" data-goto="17"><span class="idx">9</span> 原生 PDF vs Copilot PDF 差异</a>
-        <a href="#" data-goto="18"><span class="idx">10</span> 上游实测修正（1M / count_tokens）</a>
+        <a href="#" data-goto="11"><span class="idx">6</span> Copilot vs 原生 Anthropic 能力差异（Opus 4.8 / Sonnet 4.6）</a>
+        <a href="#" data-goto="15"><span class="idx">7</span> Extended Thinking 支持机制</a>
+        <a href="#" data-goto="17"><span class="idx">8</span> Claude 模型能力实测（API 直连）</a>
+        <a href="#" data-goto="18"><span class="idx">9</span> 原生 PDF vs Copilot PDF 差异</a>
+        <a href="#" data-goto="19"><span class="idx">10</span> 上游实测修正（1M / count_tokens）</a>
       </div>
     </section>
 
@@ -429,9 +429,9 @@
 
     <!-- Slide 13: Capability comparison table -->
     <section class="slide">
-      <div class="kicker"><span class="dot"></span> 06 · 能力差异</div>
-      <h2>能力对比表</h2>
-      <p class="note">中间列为<b>直连上游实测</b>(<code>api.enterprise.githubcopilot.com</code>,绕过代理);凡上游确认可用均标<span class="badge best">✅ 上游支持</span>。右列为经 copilot2api 代理后的实际可用度。<b>本轮把测试矩阵从 20 项扩展到 47 项</b>,并补做<b>三层对照(① Anthropic 原生官方 / ② Copilot 直连 / ③ 经代理)</b>:47 项里 ②③ 完全一致,唯二差异(<code>cache_control_scope</code>、<code>code_execution_beta_header</code>)均为代理有意剥离;真正的鸿沟在<b>原生 vs Copilot</b> 之间(详见下方采样参数行)。原生 <code>/v1/messages</code> 路径与直连基本零差异。</p>
+      <div class="kicker"><span class="dot"></span> 06 · 能力差异 · Opus 4.8</div>
+      <h2>能力对比表 · Claude Opus 4.8</h2>
+      <p class="note">中间列为<b>直连上游实测</b>(<code>api.enterprise.githubcopilot.com</code>,绕过代理);凡上游确认可用均标<span class="badge best">✅ 上游支持</span>。右列为经 copilot2api 代理后的实际可用度。<b>本轮把测试矩阵扩展到 47 项</b>,并补做<b>三层对照(① Anthropic 原生官方 / ② Copilot 直连 / ③ 经代理)</b>:47 项里 ②③ 完全一致,唯二差异(<code>cache_control_scope</code>、<code>code_execution_beta_header</code>)均为代理有意剥离;真正的鸿沟在<b>原生 vs Copilot</b> 之间(详见采样参数行)。<b>Sonnet 4.6 的逐项实测见下一页</b>。</p>
       <div class="table-wrap">
         <table>
           <thead><tr><th>能力</th><th>原生 Anthropic</th><th>上游 Copilot（直连实测）</th><th>经代理后</th></tr></thead>
@@ -472,6 +472,7 @@
             <tr><td><code>context_1m_large</code> 1M 大负载实证（<code>--heavy</code>）</td><td><span class="badge best">✅</span></td><td><span class="badge best">✅ 上游支持</span>（实发 <code>input_tokens=216016</code> 全量 ingest）</td><td><span class="badge best">✅ 与直连一致</span></td></tr>
             <tr><td colspan="4" style="background:var(--cp-accent-soft);color:var(--cp-accent);font-weight:700;text-transform:uppercase;letter-spacing:.04em;font-size:12px;">── Opus 4.8 原生新特性专项（三层对照,2026-06-27）──</td></tr>
             <tr><td><code>effort_max</code>（<code>max</code> 顶档,Opus 4.7/4.8 专属）</td><td><span class="badge best">✅</span></td><td><span class="badge best">✅ 上游支持</span>（200·他模型 400）</td><td><span class="badge best">✅ 透传一致</span></td></tr>
+            <tr><td><code>thinking_budget</code> 显式思考预算（<code>budget_tokens</code>）</td><td><span class="badge weak">⛔ 仅 adaptive</span>（4.8 拒显式 budget）</td><td><span class="badge weak">❌ 4xx</span>（仅 <code>adaptive</code>）</td><td><span class="badge weak">❌ 同直连</span></td></tr>
             <tr><td><code>mid_conv_system</code> 会话中 system 消息</td><td><span class="badge best">✅ 4.8 新增</span></td><td><span class="badge best">✅ 上游支持</span>（强制占位规则,非法摆放 400）</td><td><span class="badge best">✅ 与直连一致</span></td></tr>
             <tr><td><code>fast_mode</code>（<code>speed:"fast"</code> + beta）</td><td><span class="badge best">✅ 4.8 研究预览</span></td><td><span class="badge mid">⚠️ 容忍但不实现</span>（200,无真实 2.5× 加速）</td><td><span class="badge mid">⚠️ 同直连（200）</span></td></tr>
             <tr><td><code>prompt_cache_1024</code> 缓存下限降至 1024</td><td><span class="badge best">✅ 4.8 新增</span>（4.7 为 2048）</td><td><span class="badge best">✅ 上游支持</span>（实测 <code>cc=1362</code> 命中）</td><td><span class="badge best">✅ 与直连一致</span>（<code>cr=1362</code>）</td></tr>
@@ -481,7 +482,36 @@
       </div>
     </section>
 
-    <!-- Slide 14: Three conclusions -->
+    <!-- Slide 14: Sonnet 4.6 capability table -->
+    <section class="slide">
+      <div class="kicker"><span class="dot"></span> 06 · 能力差异 · Sonnet 4.6</div>
+      <h2>能力对比表 · Claude Sonnet 4.6</h2>
+      <p class="note">同一 46 项矩阵在 <code>claude-sonnet-4.6</code> 上的实测（2026-06-27 10:04，企业版账号）。<b>基线 30+ 项与 Opus 4.8 完全一致</b>，下表只列出 <b>Sonnet 4.6 与 Opus 4.8 的模型级差异</b>。结论同样成立：<b>②直连 与 ③经代理</b> 仅在「代理有意剥离」处不同（<code>cache_control_scope</code> / <code>code_execution</code> 工具类型归一化）。</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>能力</th><th>原生 Anthropic</th><th>Sonnet 4.6（直连实测）</th><th>经代理后</th><th>vs Opus 4.8</th></tr></thead>
+          <tbody>
+            <tr><td colspan="5" style="background:var(--cp-accent-soft);color:var(--cp-accent);font-weight:700;text-transform:uppercase;letter-spacing:.04em;font-size:12px;">── Sonnet 4.6 与 Opus 4.8 的模型级差异 ──</td></tr>
+            <tr><td>采样参数 <code>temperature</code> / <code>top_p</code> / <code>top_k</code></td><td><span class="badge best">✅ 原生支持</span>（无采样硬约束）</td><td><span class="badge best">✅ 上游支持</span></td><td><span class="badge best">✅ 全路径一致</span></td><td>Opus 4.8 原生 <span class="badge weak">400</span>；Sonnet 4.6 原生即 <span class="badge best">✅</span></td></tr>
+            <tr><td><code>thinking_budget</code> 显式思考预算（<code>budget_tokens</code>）</td><td><span class="badge best">✅</span></td><td><span class="badge best">✅ 上游支持</span>（返回 <code>thinking</code> 块）</td><td><span class="badge best">✅ 与直连一致</span></td><td>Opus 4.8 <span class="badge weak">仅 adaptive·拒 budget</span>；Sonnet <span class="badge best">支持显式</span></td></tr>
+            <tr><td><code>effort_xhigh</code>（<code>xhigh</code> 思考档）</td><td><span class="badge best">✅</span></td><td><span class="badge weak">⛔ 已拒绝</span>（仅 <code>low/medium/high/max</code>）</td><td><span class="badge weak">⛔ 同直连</span></td><td>Opus 4.7/4.8 <span class="badge best">支持</span>；Sonnet <span class="badge weak">不支持 xhigh</span></td></tr>
+            <tr><td><code>effort_max</code>（<code>max</code> 顶档）</td><td><span class="badge best">✅</span></td><td><span class="badge best">✅ 上游支持</span></td><td><span class="badge best">✅ 与直连一致</span></td><td><span class="badge best">两模型一致支持</span></td></tr>
+            <tr><td><code>mid_conv_system</code> 会话中 system 消息</td><td><span class="badge weak">⛔ Sonnet 不支持</span></td><td><span class="badge weak">⛔ 已拒绝</span>（400 <code>Unexpected role "system"</code>）</td><td><span class="badge weak">⛔ 同直连</span></td><td>Opus 4.8 <span class="badge best">专属支持</span>；Sonnet <span class="badge weak">拒绝</span></td></tr>
+            <tr><td><code>code_execution</code> 服务端代码执行（无 beta 头）</td><td><span class="badge best">✅</span></td><td><span class="badge weak">❌ 直连 400</span>（工具类型标签不匹配）</td><td><span class="badge best">✅ 代理 200</span>（归一化工具类型后执行）</td><td>Opus 4.8 直连=代理 <span class="badge best">200</span>；Sonnet <span class="badge mid">⚠️ 代理修复直连缺口</span></td></tr>
+            <tr><td colspan="5" style="background:var(--cp-accent-soft);color:var(--cp-accent);font-weight:700;text-transform:uppercase;letter-spacing:.04em;font-size:12px;">── 与 Opus 4.8 行为一致的能力（节选,均 ②③ 一致）──</td></tr>
+            <tr><td>文本/流式 · function/并行工具 · vision(base64) · PDF · extended_thinking</td><td><span class="badge best">✅</span></td><td><span class="badge best">✅ 上游支持</span></td><td><span class="badge best">✅</span></td><td><span class="badge best">与 Opus 一致</span></td></tr>
+            <tr><td>server 工具(bash/text_editor/memory) · prompt_cache · context_management · citations · count_tokens · 1M</td><td><span class="badge best">✅</span></td><td><span class="badge best">✅ 上游支持</span></td><td><span class="badge best">✅</span></td><td><span class="badge best">与 Opus 一致</span></td></tr>
+            <tr><td>tool_choice(auto/any/tool/none/禁并行) · structured_outputs · stop_sequences · metadata/service_tier</td><td><span class="badge best">✅</span></td><td><span class="badge best">✅ 上游支持</span></td><td><span class="badge best">✅</span></td><td><span class="badge best">与 Opus 一致</span></td></tr>
+            <tr><td>search_result · interleaved_thinking · token_efficient_tools · fine_grained_streaming · extended_cache_ttl(1h)</td><td><span class="badge best">✅</span></td><td><span class="badge best">✅ 上游支持</span></td><td><span class="badge best">✅</span></td><td><span class="badge best">与 Opus 一致</span></td></tr>
+            <tr><td><code>fast_mode</code> · <code>prompt_cache_1024</code> · <code>refusal_stop_details</code></td><td><span class="badge best">✅</span></td><td><span class="badge best">✅ 上游支持</span>（fast_mode 容忍·缓存 <code>cc=1201</code>）</td><td><span class="badge best">✅</span></td><td><span class="badge best">与 Opus 一致</span></td></tr>
+            <tr><td>vision_url · web_search · computer_use · web_fetch · output_300k</td><td><span class="badge best">✅ 原生</span></td><td><span class="badge weak">❌ 上游 4xx</span>（Copilot 不支持/128k 上限）</td><td><span class="badge weak">❌</span></td><td><span class="badge best">与 Opus 一致拒绝</span></td></tr>
+            <tr><td><code>cache_control_scope</code> · <code>code_execution_beta_header</code></td><td><span class="badge weak">⛔/✅</span></td><td><span class="badge weak">❌ 直连 400</span></td><td><span class="badge mid">↔️ 代理剥离后 200</span></td><td><span class="badge mid">与 Opus 同属预期差异</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Slide 15: Three conclusions -->
     <section class="slide">
       <div class="kicker"><span class="dot"></span> 06 · 能力差异</div>
       <h2>三点关键结论</h2>
