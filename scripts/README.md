@@ -93,30 +93,39 @@ reject), `code_execution` / `code_execution_beta_header`, `search_result`
 blocks, `interleaved_thinking`, `token_efficient_tools`,
 `fine_grained_tool_streaming`, `extended_cache_ttl` (1h cache).
 
-4.7/4.8-specific and extended-output cases:
+Effort-scale and model-conditional cases (the effort scale differs by model):
 
-`effort_xhigh` (the `xhigh` effort level — expect support on Opus 4.7/4.8,
-reject on other models), `output_300k` (the `output-300k` extended-output beta),
-and `context_1m_large` (a real >200k-token input, **`--heavy` only**).
+`effort_xhigh` (the `xhigh` level — Opus 4.7/4.8-only; other models, incl. Sonnet
+4.6, reject it), `effort_max` (the top `max` level — accepted across Claude 4.x
+effort models, e.g. Sonnet 4.6 returns 200 for `max` while rejecting `xhigh`, since
+`xhigh` is the Opus 4.7/4.8-only insertion between high and max), and
+`thinking_budget` (the **inverse** of the xhigh gate: manual extended-thinking
+`thinking:{type:"enabled",budget_tokens:N}` is supported by Sonnet 4.6 / Haiku 4.5 /
+Opus ≤4.6 but **rejected** by Opus 4.7/4.8, which are adaptive-only).
 
 Opus 4.8-native features (from the official "What's new in Claude Opus 4.8"):
 
-`effort_max` (the top `max` effort level — like `effort_xhigh`, model-conditional
-support on Opus 4.7/4.8), `mid_conv_system` (a `role:"system"` message inside the
-`messages` array, placed to end the array per the placement rules — Copilot honors
-it and enforces the same `role 'system' must precede an 'assistant' message or end
-the array` rule), `fast_mode` (`speed:"fast"` + the `fast-mode-2026-02-01` beta —
-Copilot *tolerates* the field/header and returns 200 but does not deliver the real
-2.5x speedup), `prompt_cache_1024` (a ~1.36k-token cacheable prefix that lands in
-the (1024, 2048) band to prove the lowered 4.8 cache minimum — it caches on 4.8 but
-would be too short on 4.7), and `refusal_stop_details` (a best-effort, non-deterministic
-probe for the `stop_details` object on refusal responses; never hard-fails a 200).
+`mid_conv_system` (a `role:"system"` message inside the `messages` array — an Opus
+4.8 feature; model-conditional: Opus 4.8 accepts it subject to placement rules, while
+models without it, e.g. Sonnet 4.6, reject with `Unexpected role "system"`),
+`fast_mode` (`speed:"fast"` + the `fast-mode-2026-02-01` beta — Copilot *tolerates*
+the field/header and returns 200 but does not deliver the real 2.5x speedup),
+`prompt_cache_1024` (a cacheable prefix sized into the (1024, 2048) token band on both
+tokenizers — Opus 4.7+ produces ~30% more tokens than older models — to prove the
+lowered 4.8 cache minimum; it caches on the 1024-min models (Opus 4.8 / Sonnet 4.6 /
+Haiku 4.5) but would be too short on the old 2048 floor), and `refusal_stop_details`
+(a best-effort, non-deterministic probe for the `stop_details` object on refusal
+responses; never hard-fails a 200).
 
-Note the **native-vs-Copilot** divergence the three-layer report highlights: Anthropic
+`output_300k` (the `output-300k` extended-output beta) and `context_1m_large` (a real
+>200k-token input, **`--heavy` only**) round out the extended-output cases.
+
+Note the **native-vs-Copilot** divergences the three-layer reports highlight: Anthropic
 Opus 4.8 rejects non-default `temperature` / `top_p` / `top_k` with `400`, but the
-Copilot upstream (direct and proxy alike) accepts them with `200`. See
-`scripts/opus48-capability-report.md` for the full three-layer (native / direct / proxy)
-comparison.
+Copilot upstream (direct and proxy alike) accepts them with `200`; Sonnet 4.6 has no
+such restriction. See `scripts/opus48-capability-report.md` and
+`scripts/sonnet46-capability-report.md` for the full three-layer (native / direct /
+proxy) comparisons.
 
 The proxy does **not** blindly forward client `anthropic-beta` headers on the
 native route: it auto-injects the `context-management` beta when the body
