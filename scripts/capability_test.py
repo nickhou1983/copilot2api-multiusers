@@ -893,6 +893,13 @@ def build_tests(model: str, *, heavy: bool = False):
     # other models reject it (400 listing the supported levels).
     # ----------------------------------------------------------------------- #
     xhigh_supported = any(tag in model for tag in _XHIGH_MODELS)
+    # effort "max" is the universal top of the effort scale on Claude 4.x models
+    # (Sonnet 4.6 accepts `max` with 200 while rejecting `xhigh` — `xhigh` is the
+    # Opus 4.7/4.8-only insertion between high and max). Inline role:"system"
+    # messages (mid_conv_system) are an Opus 4.8 feature; other models reject them
+    # with "Unexpected role 'system'".
+    claude_effort_model = "claude" in model
+    mid_conv_supported = any(tag in model for tag in ("opus-4.8", "opus-4-8"))
     tests.append(dict(
         name="effort_xhigh", kind="messages", stream=False, beta=[],
         expect=("support" if xhigh_supported else "reject"),
@@ -916,30 +923,50 @@ def build_tests(model: str, *, heavy: bool = False):
     # model-conditional: supported on Opus 4.7/4.8, rejected (400 listing the
     # valid levels) elsewhere. The proxy forwards output_config.effort verbatim,
     # so direct and proxy should agree.
+    # effort: "max" — the top effort level. Unlike `xhigh` (Opus 4.7/4.8-only),
+    # `max` is accepted across Claude 4.x effort-capable models (verified: Sonnet
+    # 4.6 returns 200, Opus 4.8 returns 200). So expect support on Claude models,
+    # reject on non-Claude models without the effort parameter. Direct and proxy
+    # forward output_config.effort verbatim, so they should agree.
     tests.append(dict(
         name="effort_max", kind="messages", stream=False, beta=[],
-        expect=("support" if xhigh_supported else "reject"),
+        expect=("support" if claude_effort_model else "reject"),
         body=base(thinking={"type": "adaptive"}, output_config={"effort": "max"},
                   messages=user("Reply with exactly: pong")),
-        inspect=(insp_effort_xhigh if xhigh_supported else insp_reject)))
+        inspect=(insp_effort_xhigh if claude_effort_model else insp_reject)))
 
-    # Mid-conversation system message (new in Opus 4.8): a role:"system" message
-    # inside the messages array (not the top-level system param), used to append
-    # updated instructions later in a long-running conversation. Subject to
-    # placement rules: the system turn must precede an assistant message or end
-    # the array (an invalid placement returns 400 "role 'system' must precede an
-    # 'assistant' message or end the array"). Here it ends a user/assistant/user
-    # history, so it is a valid mid-conversation append. Native passthrough should
-    # forward the messages array verbatim and the upstream should honour it (200).
+    # Manual extended-thinking budget — the *inverse* of effort_xhigh/max. Claude
+    # Sonnet 4.6, Haiku 4.5 and Opus <=4.6 support thinking:{type:"enabled",
+    # budget_tokens:N} and emit a thinking block; Opus 4.7/4.8 dropped manual
+    # budgets (adaptive-only) and return 400. So expect is the complement of the
+    # xhigh gate: reject exactly on the Opus 4.7/4.8 models that accept xhigh/max,
+    # support everywhere else. Unlike the shape-aware `extended_thinking` case
+    # (which falls back to adaptive), this case uses *only* the manual-budget form
+    # so it cleanly asserts whether the model accepts manual budgets.
     tests.append(dict(
-        name="mid_conv_system", kind="messages", stream=False, beta=[], expect="support",
+        name="thinking_budget", kind="messages", stream=False, beta=[],
+        expect=("reject" if xhigh_supported else "support"),
+        body=base(max_tokens=2048, thinking={"type": "enabled", "budget_tokens": 1024},
+                  messages=user("Think briefly, then answer: what is 17 * 23?")),
+        inspect=(insp_reject if xhigh_supported else insp_thinking)))
+
+    # Mid-conversation system message (Opus 4.8 feature): a role:"system" message
+    # inside the messages array. Opus 4.8 accepts it (subject to placement rules);
+    # models without the feature (e.g. Sonnet 4.6) reject it with 400 "Unexpected
+    # role 'system'. The Messages API accepts a top-level `system` parameter". So
+    # expect is model-conditional: support on Opus 4.8, reject elsewhere. The valid
+    # placement below (system ends a user/assistant/user history) is what Opus 4.8
+    # honours; an invalid placement would 400 even on Opus 4.8.
+    tests.append(dict(
+        name="mid_conv_system", kind="messages", stream=False, beta=[],
+        expect=("support" if mid_conv_supported else "reject"),
         body=base(messages=[
             {"role": "user", "content": "My name is Ada."},
             {"role": "assistant", "content": "Nice to meet you, Ada."},
             {"role": "user", "content": "What is my name? Reply in one short sentence."},
             {"role": "system", "content": "Always end your reply with the word DONE."},
         ]),
-        inspect=insp_text))
+        inspect=(insp_text if mid_conv_supported else insp_reject)))
 
     # Fast mode (new in Opus 4.8, research preview on the Claude API): speed:"fast"
     # plus the fast-mode-2026-02-01 beta header for up to 2.5x output tokens/sec at
@@ -953,13 +980,15 @@ def build_tests(model: str, *, heavy: bool = False):
         body=base(speed="fast", messages=user("Reply with exactly: pong")),
         inspect=insp_fast_mode))
 
-    # Lower prompt-cache minimum (new in Opus 4.8): the minimum cacheable prompt
-    # length dropped to 1,024 tokens (from 2,048 on Opus 4.7). The system block
-    # below is sized into the (1024, 2048) band — long enough to cache on Opus 4.8
-    # but too short to cache on Opus 4.7 — so a cache hit/write here specifically
-    # demonstrates the lowered 4.8 minimum. expect support (usage.cache_creation
-    # or cache_read > 0).
-    cache_text_1k = ("Cache me if you can. " * 170).strip()
+    # Lower prompt-cache minimum: the minimum cacheable prompt length is 1,024
+    # tokens on the 1024-min models (Opus 4.8 lowered it from 2,048; Sonnet 4.6 /
+    # Haiku 4.5 already use 1,024). The system block below is sized so it lands in
+    # the (1024, 2048) band on BOTH tokenizers — Opus 4.7+ uses a tokenizer that
+    # produces ~30% more tokens than older models, so a prefix tuned only for Opus
+    # would fall under Sonnet's 1024 floor. At *200 reps it is ~1.6k tokens on the
+    # Opus 4.7+ tokenizer and ~1.2k on the older one, caching on both while staying
+    # below the old 2,048 floor. expect support (usage.cache_creation/read > 0).
+    cache_text_1k = ("Cache me if you can. " * 200).strip()
     tests.append(dict(
         name="prompt_cache_1024", kind="messages", stream=False, beta=[], expect="support",
         body=base(system=[{"type": "text", "text": cache_text_1k,
