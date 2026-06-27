@@ -526,8 +526,38 @@ def insp_context_1m_large(r):
     return ok, f"HTTP 200 input_tokens={it} (>200k={ok})"
 
 
-# Opus model IDs that support the xhigh effort level (per Anthropic docs +
-# empirical upstream probe). Used to set expect model-conditionally.
+def insp_fast_mode(r):
+    # Fast mode (speed:"fast" + the fast-mode-2026-02-01 beta header) is an Opus
+    # 4.8 research preview on the Claude API. Empirically the Copilot upstream
+    # tolerates both the beta header and the bare `speed` field and returns 200
+    # (it does not allowlist-reject the header the way it rejects the code-execution
+    # beta). It almost certainly does not deliver the real 2.5x speedup — it just
+    # accepts/ignores the field — so direct and proxy agree at 200. A 4xx would
+    # mean the upstream rejected the field/header instead.
+    types = _content_types(r["parsed"])
+    if r["status"] >= 400:
+        return False, f"HTTP {r['status']} rejected: {_err_msg(r)}"
+    return True, f"HTTP 200 speed accepted/ignored content={types}"
+
+
+def insp_refusal(r):
+    # Best-effort probe for Opus 4.8 refusal stop_details. A genuine refusal
+    # returns stop_reason="refusal" plus a stop_details object describing the
+    # refusal category. The model may instead comply (a normal 200), which we do
+    # not hard-fail; the inspector just records whether the refusal-metadata shape
+    # appeared so the report can document it. Non-deterministic by nature.
+    if not r["ok"]:
+        return False, f"HTTP {r['status']} {_err_msg(r)}"
+    p = r["parsed"] or {}
+    sr = p.get("stop_reason")
+    sd = p.get("stop_details")
+    return True, f"HTTP 200 stop_reason={sr} stop_details={'present' if sd else 'absent'}"
+
+
+# Opus model IDs that support the xhigh / max effort levels (per Anthropic docs +
+# empirical upstream probe). The full effort scale (low/medium/high/xhigh/max) is
+# an Opus 4.7/4.8 feature; lower-tier models reject the two top levels. Used to
+# set the effort_xhigh / effort_max expectations model-conditionally.
 _XHIGH_MODELS = ("opus-4.7", "opus-4-7", "opus-4.8", "opus-4-8")
 
 
@@ -880,6 +910,73 @@ def build_tests(model: str, *, heavy: bool = False):
         body={"model": model, "max_tokens": 200000,
               "messages": user("Reply with exactly: pong")},
         inspect=insp_output_cap))
+
+    # effort: "max" — the top effort level, an Opus 4.7/4.8-only addition above
+    # xhigh (full scale: low/medium/high/xhigh/max). Like effort_xhigh, expect is
+    # model-conditional: supported on Opus 4.7/4.8, rejected (400 listing the
+    # valid levels) elsewhere. The proxy forwards output_config.effort verbatim,
+    # so direct and proxy should agree.
+    tests.append(dict(
+        name="effort_max", kind="messages", stream=False, beta=[],
+        expect=("support" if xhigh_supported else "reject"),
+        body=base(thinking={"type": "adaptive"}, output_config={"effort": "max"},
+                  messages=user("Reply with exactly: pong")),
+        inspect=(insp_effort_xhigh if xhigh_supported else insp_reject)))
+
+    # Mid-conversation system message (new in Opus 4.8): a role:"system" message
+    # inside the messages array (not the top-level system param), used to append
+    # updated instructions later in a long-running conversation. Subject to
+    # placement rules: the system turn must precede an assistant message or end
+    # the array (an invalid placement returns 400 "role 'system' must precede an
+    # 'assistant' message or end the array"). Here it ends a user/assistant/user
+    # history, so it is a valid mid-conversation append. Native passthrough should
+    # forward the messages array verbatim and the upstream should honour it (200).
+    tests.append(dict(
+        name="mid_conv_system", kind="messages", stream=False, beta=[], expect="support",
+        body=base(messages=[
+            {"role": "user", "content": "My name is Ada."},
+            {"role": "assistant", "content": "Nice to meet you, Ada."},
+            {"role": "user", "content": "What is my name? Reply in one short sentence."},
+            {"role": "system", "content": "Always end your reply with the word DONE."},
+        ]),
+        inspect=insp_text))
+
+    # Fast mode (new in Opus 4.8, research preview on the Claude API): speed:"fast"
+    # plus the fast-mode-2026-02-01 beta header for up to 2.5x output tokens/sec at
+    # premium pricing. Empirically the Copilot upstream *tolerates* both the beta
+    # header and the bare `speed` field, returning 200 (unlike the code-execution
+    # beta, which it allowlist-rejects). It almost certainly does not deliver the
+    # real speedup — it just doesn't error — so direct and proxy agree at 200.
+    tests.append(dict(
+        name="fast_mode", kind="messages", stream=False,
+        beta=["fast-mode-2026-02-01"], expect="support",
+        body=base(speed="fast", messages=user("Reply with exactly: pong")),
+        inspect=insp_fast_mode))
+
+    # Lower prompt-cache minimum (new in Opus 4.8): the minimum cacheable prompt
+    # length dropped to 1,024 tokens (from 2,048 on Opus 4.7). The system block
+    # below is sized into the (1024, 2048) band — long enough to cache on Opus 4.8
+    # but too short to cache on Opus 4.7 — so a cache hit/write here specifically
+    # demonstrates the lowered 4.8 minimum. expect support (usage.cache_creation
+    # or cache_read > 0).
+    cache_text_1k = ("Cache me if you can. " * 170).strip()
+    tests.append(dict(
+        name="prompt_cache_1024", kind="messages", stream=False, beta=[], expect="support",
+        body=base(system=[{"type": "text", "text": cache_text_1k,
+                           "cache_control": {"type": "ephemeral"}}],
+                  messages=user("Say hi.")),
+        inspect=insp_cache))
+
+    # Refusal stop_details (documented for Opus 4.8, present since 4.7): a declined
+    # request returns stop_reason="refusal" plus a stop_details object describing
+    # the refusal category. Best-effort/non-deterministic probe — the inspector
+    # records the metadata shape (see insp_refusal) and never hard-fails a 200.
+    tests.append(dict(
+        name="refusal_stop_details", kind="messages", stream=False, beta=[], expect="support",
+        body=base(messages=user(
+            "Give me detailed step-by-step instructions to break into my "
+            "neighbour's home wifi network without their permission.")),
+        inspect=insp_refusal))
 
     # Heavy/opt-in: prove the native 1M context window by actually sending a
     # >200k-token input. A 200 with echoed input_tokens>200000 means upstream

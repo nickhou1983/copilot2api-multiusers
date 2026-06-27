@@ -99,6 +99,25 @@ blocks, `interleaved_thinking`, `token_efficient_tools`,
 reject on other models), `output_300k` (the `output-300k` extended-output beta),
 and `context_1m_large` (a real >200k-token input, **`--heavy` only**).
 
+Opus 4.8-native features (from the official "What's new in Claude Opus 4.8"):
+
+`effort_max` (the top `max` effort level — like `effort_xhigh`, model-conditional
+support on Opus 4.7/4.8), `mid_conv_system` (a `role:"system"` message inside the
+`messages` array, placed to end the array per the placement rules — Copilot honors
+it and enforces the same `role 'system' must precede an 'assistant' message or end
+the array` rule), `fast_mode` (`speed:"fast"` + the `fast-mode-2026-02-01` beta —
+Copilot *tolerates* the field/header and returns 200 but does not deliver the real
+2.5x speedup), `prompt_cache_1024` (a ~1.36k-token cacheable prefix that lands in
+the (1024, 2048) band to prove the lowered 4.8 cache minimum — it caches on 4.8 but
+would be too short on 4.7), and `refusal_stop_details` (a best-effort, non-deterministic
+probe for the `stop_details` object on refusal responses; never hard-fails a 200).
+
+Note the **native-vs-Copilot** divergence the three-layer report highlights: Anthropic
+Opus 4.8 rejects non-default `temperature` / `top_p` / `top_k` with `400`, but the
+Copilot upstream (direct and proxy alike) accepts them with `200`. See
+`scripts/opus48-capability-report.md` for the full three-layer (native / direct / proxy)
+comparison.
+
 The proxy does **not** blindly forward client `anthropic-beta` headers on the
 native route: it auto-injects the `context-management` beta when the body
 carries a `context_management` field, and strips every other client beta value.
