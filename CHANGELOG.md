@@ -6,6 +6,8 @@
 
 ### Features
 
+- Add API key auto-generation: creating an account without specifying `api_key` now automatically generates a cryptographically random key (`sk-` prefix + 32 base62 characters). The admin UI includes a "Generate" button next to the API Key input, and a new `GET /admin/api/generate-key` endpoint returns a freshly generated key on demand.
+
 - Add a native Anthropic token-counting endpoint: `POST /v1/messages/count_tokens` now proxies to the upstream Copilot token counter (previously it returned `404`). The request is forwarded with the same model-alias resolution and `cache_control.scope` stripping as `/v1/messages`, and the upstream `{ "input_tokens": N }` response is returned verbatim.
 - Forward `context_management` on native `/v1/messages` requests instead of stripping it. When a request body includes a `context_management` field, the proxy preserves it and adds the `anthropic-beta: context-management-2025-06-27` header to the upstream call so context edits (e.g. `clear_tool_uses_20250919`) are actually applied and reported back in `usage`/`context_management.applied_edits`.
 - Add multi-account support: map API keys to GitHub accounts 1:1 via an `accounts.json` config file. Each account uses an isolated credential store and its own models cache, so token refresh and capability-based routing stay per-account. Configure the file path with `COPILOT2API_ACCOUNTS_FILE` (defaults to `<token-dir>/accounts.json`).

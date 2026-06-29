@@ -82,7 +82,7 @@
     <h2>Add account</h2>
     <div class="row">
       <div class="field"><label>Account ID</label><input id="new-id" placeholder="alice" /></div>
-      <div class="field"><label>API Key</label><input id="new-key" placeholder="sk-..." /></div>
+      <div class="field"><label>API Key (auto-generated if empty)</label><div style="display:flex;gap:6px"><input id="new-key" placeholder="sk-..." /><button class="ghost" id="gen-key-btn" type="button">Generate</button></div></div>
       <div class="field"><label>Token dir (optional)</label><input id="new-dir" placeholder="defaults to ID" /></div>
       <button id="add-btn">Add</button>
     </div>
@@ -194,17 +194,25 @@ async function load() {
   }
 }
 
+document.getElementById("gen-key-btn").addEventListener("click", async () => {
+  try {
+    const data = await api("GET", "/admin/api/generate-key");
+    document.getElementById("new-key").value = data.api_key;
+    toast("Key generated");
+  } catch (e) { toast(e.message, "err"); }
+});
+
 document.getElementById("add-btn").addEventListener("click", async () => {
   const id = document.getElementById("new-id").value.trim();
   const api_key = document.getElementById("new-key").value.trim();
   const token_dir = document.getElementById("new-dir").value.trim();
-  if (!id || !api_key) { toast("id and api_key are required", "err"); return; }
+  if (!id) { toast("id is required", "err"); return; }
   try {
-    await api("POST", "/admin/api/accounts", { id, api_key, token_dir });
+    const result = await api("POST", "/admin/api/accounts", { id, api_key, token_dir });
     document.getElementById("new-id").value = "";
     document.getElementById("new-key").value = "";
     document.getElementById("new-dir").value = "";
-    toast("Account added");
+    toast("Account added (key: " + result.api_key.slice(0,8) + "…)");
     load();
   } catch (e) { toast(e.message, "err"); }
 });

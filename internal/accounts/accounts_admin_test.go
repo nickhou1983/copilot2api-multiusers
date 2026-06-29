@@ -177,14 +177,18 @@ func TestManagerCRUD(t *testing.T) {
 	if w := do(h, "POST", "/admin/api/accounts", `{"id":"alice","api_key":"k2"}`); w.Code != http.StatusConflict {
 		t.Fatalf("dup create: %d", w.Code)
 	}
-	// Missing fields -> 400.
-	if w := do(h, "POST", "/admin/api/accounts", `{"id":"x"}`); w.Code != http.StatusBadRequest {
-		t.Fatalf("bad create: %d", w.Code)
+	// Missing api_key -> auto-generated, should succeed.
+	if w := do(h, "POST", "/admin/api/accounts", `{"id":"x"}`); w.Code != http.StatusCreated {
+		t.Fatalf("auto-gen key create: expected 201, got %d %s", w.Code, w.Body.String())
+	}
+	// Missing id -> 400.
+	if w := do(h, "POST", "/admin/api/accounts", `{"api_key":"k9"}`); w.Code != http.StatusBadRequest {
+		t.Fatalf("bad create: expected 400, got %d", w.Code)
 	}
 
 	// Persisted to disk.
 	cfg, err := LoadConfig(cfgPath)
-	if err != nil || len(cfg.Accounts) != 1 || cfg.Accounts[0].ID != "alice" {
+	if err != nil || len(cfg.Accounts) != 2 || cfg.Accounts[0].ID != "alice" {
 		t.Fatalf("config not persisted: %+v err=%v", cfg, err)
 	}
 
@@ -197,7 +201,7 @@ func TestManagerCRUD(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &views); err != nil {
 		t.Fatalf("list decode: %v", err)
 	}
-	if len(views) != 1 || views[0].APIKey != "k1" {
+	if len(views) != 2 || views[0].APIKey != "k1" {
 		t.Fatalf("unexpected list: %+v", views)
 	}
 
@@ -220,6 +224,10 @@ func TestManagerCRUD(t *testing.T) {
 	}
 	if m.reg.Get("alice") != nil {
 		t.Fatal("alice still present")
+	}
+	// Also delete the auto-generated account.
+	if w := do(h, "DELETE", "/admin/api/accounts/x", ""); w.Code != http.StatusOK {
+		t.Fatalf("delete x: %d", w.Code)
 	}
 	cfg, _ = LoadConfig(cfgPath)
 	if len(cfg.Accounts) != 0 {
