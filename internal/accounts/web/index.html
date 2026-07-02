@@ -84,6 +84,13 @@
       <div class="field"><label>Account ID</label><input id="new-id" placeholder="alice" /></div>
       <div class="field"><label>API Key (auto-generated if empty)</label><div style="display:flex;gap:6px"><input id="new-key" placeholder="sk-..." /><button class="ghost" id="gen-key-btn" type="button">Generate</button></div></div>
       <div class="field"><label>Token dir (optional)</label><input id="new-dir" placeholder="defaults to ID" /></div>
+      <div class="field"><label>Auth mode</label>
+        <select id="new-mode">
+          <option value="exchange">exchange (default)</option>
+          <option value="direct">direct (raw GitHub token)</option>
+        </select>
+      </div>
+      <div class="field" id="new-enterprise-field" style="display:none"><label>Enterprise URL (optional)</label><input id="new-enterprise" placeholder="company.ghe.com" /></div>
       <button id="add-btn">Add</button>
     </div>
   </section>
@@ -91,8 +98,8 @@
   <section class="panel">
     <h2>Accounts</h2>
     <table>
-      <thead><tr><th>ID</th><th>API Key</th><th>Token dir</th><th>Status</th><th>Actions</th></tr></thead>
-      <tbody id="rows"><tr><td colspan="5" class="muted">Loading…</td></tr></tbody>
+      <thead><tr><th>ID</th><th>API Key</th><th>Token dir</th><th>Mode</th><th>Status</th><th>Actions</th></tr></thead>
+      <tbody id="rows"><tr><td colspan="6" class="muted">Loading…</td></tr></tbody>
     </table>
   </section>
   </div>
@@ -173,7 +180,7 @@ async function load() {
   try {
     const accounts = await api("GET", "/admin/api/accounts");
     if (!accounts.length) {
-      rows.innerHTML = '<tr><td colspan="5" class="muted">No accounts yet. Add one above.</td></tr>';
+      rows.innerHTML = '<tr><td colspan="6" class="muted">No accounts yet. Add one above.</td></tr>';
       return;
     }
     rows.innerHTML = accounts.map(a => `
@@ -181,6 +188,7 @@ async function load() {
         <td><strong>${a.id}</strong></td>
         <td><code title="${a.api_key}">${maskKey(a.api_key)}</code></td>
         <td>${a.token_dir ? `<code>${a.token_dir}</code>` : '<span class="muted">'+a.id+'</span>'}</td>
+        <td><code>${a.auth_mode || 'exchange'}</code>${a.enterprise_url ? `<br><span class="muted small">${a.enterprise_url}</span>` : ''}</td>
         <td>${statusBadge(a)}</td>
         <td class="actions">
           <button class="ghost" data-act="token">Token</button>
@@ -190,7 +198,7 @@ async function load() {
         </td>
       </tr>`).join("");
   } catch (e) {
-    rows.innerHTML = `<tr><td colspan="5" class="badge no">${e.message}</td></tr>`;
+    rows.innerHTML = `<tr><td colspan="6" class="badge no">${e.message}</td></tr>`;
   }
 }
 
@@ -202,16 +210,26 @@ document.getElementById("gen-key-btn").addEventListener("click", async () => {
   } catch (e) { toast(e.message, "err"); }
 });
 
+document.getElementById("new-mode").addEventListener("change", (ev) => {
+  const show = ev.target.value === "direct";
+  document.getElementById("new-enterprise-field").style.display = show ? "" : "none";
+});
+
 document.getElementById("add-btn").addEventListener("click", async () => {
   const id = document.getElementById("new-id").value.trim();
   const api_key = document.getElementById("new-key").value.trim();
   const token_dir = document.getElementById("new-dir").value.trim();
+  const auth_mode = document.getElementById("new-mode").value;
+  const enterprise_url = document.getElementById("new-enterprise").value.trim();
   if (!id) { toast("id is required", "err"); return; }
   try {
-    const result = await api("POST", "/admin/api/accounts", { id, api_key, token_dir });
+    const result = await api("POST", "/admin/api/accounts", { id, api_key, token_dir, auth_mode, enterprise_url });
     document.getElementById("new-id").value = "";
     document.getElementById("new-key").value = "";
     document.getElementById("new-dir").value = "";
+    document.getElementById("new-enterprise").value = "";
+    document.getElementById("new-mode").value = "exchange";
+    document.getElementById("new-enterprise-field").style.display = "none";
     toast("Account added (key: " + result.api_key.slice(0,8) + "…)");
     load();
   } catch (e) { toast(e.message, "err"); }

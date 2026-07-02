@@ -85,7 +85,8 @@ You can also edit `accounts.json` by hand:
 {
   "accounts": [
     { "id": "alice", "api_key": "sk-alice-...", "token_dir": "alice" },
-    { "id": "bob",   "api_key": "sk-bob-...",   "token_dir": "bob" }
+    { "id": "bob",   "api_key": "sk-bob-...",   "token_dir": "bob" },
+    { "id": "ent",   "api_key": "sk-ent-...",   "auth_mode": "direct", "enterprise_url": "company.ghe.com" }
   ]
 }
 ```
@@ -93,6 +94,8 @@ You can also edit `accounts.json` by hand:
 - `id` — unique account identifier (used in logs; defaults the token sub-directory name).
 - `api_key` — the key clients must present. Must be unique across accounts.
 - `token_dir` — where this account's `credentials.json` is stored. Relative paths resolve under the base token directory; defaults to `id`.
+- `auth_mode` — how the Copilot bearer token is obtained: `"exchange"` (default) exchanges the GitHub token for a short-lived Copilot token via `copilot_internal/v2/token`; `"direct"` uses the raw GitHub OAuth token directly against `https://api.githubcopilot.com` (OpenCode-style, no exchange or refresh) and sends OpenCode-style headers. Set a global default with `COPILOT2API_AUTH_MODE`.
+- `enterprise_url` — GitHub Enterprise URL or domain (e.g. `company.ghe.com`). The Device Flow runs against this host; in `direct` mode, Copilot API calls route to `https://copilot-api.<domain>`. Omit for github.com.
 
 On startup the proxy runs the GitHub Device Flow once **per account** (sequentially) for any account that has no stored token. Each account keeps an isolated credential store and its own models cache, so token refresh and capability-based routing stay independent.
 
@@ -109,7 +112,7 @@ Requests **must** present a valid key or receive `401 Unauthorized`. Until at le
 The proxy serves a web UI at **`http://127.0.0.1:7777/admin/`** to maintain the mapping without editing `accounts.json` by hand:
 
 - List accounts and their authentication status.
-- Add an account (id + API key + optional token dir) and authenticate it via a browser-driven GitHub Device Flow (shows the code + verification link, polls until done).
+- Add an account (id + API key + optional token dir, auth mode, and Enterprise URL) and authenticate it via a browser-driven GitHub Device Flow (shows the code + verification link, polls until done).
 - Rotate an account's API key, or delete an account.
 - **Stats tab**: view per-account, per-model token counts — input, output, cached (prompt-cache hits), cache-write, and request totals — across all OpenAI, Anthropic, and Gemini endpoints. Usage is persisted to `<token-dir>/stats.json` and survives restarts (backed by `GET /admin/api/stats`, with `DELETE /admin/api/stats/{id}` to reset one account).
 
@@ -300,6 +303,7 @@ Environment variables are used as defaults when flags are not provided:
 | `COPILOT2API_PORT` | Server port | `7777` |
 | `COPILOT2API_TOKEN_DIR` | Token storage directory | `~/.config/copilot2api` |
 | `COPILOT2API_ACCOUNTS_FILE` | Multi-account config file path (see [Multiple GitHub Accounts](#multiple-github-accounts)) | `<token-dir>/accounts.json` |
+| `COPILOT2API_AUTH_MODE` | Default auth mode for accounts without an explicit `auth_mode`: `exchange` or `direct` (see [Multiple GitHub Accounts](#multiple-github-accounts)) | `exchange` |
 | `COPILOT2API_ADMIN_TOKEN` | If set, the `/admin/` UI requires this token (`X-Admin-Token` header or `?admin_token=`) | _(unset, no auth)_ |
 | `COPILOT2API_DEBUG` | Enable debug logging (`true`/`false`, `1`/`0`) | `false` |
 

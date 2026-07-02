@@ -11,6 +11,16 @@ import (
 // inside the base token directory.
 const DefaultConfigFileName = "accounts.json"
 
+// Auth mode values for AccountConfig.AuthMode.
+const (
+	// AuthModeExchange is the default: exchange the GitHub token for a
+	// short-lived Copilot token via copilot_internal/v2/token.
+	AuthModeExchange = "exchange"
+	// AuthModeDirect uses the raw GitHub OAuth token directly as the Copilot
+	// API bearer token (OpenCode-style), with no exchange or refresh.
+	AuthModeDirect = "direct"
+)
+
 // AccountConfig describes a single API-key ↔ GitHub-account mapping.
 type AccountConfig struct {
 	// ID is a stable, unique identifier for the account. Used for logging and
@@ -21,6 +31,13 @@ type AccountConfig struct {
 	// TokenDir is where this account's credentials.json is stored. If relative,
 	// it is resolved under the base token directory. Defaults to ID.
 	TokenDir string `json:"token_dir,omitempty"`
+	// AuthMode selects how the Copilot bearer token is obtained: "exchange"
+	// (default) or "direct". Empty falls back to COPILOT2API_AUTH_MODE, then
+	// "exchange".
+	AuthMode string `json:"auth_mode,omitempty"`
+	// EnterpriseURL is the GitHub Enterprise URL or domain to authenticate
+	// against. Empty means github.com. Only meaningful in direct mode.
+	EnterpriseURL string `json:"enterprise_url,omitempty"`
 }
 
 // Config is the parsed accounts.json file.
@@ -78,10 +95,27 @@ func (c *Config) validate() error {
 		if _, dup := seenKey[a.APIKey]; dup {
 			return fmt.Errorf("duplicate api_key for account %q", a.ID)
 		}
+		if a.AuthMode != "" && a.AuthMode != AuthModeExchange && a.AuthMode != AuthModeDirect {
+			return fmt.Errorf("account %q: invalid auth_mode %q (must be %q or %q)", a.ID, a.AuthMode, AuthModeExchange, AuthModeDirect)
+		}
 		seenID[a.ID] = struct{}{}
 		seenKey[a.APIKey] = struct{}{}
 	}
 	return nil
+}
+
+// ResolveAuthMode returns the effective auth mode for the account, honoring the
+// COPILOT2API_AUTH_MODE environment variable when AuthMode is unset, and
+// defaulting to "exchange".
+func (a AccountConfig) ResolveAuthMode() string {
+	m := a.AuthMode
+	if m == "" {
+		m = os.Getenv("COPILOT2API_AUTH_MODE")
+	}
+	if m == AuthModeDirect {
+		return AuthModeDirect
+	}
+	return AuthModeExchange
 }
 
 // ResolveTokenDir returns the absolute token directory for an account, relative

@@ -6,6 +6,8 @@
 
 ### Features
 
+- Add a configurable per-account authentication mode. Set `auth_mode: "direct"` (default `"exchange"`) on an account to use the raw GitHub OAuth token directly as the Copilot API bearer token — OpenCode-style — skipping the `copilot_internal/v2/token` exchange and refresh. Direct mode targets the static host `https://api.githubcopilot.com`, sends OpenCode-style headers (`X-GitHub-Api-Version: 2026-06-01`, `Openai-Intent: conversation-edits`, `x-initiator`), and requires no token refresh. The existing exchange flow remains the default and is unchanged. A global default can be set via `COPILOT2API_AUTH_MODE`.
+- Add GitHub Enterprise support for authentication. Accounts may set `enterprise_url` (e.g. `company.ghe.com`) to run the Device Flow against the Enterprise host and, in direct mode, route Copilot API calls to `https://copilot-api.<domain>`. The admin UI's "Add account" form now includes an auth-mode selector and an Enterprise URL field, and the accounts table shows each account's mode.
 - Add API key auto-generation: creating an account without specifying `api_key` now automatically generates a cryptographically random key (`sk-` prefix + 32 base62 characters). The admin UI includes a "Generate" button next to the API Key input, and a new `GET /admin/api/generate-key` endpoint returns a freshly generated key on demand.
 
 - Add a native Anthropic token-counting endpoint: `POST /v1/messages/count_tokens` now proxies to the upstream Copilot token counter (previously it returned `404`). The request is forwarded with the same model-alias resolution and `cache_control.scope` stripping as `/v1/messages`, and the upstream `{ "input_tokens": N }` response is returned verbatim.

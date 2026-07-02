@@ -12,8 +12,15 @@ type TokenStorage struct {
 }
 
 type StoredCredentials struct {
-	GitHubToken  string       `json:"github_token"`
+	GitHubToken  string        `json:"github_token"`
 	CopilotToken *CopilotToken `json:"copilot_token,omitempty"`
+	// EnterpriseURL is the GitHub Enterprise host (bare domain) this account was
+	// authenticated against. Empty means github.com. Persisted so the API base
+	// URL can be derived after a restart in direct mode.
+	EnterpriseURL string `json:"enterprise_url,omitempty"`
+	// AuthMode records how this account obtains its Copilot bearer token:
+	// "exchange" (default, two-step) or "direct" (raw GitHub OAuth token).
+	AuthMode string `json:"auth_mode,omitempty"`
 }
 
 // NewTokenStorage creates a new token storage instance

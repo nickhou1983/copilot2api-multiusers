@@ -17,10 +17,33 @@ type Client struct {
 	mu        sync.RWMutex
 	creds     *StoredCredentials
 	refreshMu sync.Mutex // serializes refresh/device-flow operations
+
+	// mode selects how the Copilot bearer token is obtained: ModeExchange
+	// (default) or ModeDirect.
+	mode string
+	// enterpriseDomain is the bare GitHub Enterprise host to authenticate
+	// against. Empty means github.com.
+	enterpriseDomain string
 }
 
-// NewClient creates a new auth client
+// Options configures a Client's authentication behavior.
+type Options struct {
+	// Mode is ModeExchange (default) or ModeDirect.
+	Mode string
+	// EnterpriseURL is the GitHub Enterprise URL or domain. Empty means
+	// github.com.
+	EnterpriseURL string
+}
+
+// NewClient creates a new auth client in the default exchange mode.
 func NewClient(tokenDir string) (*Client, error) {
+	return NewClientWithOptions(tokenDir, Options{})
+}
+
+// NewClientWithOptions creates a new auth client with explicit mode/enterprise
+// options. When options are unset it falls back to values persisted in the
+// account's credentials.json, then to exchange mode / github.com.
+func NewClientWithOptions(tokenDir string, opts Options) (*Client, error) {
 	storage, err := NewTokenStorage(tokenDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create token storage: %w", err)
@@ -31,14 +54,40 @@ func NewClient(tokenDir string) (*Client, error) {
 		return nil, fmt.Errorf("failed to load credentials: %w", err)
 	}
 
+	mode := opts.Mode
+	if mode == "" {
+		mode = creds.AuthMode
+	}
+	if mode != ModeDirect {
+		mode = ModeExchange
+	}
+
+	enterprise := NormalizeDomain(opts.EnterpriseURL)
+	if enterprise == "" {
+		enterprise = NormalizeDomain(creds.EnterpriseURL)
+	}
+
 	return &Client{
-		storage: storage,
-		creds:   creds,
+		storage:          storage,
+		creds:            creds,
+		mode:             mode,
+		enterpriseDomain: enterprise,
 	}, nil
 }
 
 // GetValidToken returns a valid Copilot token, performing authentication if necessary
 func (c *Client) GetValidToken(ctx context.Context) (*CopilotToken, error) {
+	// Direct mode: the raw GitHub OAuth token IS the Copilot bearer token.
+	if c.mode == ModeDirect {
+		c.mu.RLock()
+		gh := c.creds.GitHubToken
+		c.mu.RUnlock()
+		if gh == "" {
+			return nil, fmt.Errorf("authentication required: no GitHub token available (run device flow at startup)")
+		}
+		return &CopilotToken{Token: gh, BaseURL: directBaseURL(c.enterpriseDomain)}, nil
+	}
+
 	// Fast path: check with read lock only
 	c.mu.RLock()
 	if c.creds.CopilotToken != nil && c.creds.CopilotToken.IsTokenUsable() {
@@ -96,12 +145,24 @@ func (c *Client) GetToken(ctx context.Context) (string, error) {
 
 // GetBaseURL returns the base URL for API calls
 func (c *Client) GetBaseURL() string {
+	if c.mode == ModeDirect {
+		return directBaseURL(c.enterpriseDomain)
+	}
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	if c.creds.CopilotToken != nil {
 		return c.creds.CopilotToken.BaseURL
 	}
 	return DefaultBaseURL
+}
+
+// HeaderProfile reports which outbound Copilot header set this client uses:
+// copilot.ProfileOpenCode in direct mode, copilot.ProfileEditor otherwise.
+func (c *Client) HeaderProfile() string {
+	if c.mode == ModeDirect {
+		return copilot.ProfileOpenCode
+	}
+	return copilot.ProfileEditor
 }
 
 
@@ -133,10 +194,10 @@ func (c *Client) RunDeviceFlowIfNeeded() error {
 }
 
 func (c *Client) performDeviceFlow() error {
-	slog.Info("starting GitHub Device Flow OAuth")
+	slog.Info("starting GitHub Device Flow OAuth", "enterprise_domain", c.enterpriseDomain, "mode", c.mode)
 
 	// Step 1: Get device code
-	deviceResp, err := InitiateDeviceFlow()
+	deviceResp, err := InitiateDeviceFlow(c.enterpriseDomain)
 	if err != nil {
 		return fmt.Errorf("failed to initiate device flow: %w", err)
 	}
@@ -149,24 +210,42 @@ func (c *Client) performDeviceFlow() error {
 
 	// Step 3: Poll for access token
 	timeout := time.Duration(deviceResp.ExpiresIn) * time.Second
-	accessToken, err := PollForAccessToken(deviceResp.DeviceCode, deviceResp.Interval, timeout)
+	accessToken, err := PollForAccessToken(c.enterpriseDomain, deviceResp.DeviceCode, deviceResp.Interval, timeout)
 	if err != nil {
 		return fmt.Errorf("failed to get access token: %w", err)
 	}
 
 	fmt.Printf("\n✅ Authentication successful!\n\n")
 
-	// Store GitHub token
+	// Store GitHub token (plus mode/enterprise so it survives restarts)
 	c.mu.Lock()
 	c.creds.GitHubToken = accessToken
+	c.creds.AuthMode = c.mode
+	c.creds.EnterpriseURL = c.enterpriseDomain
 	c.mu.Unlock()
 
-	// Get Copilot token
+	// Direct mode: the GitHub token IS the Copilot bearer token; just persist.
+	if c.mode == ModeDirect {
+		c.saveCreds()
+		return nil
+	}
+
+	// Exchange mode: mint a Copilot token from the GitHub token.
 	if err := c.refreshCopilotToken(); err != nil {
 		return fmt.Errorf("failed to get copilot token: %w", err)
 	}
 
 	return nil
+}
+
+// saveCreds persists a snapshot of the current credentials to disk.
+func (c *Client) saveCreds() {
+	c.mu.RLock()
+	credsCopy := *c.creds
+	c.mu.RUnlock()
+	if err := c.storage.SaveCredentials(&credsCopy); err != nil {
+		slog.Warn("failed to save credentials", "error", err)
+	}
 }
 
 func (c *Client) refreshCopilotToken() error {

@@ -6,6 +6,8 @@
 
 ### 新特性
 
+- 新增可配置的按账号认证模式。在账号上设置 `auth_mode: "direct"`（默认 `"exchange"`）即可将 GitHub OAuth Token 直接用作 Copilot API 的 Bearer Token —— 采用 OpenCode 的做法，跳过 `copilot_internal/v2/token` 换取与刷新流程。Direct 模式请求静态主机 `https://api.githubcopilot.com`，发送 OpenCode 风格请求头（`X-GitHub-Api-Version: 2026-06-01`、`Openai-Intent: conversation-edits`、`x-initiator`），且无需刷新 Token。原有的 exchange 换取流程仍为默认且行为不变。可通过 `COPILOT2API_AUTH_MODE` 设置全局默认值。
+- 新增 GitHub Enterprise 认证支持。账号可设置 `enterprise_url`（如 `company.ghe.com`），使 Device Flow 针对该 Enterprise 主机进行；在 direct 模式下，Copilot API 调用会路由到 `https://copilot-api.<domain>`。管理界面的「新增账号」表单新增了认证模式选择器与 Enterprise URL 输入框，账号列表也会显示每个账号的模式。
 - 新增原生 Anthropic Token 计数端点：`POST /v1/messages/count_tokens` 现已转发到上游 Copilot 的 Token 计数接口（此前返回 `404`）。请求会与 `/v1/messages` 一样做模型别名解析与 `cache_control.scope` 剥离，并原样返回上游的 `{ "input_tokens": N }` 响应。
 - 在原生 `/v1/messages` 请求上透传 `context_management` 而非剥离它。当请求体包含 `context_management` 字段时，代理会保留该字段，并自动为上游请求加上 `anthropic-beta: context-management-2025-06-27` 头，使上下文编辑（如 `clear_tool_uses_20250919`）真正生效，并在 `usage` / `context_management.applied_edits` 中回传结果。
 - 新增多账号支持：通过 `accounts.json` 配置文件把 API Key 与 GitHub 账号 1:1 映射。每个账号使用独立的凭证存储与各自的模型缓存，因此 Token 刷新与基于能力的路由都按账号隔离。可用 `COPILOT2API_ACCOUNTS_FILE` 配置文件路径（默认为 `<token-dir>/accounts.json`）。

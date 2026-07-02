@@ -15,7 +15,30 @@ import (
 const (
 	CopilotTokenURL = "https://api.github.com/copilot_internal/v2/token"
 	DefaultBaseURL  = "https://api.individual.githubcopilot.com"
+	// CopilotAPIBaseURL is the static Copilot API host used in direct mode for
+	// github.com deployments (OpenCode-style, no proxy-ep exchange).
+	CopilotAPIBaseURL = "https://api.githubcopilot.com"
 )
+
+// Auth mode values for Client.
+const (
+	// ModeExchange (default) exchanges the GitHub token for a short-lived
+	// Copilot token via copilot_internal/v2/token.
+	ModeExchange = "exchange"
+	// ModeDirect uses the raw GitHub OAuth token directly as the Copilot API
+	// bearer token, with no exchange or refresh.
+	ModeDirect = "direct"
+)
+
+// directBaseURL returns the Copilot API base URL for direct-token mode. An empty
+// enterprise domain yields the public github.com host; otherwise the
+// Enterprise Copilot host copilot-api.<domain> is used.
+func directBaseURL(enterpriseDomain string) string {
+	if d := NormalizeDomain(enterpriseDomain); d != "" {
+		return "https://copilot-api." + d
+	}
+	return CopilotAPIBaseURL
+}
 
 // sharedHTTPClient is reused across the auth package to enable connection pooling.
 var sharedHTTPClient = &http.Client{Timeout: 30 * time.Second}

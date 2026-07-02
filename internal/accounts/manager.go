@@ -58,6 +58,8 @@ type accountView struct {
 	ID            string `json:"id"`
 	APIKey        string `json:"api_key"`
 	TokenDir      string `json:"token_dir"`
+	AuthMode      string `json:"auth_mode,omitempty"`
+	EnterpriseURL string `json:"enterprise_url,omitempty"`
 	Authenticated bool   `json:"authenticated"`
 	BaseURL       string `json:"base_url,omitempty"`
 }
@@ -114,7 +116,7 @@ func (m *Manager) handleList(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (m *Manager) viewOf(a *Account) accountView {
-	v := accountView{ID: a.ID, APIKey: a.APIKey, TokenDir: a.TokenDir}
+	v := accountView{ID: a.ID, APIKey: a.APIKey, TokenDir: a.TokenDir, AuthMode: a.AuthMode, EnterpriseURL: a.EnterpriseURL}
 	if a.Auth != nil {
 		v.Authenticated = a.Auth.IsAuthenticated()
 		v.BaseURL = a.Auth.GetBaseURL()
@@ -123,9 +125,11 @@ func (m *Manager) viewOf(a *Account) accountView {
 }
 
 type createRequest struct {
-	ID       string `json:"id"`
-	APIKey   string `json:"api_key"`
-	TokenDir string `json:"token_dir"`
+	ID            string `json:"id"`
+	APIKey        string `json:"api_key"`
+	TokenDir      string `json:"token_dir"`
+	AuthMode      string `json:"auth_mode"`
+	EnterpriseURL string `json:"enterprise_url"`
 }
 
 func (m *Manager) handleGenerateKey(w http.ResponseWriter, _ *http.Request) {
@@ -145,11 +149,15 @@ func (m *Manager) handleCreate(w http.ResponseWriter, r *http.Request) {
 	if req.APIKey == "" {
 		req.APIKey = GenerateAPIKey()
 	}
+	if req.AuthMode != "" && req.AuthMode != AuthModeExchange && req.AuthMode != AuthModeDirect {
+		writeError(w, http.StatusBadRequest, "invalid auth_mode (must be \""+AuthModeExchange+"\" or \""+AuthModeDirect+"\")")
+		return
+	}
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	acct, err := m.factory(AccountConfig{ID: req.ID, APIKey: req.APIKey, TokenDir: req.TokenDir})
+	acct, err := m.factory(AccountConfig{ID: req.ID, APIKey: req.APIKey, TokenDir: req.TokenDir, AuthMode: req.AuthMode, EnterpriseURL: req.EnterpriseURL})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -167,8 +175,10 @@ func (m *Manager) handleCreate(w http.ResponseWriter, r *http.Request) {
 }
 
 type updateRequest struct {
-	APIKey   *string `json:"api_key"`
-	TokenDir *string `json:"token_dir"`
+	APIKey        *string `json:"api_key"`
+	TokenDir      *string `json:"token_dir"`
+	AuthMode      *string `json:"auth_mode"`
+	EnterpriseURL *string `json:"enterprise_url"`
 }
 
 func (m *Manager) handleUpdate(w http.ResponseWriter, r *http.Request) {
@@ -188,13 +198,31 @@ func (m *Manager) handleUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// A token_dir change requires rebuilding the account (new auth client).
-	if req.TokenDir != nil && *req.TokenDir != existing.TokenDir {
+	// A token_dir, auth_mode, or enterprise_url change requires rebuilding the
+	// account (new auth client).
+	newTokenDir := existing.TokenDir
+	if req.TokenDir != nil {
+		newTokenDir = *req.TokenDir
+	}
+	newAuthMode := existing.AuthMode
+	if req.AuthMode != nil {
+		newAuthMode = *req.AuthMode
+	}
+	newEnterpriseURL := existing.EnterpriseURL
+	if req.EnterpriseURL != nil {
+		newEnterpriseURL = *req.EnterpriseURL
+	}
+	if newAuthMode != "" && newAuthMode != AuthModeExchange && newAuthMode != AuthModeDirect {
+		writeError(w, http.StatusBadRequest, "invalid auth_mode (must be \""+AuthModeExchange+"\" or \""+AuthModeDirect+"\")")
+		return
+	}
+
+	if newTokenDir != existing.TokenDir || newAuthMode != existing.AuthMode || newEnterpriseURL != existing.EnterpriseURL {
 		apiKey := existing.APIKey
 		if req.APIKey != nil && *req.APIKey != "" {
 			apiKey = *req.APIKey
 		}
-		rebuilt, err := m.factory(AccountConfig{ID: id, APIKey: apiKey, TokenDir: *req.TokenDir})
+		rebuilt, err := m.factory(AccountConfig{ID: id, APIKey: apiKey, TokenDir: newTokenDir, AuthMode: newAuthMode, EnterpriseURL: newEnterpriseURL})
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
@@ -368,7 +396,7 @@ func (m *Manager) persistLocked() error {
 	accs := m.reg.Accounts()
 	cfg := &Config{Accounts: make([]AccountConfig, 0, len(accs))}
 	for _, a := range accs {
-		cfg.Accounts = append(cfg.Accounts, AccountConfig{ID: a.ID, APIKey: a.APIKey, TokenDir: a.TokenDir})
+		cfg.Accounts = append(cfg.Accounts, AccountConfig{ID: a.ID, APIKey: a.APIKey, TokenDir: a.TokenDir, AuthMode: a.AuthMode, EnterpriseURL: a.EnterpriseURL})
 	}
 	sort.Slice(cfg.Accounts, func(i, j int) bool { return cfg.Accounts[i].ID < cfg.Accounts[j].ID })
 	return SaveConfig(m.cfgPath, cfg)

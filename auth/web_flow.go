@@ -42,7 +42,7 @@ func (c *Client) StoredTokens() StoredTokenInfo {
 // codes so a caller (e.g. a web UI) can present them to the user. Use
 // CompleteDeviceFlow with the returned DeviceCode to finish authentication.
 func (c *Client) StartDeviceFlow() (*DeviceCodeResponse, error) {
-	resp, err := InitiateDeviceFlow()
+	resp, err := InitiateDeviceFlow(c.enterpriseDomain)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initiate device flow: %w", err)
 	}
@@ -58,19 +58,27 @@ func (c *Client) CompleteDeviceFlow(deviceCode string, interval int, timeout tim
 	c.refreshMu.Lock()
 	defer c.refreshMu.Unlock()
 
-	accessToken, err := PollForAccessToken(deviceCode, interval, timeout)
+	accessToken, err := PollForAccessToken(c.enterpriseDomain, deviceCode, interval, timeout)
 	if err != nil {
 		return fmt.Errorf("failed to get access token: %w", err)
 	}
 
 	c.mu.Lock()
 	c.creds.GitHubToken = accessToken
+	c.creds.AuthMode = c.mode
+	c.creds.EnterpriseURL = c.enterpriseDomain
 	c.mu.Unlock()
+
+	if c.mode == ModeDirect {
+		c.saveCreds()
+		slog.Info("device flow authentication completed", "mode", c.mode)
+		return nil
+	}
 
 	if err := c.refreshCopilotToken(); err != nil {
 		return fmt.Errorf("failed to get copilot token: %w", err)
 	}
 
-	slog.Info("device flow authentication completed")
+	slog.Info("device flow authentication completed", "mode", c.mode)
 	return nil
 }

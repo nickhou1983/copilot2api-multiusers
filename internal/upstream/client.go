@@ -23,6 +23,13 @@ type TokenProvider interface {
 	GetBaseURL() string
 }
 
+// HeaderProfiler is an optional interface a TokenProvider may implement to
+// select which Copilot header set is applied to outbound requests. When not
+// implemented, the default editor profile is used.
+type HeaderProfiler interface {
+	HeaderProfile() string
+}
+
 // Client makes requests to the upstream Copilot API.
 type Client struct {
 	TokenProvider TokenProvider
@@ -129,7 +136,11 @@ func (c *Client) Do(ctx context.Context, r Request) (*http.Response, []byte, err
 		return nil, nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	copilot.AddHeaders(req, token)
+	profile := copilot.ProfileEditor
+	if hp, ok := c.TokenProvider.(HeaderProfiler); ok {
+		profile = hp.HeaderProfile()
+	}
+	copilot.AddHeadersProfile(req, token, profile)
 
 	if r.Stream {
 		req.Header.Set("Accept", "text/event-stream")

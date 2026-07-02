@@ -11,11 +11,39 @@ import (
 )
 
 const (
-	GitHubClientID      = "Iv1.b507a08c87ecfe98"
+	GitHubClientID = "Iv1.b507a08c87ecfe98"
+	// DefaultGitHubDomain is the OAuth host used for github.com deployments.
+	DefaultGitHubDomain = "github.com"
 	GitHubDeviceCodeURL = "https://github.com/login/device/code"
 	GitHubTokenURL      = "https://github.com/login/oauth/access_token"
 	GitHubScope         = "read:user"
 )
+
+// NormalizeDomain strips the scheme and any trailing slash from a GitHub
+// (Enterprise) URL or domain, returning a bare host like "company.ghe.com".
+func NormalizeDomain(raw string) string {
+	d := strings.TrimSpace(raw)
+	d = strings.TrimPrefix(d, "https://")
+	d = strings.TrimPrefix(d, "http://")
+	d = strings.TrimSuffix(d, "/")
+	return d
+}
+
+// resolveDomain returns the OAuth host to use, defaulting to github.com.
+func resolveDomain(domain string) string {
+	if d := NormalizeDomain(domain); d != "" {
+		return d
+	}
+	return DefaultGitHubDomain
+}
+
+func deviceCodeURL(domain string) string {
+	return "https://" + resolveDomain(domain) + "/login/device/code"
+}
+
+func accessTokenURL(domain string) string {
+	return "https://" + resolveDomain(domain) + "/login/oauth/access_token"
+}
 
 type DeviceCodeResponse struct {
 	DeviceCode      string `json:"device_code"`
@@ -31,14 +59,16 @@ type AccessTokenResponse struct {
 	Error       string `json:"error"`
 }
 
-// InitiateDeviceFlow starts the GitHub Device Flow OAuth process
-func InitiateDeviceFlow() (*DeviceCodeResponse, error) {
+// InitiateDeviceFlow starts the GitHub Device Flow OAuth process against the
+// given domain. An empty domain defaults to github.com; pass a GitHub Enterprise
+// host (e.g. "company.ghe.com") to authenticate against an Enterprise instance.
+func InitiateDeviceFlow(domain string) (*DeviceCodeResponse, error) {
 	data := url.Values{
 		"client_id": {GitHubClientID},
 		"scope":     {GitHubScope},
 	}
 
-	req, err := http.NewRequest("POST", GitHubDeviceCodeURL, strings.NewReader(data.Encode()))
+	req, err := http.NewRequest("POST", deviceCodeURL(domain), strings.NewReader(data.Encode()))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create device code request: %w", err)
 	}
@@ -69,8 +99,9 @@ func InitiateDeviceFlow() (*DeviceCodeResponse, error) {
 	return &deviceResp, nil
 }
 
-// PollForAccessToken polls GitHub for the access token after user authorization
-func PollForAccessToken(deviceCode string, interval int, timeout time.Duration) (string, error) {
+// PollForAccessToken polls the given domain for the access token after user
+// authorization. An empty domain defaults to github.com.
+func PollForAccessToken(domain, deviceCode string, interval int, timeout time.Duration) (string, error) {
 	pollInterval := time.Duration(interval) * time.Second
 	if pollInterval <= 0 {
 		pollInterval = 5 * time.Second
@@ -85,7 +116,7 @@ func PollForAccessToken(deviceCode string, interval int, timeout time.Duration) 
 		case <-timeoutTimer.C:
 			return "", fmt.Errorf("polling timeout exceeded")
 		case <-pollTicker.C:
-			token, err := checkAccessToken(deviceCode)
+			token, err := checkAccessToken(domain, deviceCode)
 			if err != nil {
 				// Continue polling on certain errors
 				if strings.Contains(err.Error(), "authorization_pending") {
@@ -107,14 +138,14 @@ func PollForAccessToken(deviceCode string, interval int, timeout time.Duration) 
 	}
 }
 
-func checkAccessToken(deviceCode string) (string, error) {
+func checkAccessToken(domain, deviceCode string) (string, error) {
 	data := url.Values{
 		"client_id":   {GitHubClientID},
 		"device_code": {deviceCode},
 		"grant_type":  {"urn:ietf:params:oauth:grant-type:device_code"},
 	}
 
-	req, err := http.NewRequest("POST", GitHubTokenURL, strings.NewReader(data.Encode()))
+	req, err := http.NewRequest("POST", accessTokenURL(domain), strings.NewReader(data.Encode()))
 	if err != nil {
 		return "", fmt.Errorf("failed to create access token request: %w", err)
 	}

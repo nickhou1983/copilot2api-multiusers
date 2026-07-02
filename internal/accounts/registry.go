@@ -36,7 +36,11 @@ type Account struct {
 	// TokenDir is the configured (possibly relative) token directory for this
 	// account, retained so the registry can round-trip it back to accounts.json.
 	TokenDir string
-	Auth     *auth.Client
+	// AuthMode and EnterpriseURL are retained so the registry can round-trip
+	// them back to accounts.json.
+	AuthMode      string
+	EnterpriseURL string
+	Auth          *auth.Client
 
 	// Recorder accumulates this account's token usage. May be nil.
 	Recorder *stats.Recorder
