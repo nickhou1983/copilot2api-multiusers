@@ -73,6 +73,7 @@ func (m *Manager) Handler() http.Handler {
 	mux.HandleFunc("POST /admin/api/accounts/{id}/auth/start", m.handleAuthStart)
 	mux.HandleFunc("GET /admin/api/accounts/{id}/auth/status", m.handleAuthStatus)
 	mux.HandleFunc("GET /admin/api/accounts/{id}/tokens", m.handleTokens)
+	mux.HandleFunc("GET /admin/api/generate-key", m.handleGenerateKey)
 	mux.HandleFunc("GET /admin/api/stats", m.handleStats)
 	mux.HandleFunc("DELETE /admin/api/stats", m.handleStatsResetAll)
 	mux.HandleFunc("DELETE /admin/api/stats/{id}", m.handleStatsReset)
@@ -127,15 +128,22 @@ type createRequest struct {
 	TokenDir string `json:"token_dir"`
 }
 
+func (m *Manager) handleGenerateKey(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]string{"api_key": GenerateAPIKey()})
+}
+
 func (m *Manager) handleCreate(w http.ResponseWriter, r *http.Request) {
 	var req createRequest
 	if err := decodeJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if req.ID == "" || req.APIKey == "" {
-		writeError(w, http.StatusBadRequest, "id and api_key are required")
+	if req.ID == "" {
+		writeError(w, http.StatusBadRequest, "id is required")
 		return
+	}
+	if req.APIKey == "" {
+		req.APIKey = GenerateAPIKey()
 	}
 
 	m.mu.Lock()

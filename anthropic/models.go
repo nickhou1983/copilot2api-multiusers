@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"regexp"
+	"strings"
 
 	"github.com/whtsky/copilot2api/internal/models"
 )
@@ -28,6 +29,37 @@ var dateSuffixRe = regexp.MustCompile(`-(\d{8,})$`)
 // context1mRe matches the "context-1m" token in the anthropic-beta header,
 // used by Claude Code to signal the 1M context window variant.
 var context1mRe = regexp.MustCompile(`\bcontext-1m\b`)
+
+// oneMillionContextTokens is the threshold (in tokens) at which a model is
+// considered to already provide a 1M context window natively.
+const oneMillionContextTokens = 1_000_000
+
+// resolve1MContextModel decides the effective model ID when the client requests
+// the 1M context window via the "anthropic-beta: context-1m" header.
+//
+// Copilot historically exposed the 1M variant as a separate model ID with a
+// "-1m" suffix (e.g. "claude-sonnet-4-1m"). Newer Claude models advertise a 1M
+// context window on the base model ID directly, with no "-1m" variant in the
+// model list. Blindly appending "-1m" would fabricate a non-existent model ID
+// for those, breaking capability detection and routing.
+//
+// Resolution order:
+//  1. Already has a "-1m" suffix -> use as-is.
+//  2. Base model already advertises >= 1M context -> use the base ID.
+//  3. A "<model>-1m" variant exists upstream -> use that variant.
+//  4. Otherwise -> leave the base model unchanged.
+func resolve1MContextModel(modelID string, infoMap map[string]*models.Info) string {
+	if strings.HasSuffix(modelID, "-1m") {
+		return modelID
+	}
+	if models.MaxContextWindow(infoMap[modelID]) >= oneMillionContextTokens {
+		return modelID
+	}
+	if variant := modelID + "-1m"; infoMap[variant] != nil {
+		return variant
+	}
+	return modelID
+}
 
 // resolveModelAlias returns the canonical model ID for Copilot's model list.
 // It applies the following transformations in order:

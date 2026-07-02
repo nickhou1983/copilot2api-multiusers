@@ -29,6 +29,26 @@ func extractSystemText(system *AnthropicSystem) *string {
 	return nil
 }
 
+// searchResultText extracts the concatenated plain text from a search_result
+// block's content. OpenAI Chat Completions and the Responses API have no
+// search_result equivalent, so the conversion paths downgrade the block to
+// plain text (dropping citation metadata but preserving the content).
+func searchResultText(block AnthropicContentBlock) string {
+	if block.Content == nil {
+		return ""
+	}
+	if block.Content.Text != nil {
+		return *block.Content.Text
+	}
+	var parts []string
+	for _, b := range block.Content.Blocks {
+		if b.Type == "text" {
+			parts = append(parts, b.Text)
+		}
+	}
+	return strings.Join(parts, "\n")
+}
+
 // ToolNameDescSchema holds the fields common to every tool definition format.
 type ToolNameDescSchema struct {
 	Name        string

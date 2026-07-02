@@ -82,3 +82,58 @@ func TestResolveModelAlias(t *testing.T) {
 		})
 	}
 }
+
+func TestResolve1MContextModel(t *testing.T) {
+	// Current Copilot shape: base Claude IDs already advertise a 1M context
+	// window, with no "-1m" variants in the list.
+	nativeMap := map[string]*models.Info{
+		"claude-opus-4.6": {
+			ID:           "claude-opus-4.6",
+			Capabilities: models.Capability{Limits: models.Limits{MaxContextWindowTokens: 1_000_000}},
+		},
+		"claude-haiku-4.5": {
+			ID:           "claude-haiku-4.5",
+			Capabilities: models.Capability{Limits: models.Limits{MaxContextWindowTokens: 200_000}},
+		},
+	}
+
+	// Legacy Copilot shape: 1M exposed as a separate "-1m" model ID, base reports
+	// only 200K.
+	legacyMap := map[string]*models.Info{
+		"claude-sonnet-4": {
+			ID:           "claude-sonnet-4",
+			Capabilities: models.Capability{Limits: models.Limits{MaxContextWindowTokens: 200_000}},
+		},
+		"claude-sonnet-4-1m": {
+			ID:           "claude-sonnet-4-1m",
+			Capabilities: models.Capability{Limits: models.Limits{MaxContextWindowTokens: 1_000_000}},
+		},
+	}
+
+	tests := []struct {
+		name    string
+		modelID string
+		infoMap map[string]*models.Info
+		want    string
+	}{
+		// Base already 1M -> no suffix fabricated.
+		{"native base already 1M", "claude-opus-4.6", nativeMap, "claude-opus-4.6"},
+		// Base not 1M and no variant exists -> leave unchanged (avoid fake ID).
+		{"base not 1M, no variant", "claude-haiku-4.5", nativeMap, "claude-haiku-4.5"},
+		// Legacy: base not 1M but a "-1m" variant exists -> switch to it.
+		{"legacy variant exists", "claude-sonnet-4", legacyMap, "claude-sonnet-4-1m"},
+		// Already suffixed -> idempotent.
+		{"already 1m suffix", "claude-sonnet-4-1m", legacyMap, "claude-sonnet-4-1m"},
+		// Unknown model, empty map -> unchanged.
+		{"unknown model", "claude-opus-9.9", map[string]*models.Info{}, "claude-opus-9.9"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := resolve1MContextModel(tt.modelID, tt.infoMap)
+			if got != tt.want {
+				t.Errorf("resolve1MContextModel(%q) = %q, want %q", tt.modelID, got, tt.want)
+			}
+		})
+	}
+}

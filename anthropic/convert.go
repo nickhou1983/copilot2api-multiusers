@@ -316,11 +316,16 @@ func convertContentBlocksToOpenAI(blocks []AnthropicContentBlock) (*OpenAIConten
 	}
 
 	if !hasImages {
-		// Text only - combine all text blocks
+		// Text only - combine all text and search_result blocks
 		var textParts []string
 		for _, block := range blocks {
-			if block.Type == "text" {
+			switch block.Type {
+			case "text":
 				textParts = append(textParts, block.Text)
+			case "search_result":
+				if t := searchResultText(block); t != "" {
+					textParts = append(textParts, t)
+				}
 			}
 		}
 		if len(textParts) > 0 {
@@ -348,6 +353,10 @@ func convertContentBlocksToOpenAI(blocks []AnthropicContentBlock) (*OpenAIConten
 						URL: url,
 					},
 				})
+			}
+		case "search_result":
+			if t := searchResultText(block); t != "" {
+				parts = append(parts, OpenAIContentPart{Type: "text", Text: t})
 			}
 		}
 	}

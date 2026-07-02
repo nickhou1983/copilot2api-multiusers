@@ -37,3 +37,11 @@ __debug_bin*
 .env
 .env.*
 copilot2api-darwin-arm64
+
+# Capability test artifacts
+scripts/out/
+__pycache__/
+*.pyc
+
+# benchmark
+benchmark/

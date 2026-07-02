@@ -10,11 +10,11 @@
 
 - **兼容 OpenAI API**：`/v1/chat/completions`、`/v1/models`、`/v1/embeddings`、`/v1/responses`
 - **支持 Embeddings**：原生兼容 OpenAI 的 `/v1/embeddings` 端点
-- **兼容 Anthropic API**：`/v1/messages`
+- **兼容 Anthropic API**：`/v1/messages`、`/v1/messages/count_tokens`
 - **兼容 Gemini API**：`/v1beta/models`、`/v1beta/models/{model}:generateContent`、`/v1beta/models/{model}:streamGenerateContent`、`/v1beta/models/{model}:countTokens`
 - **兼容 AmpCode**：`/amp/v1/*` 路由用于对话，`/api/provider/*` 用于特定 provider 的调用，管理类请求反向代理到 `ampcode.com`
 - **流式支持**：OpenAI 与 Anthropic 格式均支持完整的 SSE 流式输出
-- **Anthropic 智能路由**：模型原生支持时使用 `/v1/messages`，否则通过 `/responses` 或 `/chat/completions` 转发
+- **Anthropic 智能路由**：模型原生支持时使用 `/v1/messages`，否则通过 `/responses` 或 `/chat/completions` 转发。原生路径会透传高级字段，如 `context_management`（自动补加 `context-management-2025-06-27` beta 头）与 `search_result` 内容块。
 - **多账号支持**：将 API Key 与 GitHub 账号一对一映射，各账号使用独立的凭据存储（详见 [多 GitHub 账号](#多-github-账号)）
 - **Web 管理界面**：在 `/admin/` 管理账号并查看 Token 使用统计（多账号模式）
 - **自动认证**：GitHub Device Flow OAuth，自动刷新 Token
@@ -262,6 +262,7 @@ message = client.messages.create(
 | `/v1/models` | GET | 列出可用模型（缓存 5 分钟） |
 | `/v1/embeddings` | POST | 生成 Embeddings（支持字符串或数组输入） |
 | `/v1/messages` | POST | Anthropic Messages API（流式与非流式） |
+| `/v1/messages/count_tokens` | POST | Anthropic Token 计数（转发至上游） |
 | `/v1beta/models` | GET | 列出 Gemini 兼容模型 |
 | `/v1beta/models/{model}:generateContent` | POST | Gemini Generate Content |
 | `/v1beta/models/{model}:streamGenerateContent` | POST | Gemini Generate Content 流式 SSE |

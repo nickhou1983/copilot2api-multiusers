@@ -13,10 +13,30 @@ import (
 	"golang.org/x/sync/singleflight"
 )
 
-// Info contains model metadata including supported endpoints.
+// Info contains model metadata including supported endpoints and capability limits.
 type Info struct {
-	ID                 string   `json:"id"`
-	SupportedEndpoints []string `json:"supported_endpoints"`
+	ID                 string     `json:"id"`
+	SupportedEndpoints []string   `json:"supported_endpoints"`
+	Capabilities       Capability `json:"capabilities"`
+}
+
+// Capability mirrors the subset of a model's capabilities we rely on for routing.
+type Capability struct {
+	Limits Limits `json:"limits"`
+}
+
+// Limits captures the model's context/token limits.
+type Limits struct {
+	MaxContextWindowTokens int `json:"max_context_window_tokens"`
+}
+
+// MaxContextWindow returns the model's advertised max context window in tokens,
+// or 0 when the info is nil or the upstream did not report a value.
+func MaxContextWindow(info *Info) int {
+	if info == nil {
+		return 0
+	}
+	return info.Capabilities.Limits.MaxContextWindowTokens
 }
 
 // modelsListResponse is the response from the /models endpoint.
