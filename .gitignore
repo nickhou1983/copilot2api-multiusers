@@ -42,3 +42,6 @@ copilot2api-darwin-arm64
 scripts/out/
 __pycache__/
 *.pyc
+
+# benchmark
+benchmark/
