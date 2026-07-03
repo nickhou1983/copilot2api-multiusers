@@ -58,6 +58,7 @@ type accountView struct {
 	ID            string `json:"id"`
 	APIKey        string `json:"api_key"`
 	TokenDir      string `json:"token_dir"`
+	Pool          string `json:"pool,omitempty"`
 	Authenticated bool   `json:"authenticated"`
 	BaseURL       string `json:"base_url,omitempty"`
 }
@@ -114,7 +115,7 @@ func (m *Manager) handleList(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (m *Manager) viewOf(a *Account) accountView {
-	v := accountView{ID: a.ID, APIKey: a.APIKey, TokenDir: a.TokenDir}
+	v := accountView{ID: a.ID, APIKey: a.APIKey, TokenDir: a.TokenDir, Pool: a.Pool}
 	if a.Auth != nil {
 		v.Authenticated = a.Auth.IsAuthenticated()
 		v.BaseURL = a.Auth.GetBaseURL()
@@ -126,6 +127,7 @@ type createRequest struct {
 	ID       string `json:"id"`
 	APIKey   string `json:"api_key"`
 	TokenDir string `json:"token_dir"`
+	Pool     string `json:"pool"`
 }
 
 func (m *Manager) handleGenerateKey(w http.ResponseWriter, _ *http.Request) {
@@ -149,7 +151,7 @@ func (m *Manager) handleCreate(w http.ResponseWriter, r *http.Request) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	acct, err := m.factory(AccountConfig{ID: req.ID, APIKey: req.APIKey, TokenDir: req.TokenDir})
+	acct, err := m.factory(AccountConfig{ID: req.ID, APIKey: req.APIKey, TokenDir: req.TokenDir, Pool: req.Pool})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -169,6 +171,7 @@ func (m *Manager) handleCreate(w http.ResponseWriter, r *http.Request) {
 type updateRequest struct {
 	APIKey   *string `json:"api_key"`
 	TokenDir *string `json:"token_dir"`
+	Pool     *string `json:"pool"`
 }
 
 func (m *Manager) handleUpdate(w http.ResponseWriter, r *http.Request) {
@@ -188,22 +191,49 @@ func (m *Manager) handleUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// A token_dir change requires rebuilding the account (new auth client).
-	if req.TokenDir != nil && *req.TokenDir != existing.TokenDir {
-		apiKey := existing.APIKey
-		if req.APIKey != nil && *req.APIKey != "" {
-			apiKey = *req.APIKey
-		}
-		rebuilt, err := m.factory(AccountConfig{ID: id, APIKey: apiKey, TokenDir: *req.TokenDir})
+	if req.APIKey != nil && *req.APIKey == "" {
+		writeError(w, http.StatusBadRequest, "api_key cannot be empty")
+		return
+	}
+
+	// Resolve the desired final field values.
+	apiKey := existing.APIKey
+	if req.APIKey != nil {
+		apiKey = *req.APIKey
+	}
+	tokenDir := existing.TokenDir
+	if req.TokenDir != nil {
+		tokenDir = *req.TokenDir
+	}
+	pool := existing.Pool
+	if req.Pool != nil {
+		pool = *req.Pool
+	}
+
+	tokenDirChanged := req.TokenDir != nil && *req.TokenDir != existing.TokenDir
+	poolChanged := req.Pool != nil && *req.Pool != existing.Pool
+
+	// A token_dir change needs a fresh auth client; a pool change needs the
+	// account re-grouped. Both are handled by rebuilding and re-registering.
+	if tokenDirChanged || poolChanged {
+		rebuilt, err := m.factory(AccountConfig{ID: id, APIKey: apiKey, TokenDir: tokenDir, Pool: pool})
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		if err := m.reg.Replace(rebuilt); err != nil {
+		old, _ := m.reg.Remove(id)
+		if err := m.reg.Add(rebuilt); err != nil {
+			if old != nil {
+				_ = m.reg.Add(old) // roll back
+			}
 			writeError(w, http.StatusConflict, err.Error())
 			return
 		}
 		if err := m.persistLocked(); err != nil {
+			_, _ = m.reg.Remove(id)
+			if old != nil {
+				_ = m.reg.Add(old)
+			}
 			writeError(w, http.StatusInternalServerError, "failed to save config: "+err.Error())
 			return
 		}
@@ -211,12 +241,8 @@ func (m *Manager) handleUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.APIKey != nil && *req.APIKey != existing.APIKey {
-		if *req.APIKey == "" {
-			writeError(w, http.StatusBadRequest, "api_key cannot be empty")
-			return
-		}
-		if err := m.reg.UpdateKey(id, *req.APIKey); err != nil {
+	if apiKey != existing.APIKey {
+		if err := m.reg.UpdateKey(id, apiKey); err != nil {
 			writeError(w, http.StatusConflict, err.Error())
 			return
 		}
@@ -368,7 +394,7 @@ func (m *Manager) persistLocked() error {
 	accs := m.reg.Accounts()
 	cfg := &Config{Accounts: make([]AccountConfig, 0, len(accs))}
 	for _, a := range accs {
-		cfg.Accounts = append(cfg.Accounts, AccountConfig{ID: a.ID, APIKey: a.APIKey, TokenDir: a.TokenDir})
+		cfg.Accounts = append(cfg.Accounts, AccountConfig{ID: a.ID, APIKey: a.APIKey, TokenDir: a.TokenDir, Pool: a.Pool})
 	}
 	sort.Slice(cfg.Accounts, func(i, j int) bool { return cfg.Accounts[i].ID < cfg.Accounts[j].ID })
 	return SaveConfig(m.cfgPath, cfg)

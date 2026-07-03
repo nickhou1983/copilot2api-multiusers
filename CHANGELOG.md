@@ -6,6 +6,7 @@
 
 ### Features
 
+- Add **account pools**: a single API key can now front multiple GitHub accounts to spread load and work around per-account rate limits and quotas. Give two or more accounts the same `api_key` plus the same non-empty `pool` name in `accounts.json` and they form a pool. Requests to that key are distributed **round-robin** across members, with **automatic failover** to the next member when an attempt returns a retryable status (`429` rate limit, `402`/`403` quota, or transient `5xx`) before any response bytes are streamed. Accounts without a `pool` are unchanged (a pool of one, no retry overhead); sharing a key without a matching `pool` name is still rejected as a duplicate. The admin UI/API accept an optional `pool` field on create/update and persist it. Backward compatible — existing single-key-per-account configs behave exactly as before.
 - Add API key auto-generation: creating an account without specifying `api_key` now automatically generates a cryptographically random key (`sk-` prefix + 32 base62 characters). The admin UI includes a "Generate" button next to the API Key input, and a new `GET /admin/api/generate-key` endpoint returns a freshly generated key on demand.
 
 - Add a native Anthropic token-counting endpoint: `POST /v1/messages/count_tokens` now proxies to the upstream Copilot token counter (previously it returned `404`). The request is forwarded with the same model-alias resolution and `cache_control.scope` stripping as `/v1/messages`, and the upstream `{ "input_tokens": N }` response is returned verbatim.
@@ -29,6 +30,7 @@
 
 - Document the `/v1/messages/count_tokens` endpoint and native-passthrough fields (`context_management`, `search_result`) in both `README.md` and `README.zh-CN.md` (Features list and API Endpoints table).
 - Document multi-account, admin UI, and token-usage stats in the README, and add Simplified Chinese translations (`README.zh-CN.md`, `CHANGELOG.zh-CN.md`) with language switch links.
+- Document account pools (round-robin + automatic failover across accounts sharing one key) in both `README.md` and `README.zh-CN.md`.
 
 ### Tests
 

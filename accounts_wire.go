@@ -25,7 +25,7 @@ const modelsCacheTTL = 5 * time.Minute
 // per-protocol handlers WITHOUT authenticating. Authentication happens
 // separately (interactive device flow at startup, or web-driven via the admin
 // API), so accounts can be created before the user authorizes them.
-func newAccountHandlers(id, apiKey, tokenDirRaw, tokenDirAbs string, transport *http.Transport, rec *stats.Recorder) (*accounts.Account, error) {
+func newAccountHandlers(id, apiKey, pool, tokenDirRaw, tokenDirAbs string, transport *http.Transport, rec *stats.Recorder) (*accounts.Account, error) {
 	authClient, err := auth.NewClient(tokenDirAbs)
 	if err != nil {
 		return nil, fmt.Errorf("account %q: failed to initialize auth client: %w", id, err)
@@ -50,6 +50,7 @@ func newAccountHandlers(id, apiKey, tokenDirRaw, tokenDirAbs string, transport *
 		ID:        id,
 		APIKey:    apiKey,
 		TokenDir:  tokenDirRaw,
+		Pool:      pool,
 		Auth:      authClient,
 		Recorder:  rec,
 		OpenAI:    proxyHandler,
@@ -61,8 +62,8 @@ func newAccountHandlers(id, apiKey, tokenDirRaw, tokenDirAbs string, transport *
 
 // buildAccount builds an account and runs the interactive device flow if it has
 // no stored GitHub token. Used at startup.
-func buildAccount(ctx context.Context, id, apiKey, tokenDirRaw, tokenDirAbs string, transport *http.Transport, rec *stats.Recorder) (*accounts.Account, error) {
-	acct, err := newAccountHandlers(id, apiKey, tokenDirRaw, tokenDirAbs, transport, rec)
+func buildAccount(ctx context.Context, id, apiKey, pool, tokenDirRaw, tokenDirAbs string, transport *http.Transport, rec *stats.Recorder) (*accounts.Account, error) {
+	acct, err := newAccountHandlers(id, apiKey, pool, tokenDirRaw, tokenDirAbs, transport, rec)
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +109,7 @@ func buildRegistry(ctx context.Context, baseTokenDir string, transport *http.Tra
 	built := make([]*accounts.Account, 0, len(cfg.Accounts))
 	for i := range cfg.Accounts {
 		ac := cfg.Accounts[i]
-		acct, err := buildAccount(ctx, ac.ID, ac.APIKey, ac.TokenDir, ac.ResolveTokenDir(baseTokenDir), transport, statsStore.Recorder(ac.ID))
+		acct, err := buildAccount(ctx, ac.ID, ac.APIKey, ac.Pool, ac.TokenDir, ac.ResolveTokenDir(baseTokenDir), transport, statsStore.Recorder(ac.ID))
 		if err != nil {
 			return nil, nil, nil, err
 		}
@@ -122,7 +123,7 @@ func buildRegistry(ctx context.Context, baseTokenDir string, transport *http.Tra
 
 	// Factory used by the admin API to create accounts without authenticating.
 	factory := func(c accounts.AccountConfig) (*accounts.Account, error) {
-		return newAccountHandlers(c.ID, c.APIKey, c.TokenDir, c.ResolveTokenDir(baseTokenDir), transport, statsStore.Recorder(c.ID))
+		return newAccountHandlers(c.ID, c.APIKey, c.Pool, c.TokenDir, c.ResolveTokenDir(baseTokenDir), transport, statsStore.Recorder(c.ID))
 	}
 	mgr := accounts.NewManager(reg, factory, cfgPath, os.Getenv("COPILOT2API_ADMIN_TOKEN"), statsStore)
 	return reg, mgr, statsStore, nil

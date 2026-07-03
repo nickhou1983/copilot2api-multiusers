@@ -91,8 +91,9 @@ You can also edit `accounts.json` by hand:
 ```
 
 - `id` — unique account identifier (used in logs; defaults the token sub-directory name).
-- `api_key` — the key clients must present. Must be unique across accounts.
+- `api_key` — the key clients must present. Must be unique across accounts, **unless** the accounts form a pool (see [Account Pools](#account-pools), where pool members share one key).
 - `token_dir` — where this account's `credentials.json` is stored. Relative paths resolve under the base token directory; defaults to `id`.
+- `pool` *(optional)* — groups this account with others into an [account pool](#account-pools) that share one API key.
 
 On startup the proxy runs the GitHub Device Flow once **per account** (sequentially) for any account that has no stored token. Each account keeps an isolated credential store and its own models cache, so token refresh and capability-based routing stay independent.
 
@@ -103,6 +104,29 @@ Clients select an account by sending its `api_key`:
 - Gemini: `x-goog-api-key: <api_key>` or `?key=<api_key>`
 
 Requests **must** present a valid key or receive `401 Unauthorized`. Until at least one account is configured (e.g. via the admin UI), every request is rejected with `401`.
+
+### Account Pools
+
+An **account pool** lets a single API key sit in front of several GitHub accounts, spreading load and working around per-account rate limits and quotas. Give two or more accounts the **same `api_key`** and the **same non-empty `pool`** name:
+
+```json
+{
+  "accounts": [
+    { "id": "team-a", "api_key": "sk-team-...", "pool": "team", "token_dir": "team-a" },
+    { "id": "team-b", "api_key": "sk-team-...", "pool": "team", "token_dir": "team-b" },
+    { "id": "solo",   "api_key": "sk-solo-...", "token_dir": "solo" }
+  ]
+}
+```
+
+Here `sk-team-...` routes to a pool of `team-a` + `team-b`, while `sk-solo-...` stays a normal 1:1 account.
+
+- **Round-robin**: each request to a pooled key is dispatched to the next member in rotation, so load is spread evenly.
+- **Automatic failover**: if a member responds with a retryable status (`429` rate limit, `402`/`403` quota, or a transient `5xx`) *before any response bytes are streamed*, the proxy transparently retries the request on the next member. The client only ever sees the response of the member that succeeds (or the last member's error if all fail).
+- **Backward compatible**: accounts without a `pool` behave exactly as before (a pool of one, no retry overhead). Sharing an `api_key` **without** a matching `pool` name is still rejected as a duplicate key.
+- Each member keeps its own isolated credential store, token, models cache, and usage stats (recorded under its own `id`).
+
+> Only the round-robin selection strategy is currently implemented. Failover applies to non-streaming errors and to streaming responses that fail before the first byte; once a `200` stream has started it cannot be retried on another member.
 
 ### Admin UI
 

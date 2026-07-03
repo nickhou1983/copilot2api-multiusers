@@ -84,6 +84,7 @@
       <div class="field"><label>Account ID</label><input id="new-id" placeholder="alice" /></div>
       <div class="field"><label>API Key (auto-generated if empty)</label><div style="display:flex;gap:6px"><input id="new-key" placeholder="sk-..." /><button class="ghost" id="gen-key-btn" type="button">Generate</button></div></div>
       <div class="field"><label>Token dir (optional)</label><input id="new-dir" placeholder="defaults to ID" /></div>
+      <div class="field"><label>Pool (optional)</label><input id="new-pool" placeholder="share a key across accounts" /></div>
       <button id="add-btn">Add</button>
     </div>
   </section>
@@ -91,8 +92,8 @@
   <section class="panel">
     <h2>Accounts</h2>
     <table>
-      <thead><tr><th>ID</th><th>API Key</th><th>Token dir</th><th>Status</th><th>Actions</th></tr></thead>
-      <tbody id="rows"><tr><td colspan="5" class="muted">Loading…</td></tr></tbody>
+      <thead><tr><th>ID</th><th>API Key</th><th>Token dir</th><th>Pool</th><th>Status</th><th>Actions</th></tr></thead>
+      <tbody id="rows"><tr><td colspan="6" class="muted">Loading…</td></tr></tbody>
     </table>
   </section>
   </div>
@@ -173,7 +174,7 @@ async function load() {
   try {
     const accounts = await api("GET", "/admin/api/accounts");
     if (!accounts.length) {
-      rows.innerHTML = '<tr><td colspan="5" class="muted">No accounts yet. Add one above.</td></tr>';
+      rows.innerHTML = '<tr><td colspan="6" class="muted">No accounts yet. Add one above.</td></tr>';
       return;
     }
     rows.innerHTML = accounts.map(a => `
@@ -181,6 +182,7 @@ async function load() {
         <td><strong>${a.id}</strong></td>
         <td><code title="${a.api_key}">${maskKey(a.api_key)}</code></td>
         <td>${a.token_dir ? `<code>${a.token_dir}</code>` : '<span class="muted">'+a.id+'</span>'}</td>
+        <td>${a.pool ? `<code>${a.pool}</code>` : '<span class="muted">—</span>'}</td>
         <td>${statusBadge(a)}</td>
         <td class="actions">
           <button class="ghost" data-act="token">Token</button>
@@ -190,7 +192,7 @@ async function load() {
         </td>
       </tr>`).join("");
   } catch (e) {
-    rows.innerHTML = `<tr><td colspan="5" class="badge no">${e.message}</td></tr>`;
+    rows.innerHTML = `<tr><td colspan="6" class="badge no">${e.message}</td></tr>`;
   }
 }
 
@@ -206,12 +208,14 @@ document.getElementById("add-btn").addEventListener("click", async () => {
   const id = document.getElementById("new-id").value.trim();
   const api_key = document.getElementById("new-key").value.trim();
   const token_dir = document.getElementById("new-dir").value.trim();
+  const pool = document.getElementById("new-pool").value.trim();
   if (!id) { toast("id is required", "err"); return; }
   try {
-    const result = await api("POST", "/admin/api/accounts", { id, api_key, token_dir });
+    const result = await api("POST", "/admin/api/accounts", { id, api_key, token_dir, pool });
     document.getElementById("new-id").value = "";
     document.getElementById("new-key").value = "";
     document.getElementById("new-dir").value = "";
+    document.getElementById("new-pool").value = "";
     toast("Account added (key: " + result.api_key.slice(0,8) + "…)");
     load();
   } catch (e) { toast(e.message, "err"); }

@@ -6,6 +6,7 @@
 
 ### 新特性
 
+- 新增**账户池**：单个 API Key 现在可以挂多个 GitHub 账号，以分摊负载、规避单账号的限流与配额。在 `accounts.json` 中给两个或更多账号设置相同的 `api_key` 和相同的非空 `pool` 名称，它们即组成一个池。对该 Key 的请求会在成员间**轮询**分发，并在某次尝试于响应字节下发前返回可重试状态（`429` 限流、`402`/`403` 配额、或瞬时 `5xx`）时**自动故障转移**到下一个成员。没有 `pool` 的账号行为不变（单成员池，无重试开销）；共享 Key 但没有匹配的 `pool` 名称仍会被判为重复而拒绝。管理界面/API 在创建、更新时接受可选的 `pool` 字段并持久化。向后兼容 —— 既有的一 Key 一账号配置行为完全不变。
 - 新增原生 Anthropic Token 计数端点：`POST /v1/messages/count_tokens` 现已转发到上游 Copilot 的 Token 计数接口（此前返回 `404`）。请求会与 `/v1/messages` 一样做模型别名解析与 `cache_control.scope` 剥离，并原样返回上游的 `{ "input_tokens": N }` 响应。
 - 在原生 `/v1/messages` 请求上透传 `context_management` 而非剥离它。当请求体包含 `context_management` 字段时，代理会保留该字段，并自动为上游请求加上 `anthropic-beta: context-management-2025-06-27` 头，使上下文编辑（如 `clear_tool_uses_20250919`）真正生效，并在 `usage` / `context_management.applied_edits` 中回传结果。
 - 新增多账号支持：通过 `accounts.json` 配置文件把 API Key 与 GitHub 账号 1:1 映射。每个账号使用独立的凭证存储与各自的模型缓存，因此 Token 刷新与基于能力的路由都按账号隔离。可用 `COPILOT2API_ACCOUNTS_FILE` 配置文件路径（默认为 `<token-dir>/accounts.json`）。
@@ -27,6 +28,7 @@
 
 - 在 `README.md` 与 `README.zh-CN.md` 中记录 `/v1/messages/count_tokens` 端点及原生透传字段（`context_management`、`search_result`）（Features 列表与 API 端点表）。
 - 在 README 中记录多账号、管理界面与 Token 用量统计，并新增简体中文翻译（`README.zh-CN.md`、`CHANGELOG.zh-CN.md`）及语言切换链接。
+- 在 `README.md` 与 `README.zh-CN.md` 中记录账户池（多个共享同一 Key 的账号之间轮询 + 自动故障转移）。
 
 ### 测试
 

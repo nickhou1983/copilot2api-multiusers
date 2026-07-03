@@ -21,6 +21,13 @@ type AccountConfig struct {
 	// TokenDir is where this account's credentials.json is stored. If relative,
 	// it is resolved under the base token directory. Defaults to ID.
 	TokenDir string `json:"token_dir,omitempty"`
+	// Pool, when set, groups this account with other accounts that declare the
+	// same pool name into an account pool. All members of a pool MUST share the
+	// same api_key: requests to that key are distributed across pool members
+	// with round-robin selection and automatic failover. Leaving Pool empty
+	// makes the account standalone (a pool of one), preserving the classic
+	// one-key-one-account behavior.
+	Pool string `json:"pool,omitempty"`
 }
 
 // Config is the parsed accounts.json file.
@@ -63,7 +70,15 @@ func LoadConfig(path string) (*Config, error) {
 
 func (c *Config) validate() error {
 	seenID := make(map[string]struct{}, len(c.Accounts))
-	seenKey := make(map[string]struct{}, len(c.Accounts))
+	// keyPool tracks, per api_key, the pool name it is associated with and how
+	// many accounts use it, so we can allow a shared key only within one pool.
+	type keyInfo struct {
+		pool  string
+		count int
+	}
+	byKey := make(map[string]*keyInfo, len(c.Accounts))
+	// poolKey ensures a pool name maps to exactly one api_key.
+	poolKey := make(map[string]string, len(c.Accounts))
 	for i := range c.Accounts {
 		a := &c.Accounts[i]
 		if a.ID == "" {
@@ -75,11 +90,25 @@ func (c *Config) validate() error {
 		if _, dup := seenID[a.ID]; dup {
 			return fmt.Errorf("duplicate account id %q", a.ID)
 		}
-		if _, dup := seenKey[a.APIKey]; dup {
-			return fmt.Errorf("duplicate api_key for account %q", a.ID)
-		}
 		seenID[a.ID] = struct{}{}
-		seenKey[a.APIKey] = struct{}{}
+
+		if ki, ok := byKey[a.APIKey]; ok {
+			// The key is already used. It may only be reused when both this and
+			// the prior account(s) belong to the SAME non-empty pool.
+			if a.Pool == "" || ki.pool == "" || a.Pool != ki.pool {
+				return fmt.Errorf("duplicate api_key for account %q (share a key only within the same pool)", a.ID)
+			}
+			ki.count++
+		} else {
+			byKey[a.APIKey] = &keyInfo{pool: a.Pool, count: 1}
+		}
+
+		if a.Pool != "" {
+			if k, ok := poolKey[a.Pool]; ok && k != a.APIKey {
+				return fmt.Errorf("pool %q maps to more than one api_key", a.Pool)
+			}
+			poolKey[a.Pool] = a.APIKey
+		}
 	}
 	return nil
 }
