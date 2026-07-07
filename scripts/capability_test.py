@@ -560,6 +560,21 @@ def insp_refusal(r):
 # set the effort_xhigh / effort_max expectations model-conditionally.
 _XHIGH_MODELS = ("opus-4.7", "opus-4-7", "opus-4.8", "opus-4-8")
 
+# Computer use tool version by model (per Anthropic docs, re-verified 2026-07-07).
+# The computer-use-2025-11-24 beta + computer_20251124 tool type cover Sonnet 5,
+# Opus 4.8/4.7/4.6, Sonnet 4.6, and Opus 4.5; computer-use-2025-01-24 +
+# computer_20250124 cover Sonnet 4.5 / Haiku 4.5 / Opus 4.1 / Sonnet 4 / Opus 4.
+# The Copilot upstream supports computer use, and the proxy now forwards the
+# computer-use beta header, so direct and proxy both expect 200 for these models.
+_COMPUTER_USE_2511_MODELS = (
+    "sonnet-5", "opus-4.8", "opus-4-8", "opus-4.7", "opus-4-7",
+    "opus-4.6", "opus-4-6", "sonnet-4.6", "sonnet-4-6", "opus-4.5", "opus-4-5",
+)
+_COMPUTER_USE_2501_MODELS = (
+    "sonnet-4.5", "sonnet-4-5", "haiku-4.5", "haiku-4-5",
+    "opus-4.1", "opus-4-1",
+)
+
 
 def build_tests(model: str, *, heavy: bool = False):
     user = lambda t: [{"role": "user", "content": t}]  # noqa: E731
@@ -700,12 +715,24 @@ def build_tests(model: str, *, heavy: bool = False):
                   messages=user("Search the web for today's news.")),
         inspect=insp_reject))
 
+    # computer_use is model-conditional. The Copilot upstream supports the
+    # computer use tool, and the proxy now forwards the computer-use beta header
+    # (extractComputerUseBetas in anthropic/handler.go), so for models that
+    # advertise computer use both direct and proxy expect 200 with a tool_use
+    # response. Pick the tool type + beta version by model; unknown models expect
+    # a 4xx reject.
+    if any(m in model for m in _COMPUTER_USE_2511_MODELS):
+        cu_beta, cu_tool, cu_expect, cu_insp = ["computer-use-2025-11-24"], "computer_20251124", "support", insp_server_tool
+    elif any(m in model for m in _COMPUTER_USE_2501_MODELS):
+        cu_beta, cu_tool, cu_expect, cu_insp = ["computer-use-2025-01-24"], "computer_20250124", "support", insp_server_tool
+    else:
+        cu_beta, cu_tool, cu_expect, cu_insp = ["computer-use-2025-11-24"], "computer_20251124", "reject", insp_reject
     tests.append(dict(
-        name="computer_use", kind="messages", stream=False, beta=["computer-use-2025-01-24"], expect="reject",
-        body=base(tools=[{"type": "computer_20250124", "name": "computer",
+        name="computer_use", kind="messages", stream=False, beta=cu_beta, expect=cu_expect,
+        body=base(tools=[{"type": cu_tool, "name": "computer",
                           "display_width_px": 1024, "display_height_px": 768}],
                   messages=user("Take a screenshot.")),
-        inspect=insp_reject))
+        inspect=cu_insp))
 
     tests.append(dict(
         name="count_tokens", kind="count_tokens", stream=False, beta=[], expect="support",

@@ -6,6 +6,8 @@
 
 ### Features
 
+- Support the Computer Use tool on the native `/v1/messages` (and `/v1/messages/count_tokens`) route by forwarding the client's `computer-use-*` beta header to the upstream. The proxy still does not blindly forward arbitrary client `anthropic-beta` headers, but it now allows `computer-use-2025-11-24` (Claude Opus 4.8/4.7/4.6, Sonnet 4.6, ...) and `computer-use-2025-01-24` (older models) through — merged with the auto-injected `context-management` beta into a single `anthropic-beta` value. The Copilot upstream already supports computer use; previously the beta header was stripped, so the `computer_20251124` / `computer_20250124` tool types were rejected with `400`. Requests that don't carry a `computer-use-*` header are unaffected.
+
 - Add API key auto-generation: creating an account without specifying `api_key` now automatically generates a cryptographically random key (`sk-` prefix + 32 base62 characters). The admin UI includes a "Generate" button next to the API Key input, and a new `GET /admin/api/generate-key` endpoint returns a freshly generated key on demand.
 
 - Add a native Anthropic token-counting endpoint: `POST /v1/messages/count_tokens` now proxies to the upstream Copilot token counter (previously it returned `404`). The request is forwarded with the same model-alias resolution and `cache_control.scope` stripping as `/v1/messages`, and the upstream `{ "input_tokens": N }` response is returned verbatim.

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"io"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -107,14 +108,65 @@ func TestNormalizeNativeMessagesBody_RemovesCacheControlScope(t *testing.T) {
 	}
 }
 
-func TestUpstreamBetaHeaders(t *testing.T) {
-	if h := upstreamBetaHeaders(false); h != nil {
-		t.Fatalf("without context_management, headers = %v, want nil", h)
+func TestExtractComputerUseBetas(t *testing.T) {
+	cases := []struct {
+		name   string
+		values []string
+		want   []string
+	}{
+		{"empty", nil, nil},
+		{"none", []string{"context-1m-2025-08-07,interleaved-thinking-2025-05-14"}, nil},
+		{"new only", []string{"computer-use-2025-11-24"}, []string{"computer-use-2025-11-24"}},
+		{"old only", []string{"computer-use-2025-01-24"}, []string{"computer-use-2025-01-24"}},
+		{"mixed with others", []string{"context-management-2025-06-27,computer-use-2025-11-24"}, []string{"computer-use-2025-11-24"}},
+		{"both versions", []string{"computer-use-2025-11-24,computer-use-2025-01-24"}, []string{"computer-use-2025-11-24", "computer-use-2025-01-24"}},
+		{"dedup", []string{"computer-use-2025-11-24,computer-use-2025-11-24"}, []string{"computer-use-2025-11-24"}},
+		{"spaces around tokens", []string{" context-1m-2025-08-07 , computer-use-2025-11-24 "}, []string{"computer-use-2025-11-24"}},
+		{"multiple header lines", []string{"context-1m-2025-08-07", "computer-use-2025-11-24"}, []string{"computer-use-2025-11-24"}},
+		{"embedded substring not matched", []string{"xcomputer-use-2025-11-24", "computer-use-2025-11-24-extra"}, nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := extractComputerUseBetas(tc.values)
+			if !slices.Equal(got, tc.want) {
+				t.Fatalf("extractComputerUseBetas(%v) = %v, want %v", tc.values, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestBuildUpstreamBetaHeaders(t *testing.T) {
+	if h := buildUpstreamBetaHeaders(nil); h != nil {
+		t.Fatalf("no betas: headers = %v, want nil", h)
+	}
+	if h := buildUpstreamBetaHeaders([]string{"", ""}); h != nil {
+		t.Fatalf("only empty betas: headers = %v, want nil", h)
 	}
 
-	h := upstreamBetaHeaders(true)
-	if got := h["anthropic-beta"]; got != contextManagementBeta {
-		t.Fatalf("anthropic-beta = %q, want %q", got, contextManagementBeta)
+	h := buildUpstreamBetaHeaders([]string{contextManagementBeta, "computer-use-2025-11-24", contextManagementBeta})
+	want := contextManagementBeta + ",computer-use-2025-11-24"
+	if got := h["anthropic-beta"]; got != want {
+		t.Fatalf("anthropic-beta = %q, want %q (dedup + comma-join)", got, want)
+	}
+}
+
+func TestCollectUpstreamBetas(t *testing.T) {
+	// context_management only
+	if got := collectUpstreamBetas(true, nil); !slices.Equal(got, []string{contextManagementBeta}) {
+		t.Fatalf("context_management only = %v", got)
+	}
+	// computer-use only (context_management absent)
+	if got := collectUpstreamBetas(false, []string{"computer-use-2025-11-24"}); !slices.Equal(got, []string{"computer-use-2025-11-24"}) {
+		t.Fatalf("computer-use only = %v", got)
+	}
+	// both, order: context-management first then computer-use
+	got := collectUpstreamBetas(true, []string{"computer-use-2025-11-24"})
+	if !slices.Equal(got, []string{contextManagementBeta, "computer-use-2025-11-24"}) {
+		t.Fatalf("both = %v", got)
+	}
+	// none
+	if got := collectUpstreamBetas(false, nil); len(got) != 0 {
+		t.Fatalf("none = %v, want empty", got)
 	}
 }
 

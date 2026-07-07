@@ -24,7 +24,7 @@
 | Adaptive thinking | **支持** | `thinking:{type:"adaptive"}` |
 | effort 档位 | `low / medium / high` **+ `max`**(顶档) | **不支持 `xhigh`**(`xhigh` 为 Opus 4.7/4.8 在 high 与 max 间的插入档) |
 | 采样参数 | `temperature` / `top_p` / `top_k` **可设非默认值** | **无 Opus 4.7/4.8 式 400 限制** |
-| computer use | **原生增强**(OSWorld 大幅提升) | Anthropic 服务端工具;Copilot 不支持该工具类型 |
+| computer use | **原生增强**(OSWorld 大幅提升) | Copilot 上游**已支持**(需 `computer-use-2025-11-24` beta + `computer_20251124`);详见 §3.5 |
 | 可靠知识截止 | **Aug 2025**(训练数据 Jan 2026) | Opus 4.8 为 Jan 2026 可靠 |
 | 定价 | $3 / $15 每 MTok | 与 Sonnet 4.5 同档 |
 | 输入模态 | 文本 + 图像(含 URL 图源) | — |
@@ -70,7 +70,7 @@
 | 14 | `context_management` | ✅ | ✅ | ✅ | ✅ | beta,代理自动注入 |
 | 15 | `citations` | ✅ | ✅ | ✅ | ✅ |  |
 | 16 | `web_search` | ✅ | ⛔ 4xx | ⛔ 4xx | ✅ | 原生服务端工具,Copilot 不支持 |
-| 17 | `computer_use` | ✅ | ⛔ 4xx | ⛔ 4xx | ✅ | Sonnet 4.6 原生增强 computer use;Copilot 不支持 |
+| 17 | `computer_use` | ✅ | ✅ | ✅ | ✅ | **代理已放行 `computer-use-*` beta 头**,端到端打通(需 `computer-use-2025-11-24` + `computer_20251124`)。见 §3.5 |
 | 18 | `count_tokens` | ✅ | ✅ | ✅ | ✅ |  |
 | 19 | `context_1m` | ✅ | ✅ | ✅ | ✅ | 原生 1M |
 | 20 | `temperature` | ✅ | ✅ | ✅ | ✅ | Sonnet 无 Opus 4.7/4.8 式采样限制(原生接受非默认值) |
@@ -105,7 +105,7 @@
 
 † **`code_execution`(#33)**:本轮 authoritative 运行中**直连**偶发返回 `400`(上游 schema 未将 `code_execution_20250825` 纳入工具联合类型),**经代理** `200`。复测 3/3 两侧均 `200`(执行成功),确认该 400 为**上游瞬时错误**,非代理行为差异。
 
-**一句话结论**:48 项里,**②直连 与 ③经代理 完全一致**,唯二的「不一致」是 `cache_control_scope` 与 `code_execution_beta_header` —— 二者都是 Copilot2API **有意为之**(剥离非标准 `scope` / 剥离客户端 beta),非缺陷;`code_execution` 的一次性 400 为上游瞬时。真正差异在 **①原生 与 ②③Copilot 之间**,且 **Sonnet 与 Opus 的原生约束此消彼长**,见 §三。
+**一句话结论**:48 项里,**②直连 与 ③经代理** 仅 **两处**「不一致」:`cache_control_scope` 与 `code_execution_beta_header`,二者是 Copilot2API **有意为之**(剥离非标准 `scope` / 剥离客户端 beta),非缺陷(`code_execution` 的一次性 400 为上游瞬时)。原先第三处 `computer_use` 差异**已于 2026-07-07 修复**:代理放行客户端 `computer-use-*` beta 头后,直连=代理=✅(见 §3.5)。其余差异在 **①原生 与 ②③Copilot 之间**,且 **Sonnet 与 Opus 的原生约束此消彼长**,见 §三。
 
 ---
 
@@ -126,7 +126,14 @@ Sonnet 4.6 接受 `output_config.effort:"max"`(200),但拒绝 `"xhigh"`(400「no
 `speed:"fast"` + `fast-mode-2026-02-01` beta 是 Opus 4.8 的研究预览;Sonnet 4.6 原生不在支持名单。但 Copilot 直连/代理对该字段+beta **仍返回 200**(容忍/忽略,不报错),两侧一致。即「原生无此能力,Copilot 不拒绝」——与 Opus 上的表现一致。
 
 ### 3.5 原生 vs Copilot:服务端工具与外链图(含 Sonnet 的强项 computer use)
-`web_search` / `web_fetch` / `computer_use` / `vision_url` 是 Anthropic 原生能力,**Copilot 上游一律 4xx**,直连与经代理一致。尤其 **`computer_use`**:Sonnet 4.6 的一大卖点是原生增强的 computer use,但 Copilot 不支持该工具类型(`'claude-sonnet-4-6' does not support tool types: computer_20250124`)——这是 Copilot 相对原生 Sonnet 最显著的能力缺口。
+`web_search` / `web_fetch` / `vision_url` 是 Anthropic 原生能力,**Copilot 上游一律 4xx**,直连与经代理一致。
+
+**`computer_use` 结论已更新(2026-07-07 复测 + 代理修复)**:早期报告(用旧头 `computer-use-2025-01-24` + `computer_20250124`)记为「Copilot 不支持」。按 Anthropic 官方文档,Sonnet 4.6 的 computer use 需 **新 beta 头 `computer-use-2025-11-24` + 新工具型 `computer_20251124`**。以正确组合复测:
+
+- **② 直连 = ✅ 200**:上游 `claude-sonnet-4-6` 返回 `stop_reason=tool_use` 并实际调用 `computer` 工具。即 **Copilot 上游已支持 Sonnet 4.6 的 computer use**(旧工具型 `computer_20250124` 仍被拒:`does not support tool types`)。
+- **③ 经代理 = ✅ 200(修复后)**:复测时经 copilot2api 曾返回 400(`computer-use-2025-11-24` 被代理剥离所致)。**已修复**:代理新增 `extractComputerUseBetas`(`anthropic/handler.go`),在原生 `/v1/messages` 与 `/count_tokens` 路由放行客户端头中的 `computer-use-*` token 并转发上游。修复后经代理返回 `stop_reason=tool_use`,与直连一致。
+
+**含义**:Sonnet 4.6 主打的增强 computer use 现已**端到端打通**(与 Opus 4.8 §3.2 同一修复)。
 
 ### 3.6 输出上限与缓存下限
 - **输出**:Sonnet 4.6 与 Copilot 都把上限定在 **128k**(`max_tokens=200000` → 400 `> 128000`);`output-300k` 不适用本路径。

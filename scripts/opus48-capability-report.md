@@ -60,7 +60,7 @@
 | 14 | `context_management` | ✅ | ✅ | ✅ | ✅ | beta,代理自动注入 |
 | 15 | `citations` | ✅ | ✅ | ✅ | ✅ |  |
 | 16 | `web_search` | ✅ | ⛔ 4xx | ⛔ 4xx | ✅ | 原生服务端工具,Copilot 不支持 |
-| 17 | `computer_use` | ✅ | ⛔ 4xx | ⛔ 4xx | ✅ | 原生服务端工具,Copilot 不支持 |
+| 17 | `computer_use` | ✅ | ✅ | ✅ | ✅ | **代理已放行 `computer-use-*` beta 头**,端到端打通(需 `computer-use-2025-11-24` + `computer_20251124`)。见 §3.2(2026-07-07 复测 + 代理修复) |
 | 18 | `count_tokens` | ✅ | ✅ | ✅ | ✅ |  |
 | 19 | `context_1m` | ✅ | ✅ | ✅ | ✅ | 原生 1M |
 | 20 | `temperature` | ⛔ | ✅ | ✅ | ✅ | 4.8 原生拒非默认采样,Copilot 容忍 |
@@ -92,7 +92,7 @@
 | 46 | `refusal_stop_details`  🆕 | ✅ | ✅ | ✅ | ✅ | 4.8 文档化;本轮未触发硬拒绝,stop_details 未出现 |
 | 47 | `model_discovery` | ✅ | ✅ | ✅ | ✅ | `/v1/models` 34 个模型,capabilities + max_ctx=1,000,000 |
 
-**一句话结论**:在 47 项里,**②直连 与 ③经代理 完全一致**,唯二的「不一致」是 `cache_control_scope` 与 `code_execution_beta_header` —— 二者都是 Copilot2API **有意为之**(剥离非标准 `scope` / 剥离客户端 beta 头),并非缺陷。真正的「能力鸿沟」发生在 **①原生 与 ②③Copilot 之间**,见 §三。
+**一句话结论**:在 47 项里,**②直连 与 ③经代理** 仅 **两处**「不一致」:`cache_control_scope` 与 `code_execution_beta_header` —— 二者都是 Copilot2API **有意为之**(剥离非标准 `scope` / 剥离客户端 beta 头),并非缺陷。原先第三处 `computer_use` 差异**已于 2026-07-07 修复**:代理在原生路由放行客户端 `computer-use-*` beta 头后,直连=代理=✅(见 §3.2)。其余「能力鸿沟」发生在 **①原生 与 ②③Copilot 之间**,见 §三。
 
 ---
 
@@ -102,7 +102,28 @@
 Anthropic 文档明确:Opus 4.8(同 4.7)对 `temperature` / `top_p` / `top_k` 设非默认值 **返回 400**,要求改用提示词。但 **Copilot 上游(直连与经代理一致)对 `temperature=0.0` / `top_p=0.5` / `top_k=10` 均返回 200**。即 Copilot 没有移植 Anthropic 的 4.7/4.8 采样硬约束 —— 对客户端更宽松,但也意味着这些参数在 Copilot 上的实际效果未必与原生一致(可能被静默接受/忽略)。这是**原生 vs Copilot 的行为偏差,非代理 bug**。
 
 ### 3.2 原生 vs Copilot:服务端工具与外链图(`web_search` / `computer_use` / `web_fetch` / `vision_url`)
-这些是 Anthropic 原生支持的服务端能力,**Copilot 上游一律 4xx 拒绝**,直连与经代理表现一致。其中 `web_fetch` 直连报「unsupported beta header」,经代理报「rejected tool(s): web_fetch」(代理剥 beta 后由上游按工具维度拒),**拒绝来源不同但结果一致(均 4xx)**。`computer_use` 同理:直连由上游拒、经代理由代理本地 schema 校验拒,均 400。
+`web_search` / `web_fetch` / `vision_url` 是 Anthropic 原生支持的能力,**Copilot 上游一律 4xx 拒绝**,直连与经代理表现一致。其中 `web_fetch` 直连报「unsupported beta header」,经代理报「rejected tool(s): web_fetch」(代理剥 beta 后由上游按工具维度拒),**拒绝来源不同但结果一致(均 4xx)**。
+
+**用最新工具型号直连复测(2026-07-07)——仍不支持**:按 Anthropic 官方文档,这三项现均为 GA、**无需 `anthropic-beta` 头**,最新工具型分别为 `web_search_20260318` / `web_fetch_20260318`、图片用 `image.source.type=url`。以最新型号直打上游 `claude-opus-4-8` 复测,**换任何版本 / `allowed_callers` / beta 头都是 400**,证实是上游硬限制而非缺头:
+
+| 用例 | HTTP | 上游报错 |
+|---|---|---|
+| `web_search_20260318`(最新,无 beta) | 400 | `The use of the web search tool is not supported.` |
+| `web_search_20260318` + `allowed_callers:["direct"]` | 400 | 同上 |
+| `web_search_20250305`(基础) | 400 | 同上 |
+| `web_fetch_20260318`(最新,无 beta) | 400 | `rejected tool(s): web_fetch` |
+| `web_fetch_20260318` + `allowed_callers:["direct"]` | 400 | 同上 |
+| `web_fetch_20250910` + beta `web-fetch-2025-09-10` | 400 | `unsupported beta header(s): web-fetch-2025-09-10` |
+| 外链图片 `image.source.type=url` | 400 | `external image URLs are not supported`(上游仅收 base64 图) |
+
+**关键对比**:与 `computer_use` 不同——这三项是上游**真·不支持**(工具/beta 双白名单都堵、图片仅 base64),用最新 header 也打不通;而 `computer_use` 底层上游已支持,代理修复后已端到端打通(见下)。
+
+**`computer_use` 结论已更新(2026-07-07 复测 + 代理修复)**:早期报告(2026-06-27,用旧头 `computer-use-2025-01-24` + `computer_20250124`)记为「Copilot 不支持」。但按 Anthropic 官方文档,Opus 4.8 的 computer use 需 **新 beta 头 `computer-use-2025-11-24` + 新工具型 `computer_20251124`**。以正确组合复测:
+
+- **② 直连 = ✅ 200**:上游 `claude-opus-4-8` 正常返回 `stop_reason=tool_use` 并实际调用 `computer` 工具(`content` 含 `text` + `tool_use`)。即 **Copilot 上游现已支持 computer use**(旧头/旧工具型 `computer_20250124` 仍被拒:`does not support tool types`)。
+- **③ 经代理 = ✅ 200(修复后)**:复测时经 copilot2api 曾返回 400(`Input tag 'computer_20251124' ... does not match any of the expected tags`)——根因是代理在原生 `/v1/messages` 路由上**不透传客户端 `anthropic-beta` 头**,`computer-use-2025-11-24` 被剥离。**已修复**:代理新增 `extractComputerUseBetas`(`anthropic/handler.go`),在原生 `/v1/messages` 与 `/count_tokens` 路由上放行客户端头中的 `computer-use-*` token(与 `context-management` beta 合并成单个 `anthropic-beta` 值转发)。修复后经代理返回 `stop_reason=tool_use`,与直连一致;不带该头的请求行为不变。
+
+**含义**:computer use 现已**端到端打通**——底层上游能力具备,代理放行必需的 `computer-use-*` beta 头即可。注:同一新头下 **Sonnet 4.6 直连/经代理亦 ✅ 200**,与官方「`computer-use-2025-11-24` 覆盖 Sonnet 4.6」一致。
 
 ### 3.3 原生 vs Copilot:`fast_mode`(容忍但不实现)
 `speed:"fast"` + `fast-mode-2026-02-01` beta 是 4.8 的 Claude API 研究预览。实测 **Copilot 直连与经代理均返回 200** —— 上游既不拒 beta 头也不拒 `speed` 字段,但几乎可以肯定**并未真正提供 2.5× 加速**,只是「接受/忽略」。对比 `code_execution-2025-08-25` beta 会被 allowlist **拒**,可见 Copilot 的 beta 白名单并不一致。

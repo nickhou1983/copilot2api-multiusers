@@ -30,6 +30,15 @@ var dateSuffixRe = regexp.MustCompile(`-(\d{8,})$`)
 // used by Claude Code to signal the 1M context window variant.
 var context1mRe = regexp.MustCompile(`\bcontext-1m\b`)
 
+// computerUseBetaRe matches a single computer-use beta token, e.g.
+// "computer-use-2025-11-24" (Opus 4.8/4.7, Sonnet 4.6, ...) or
+// "computer-use-2025-01-24" (older models). The proxy forwards these tokens
+// verbatim so the computer use tool types (computer_20251124 / computer_20250124)
+// are recognized upstream. The pattern is anchored (^...$) and applied to each
+// comma-separated token individually so it never matches a substring inside a
+// larger token. The date is written as YYYY-MM-DD.
+var computerUseBetaRe = regexp.MustCompile(`^computer-use-\d{4}-\d{2}-\d{2}$`)
+
 // oneMillionContextTokens is the threshold (in tokens) at which a model is
 // considered to already provide a 1M context window natively.
 const oneMillionContextTokens = 1_000_000

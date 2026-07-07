@@ -73,8 +73,8 @@ Core / content / tools:
 `vision_url` (expect reject), `pdf_document`, `extended_thinking`,
 `server_tool_bash` / `server_tool_text_editor` / `server_tool_memory`,
 `prompt_cache`, `cache_control_scope`, `context_management`, `citations`,
-`web_search` (expect reject), `computer_use` (expect reject), `count_tokens`,
-`context_1m`, `model_discovery`.
+`web_search` (expect reject), `computer_use` (model-conditional support),
+`count_tokens`, `context_1m`, `model_discovery`.
 
 Sampling / request parameters (group A):
 
@@ -129,15 +129,26 @@ proxy) comparisons.
 
 The proxy does **not** blindly forward client `anthropic-beta` headers on the
 native route: it auto-injects the `context-management` beta when the body
-carries a `context_management` field, and strips every other client beta value.
-So the header-only D features (`interleaved_thinking` / `token_efficient_tools`
-/ `fine_grained_tool_streaming` / `extended_cache_ttl`) reach the upstream as
-plain requests and succeed. `structured_outputs` works end-to-end (Copilot
-advertises it and native passthrough forwards `output_config.format`).
-`search_result` content blocks also work end-to-end: the Copilot upstream
-returns `search_result_location` citations, and the proxy now parses their bare
-string `source` (it previously rejected these blocks with `400 "content must be
-string or array of blocks"` before the request reached upstream).
+carries a `context_management` field, and forwards any `computer-use-*` tokens
+from the client header (so the computer use tool types are recognized upstream),
+but strips every other client beta value. So the header-only D features
+(`interleaved_thinking` / `token_efficient_tools` / `fine_grained_tool_streaming`
+/ `extended_cache_ttl`) reach the upstream as plain requests and succeed.
+`structured_outputs` works end-to-end (Copilot advertises it and native
+passthrough forwards `output_config.format`). `search_result` content blocks
+also work end-to-end: the Copilot upstream returns `search_result_location`
+citations, and the proxy now parses their bare string `source` (it previously
+rejected these blocks with `400 "content must be string or array of blocks"`
+before the request reached upstream).
+
+`computer_use` is now **model-conditional support** (re-verified 2026-07-07).
+The Copilot upstream supports the computer use tool with the current
+`computer-use-2025-11-24` beta + `computer_20251124` tool type (and the older
+`computer-use-2025-01-24` + `computer_20250124` for pre-4.6 models). Earlier
+reports marked it as rejected because they used the old header on Opus 4.8 /
+Sonnet 4.6, which require the new one. Since the proxy forwards `computer-use-*`
+beta headers, direct and proxy agree (both 200 with a `tool_use` response) for
+models that advertise computer use.
 
 `code_execution` is split into two cases because the upstream treats the *tool*
 and the *beta header* on different axes. **Without** the beta header the Copilot

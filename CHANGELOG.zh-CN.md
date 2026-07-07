@@ -6,6 +6,7 @@
 
 ### 新特性
 
+- 在原生 `/v1/messages`（及 `/v1/messages/count_tokens`）路由上支持 Computer Use 工具：代理会把客户端的 `computer-use-*` beta 头转发到上游。代理仍不会盲目转发任意客户端 `anthropic-beta` 头，但现在放行 `computer-use-2025-11-24`（Claude Opus 4.8/4.7/4.6、Sonnet 4.6 等）与 `computer-use-2025-01-24`（更旧的模型），并与自动注入的 `context-management` beta 合并成单个 `anthropic-beta` 值。Copilot 上游本就支持 computer use；此前该 beta 头被剥离，导致 `computer_20251124` / `computer_20250124` 工具型被 `400` 拒绝。不带 `computer-use-*` 头的请求不受影响。
 - 新增原生 Anthropic Token 计数端点：`POST /v1/messages/count_tokens` 现已转发到上游 Copilot 的 Token 计数接口（此前返回 `404`）。请求会与 `/v1/messages` 一样做模型别名解析与 `cache_control.scope` 剥离，并原样返回上游的 `{ "input_tokens": N }` 响应。
 - 在原生 `/v1/messages` 请求上透传 `context_management` 而非剥离它。当请求体包含 `context_management` 字段时，代理会保留该字段，并自动为上游请求加上 `anthropic-beta: context-management-2025-06-27` 头，使上下文编辑（如 `clear_tool_uses_20250919`）真正生效，并在 `usage` / `context_management.applied_edits` 中回传结果。
 - 新增多账号支持：通过 `accounts.json` 配置文件把 API Key 与 GitHub 账号 1:1 映射。每个账号使用独立的凭证存储与各自的模型缓存，因此 Token 刷新与基于能力的路由都按账号隔离。可用 `COPILOT2API_ACCOUNTS_FILE` 配置文件路径（默认为 `<token-dir>/accounts.json`）。
