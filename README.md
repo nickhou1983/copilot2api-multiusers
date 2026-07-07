@@ -28,7 +28,7 @@ A lightweight Go proxy that exposes GitHub Copilot as OpenAI-compatible, Anthrop
 Build the image from source (this fork includes multi-account and usage-stats features not in the upstream image):
 
 ```bash
-docker build -t copilot2api-multiusers .
+docker build -t copilot2api-multiusers-safeadmin .
 ```
 
 Run it:
@@ -40,7 +40,7 @@ docker run -it --rm \
   -e COPILOT2API_ADMIN_USERNAME=admin \
   -e COPILOT2API_ADMIN_PASSWORD='change-me' \
   -v ~/.config/copilot2api:/root/.config/copilot2api \
-  copilot2api-multiusers
+  copilot2api-multiusers-safeadmin
 ```
 
 The volume mount persists your GitHub credentials across container restarts. The examples publish both the public API port (`7777`) and admin port (`7778`).

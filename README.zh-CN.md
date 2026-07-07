@@ -28,7 +28,7 @@
 从源码构建镜像（本 fork 包含上游镜像没有的多账号与用量统计功能）：
 
 ```bash
-docker build -t copilot2api-multiusers .
+docker build -t copilot2api-multiusers-safeadmin .
 ```
 
 运行：
@@ -40,7 +40,7 @@ docker run -it --rm \
   -e COPILOT2API_ADMIN_USERNAME=admin \
   -e COPILOT2API_ADMIN_PASSWORD='change-me' \
   -v ~/.config/copilot2api:/root/.config/copilot2api \
-  copilot2api-multiusers
+  copilot2api-multiusers-safeadmin
 ```
 
 挂载卷可在容器重启后保留你的 GitHub 凭据。示例会发布公开 API 端口（`7777`）和管理端口（`7778`）。
