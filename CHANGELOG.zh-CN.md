@@ -6,7 +6,8 @@
 
 ### 新特性
 
-- 将管理界面与 `/admin/api/*` 端点从公开 API 监听器拆到独立管理监听器（`COPILOT2API_ADMIN_HOST` / `COPILOT2API_ADMIN_PORT`，默认 `0.0.0.0:7778`）。`COPILOT2API_HOST` / `COPILOT2API_PORT` 上的公开 API 监听器不再服务 `/admin`，因此部署时可只暴露推理接口而不暴露账号管理面。
+- 将默认公开 API / 管理监听端口从 `7777/7778` 调整为 `8888/8889`，并同步更新 Docker 镜像及文档中的暴露端口与示例。
+- 将管理界面与 `/admin/api/*` 端点从公开 API 监听器拆到独立管理监听器（`COPILOT2API_ADMIN_HOST` / `COPILOT2API_ADMIN_PORT`，默认 `0.0.0.0:8889`）。`COPILOT2API_HOST` / `COPILOT2API_PORT` 上的公开 API 监听器不再服务 `/admin`，因此部署时可只暴露推理接口而不暴露账号管理面。
 - 管理界面现在必须通过 `COPILOT2API_ADMIN_USERNAME` 与 `COPILOT2API_ADMIN_PASSWORD` 用户名/密码登录。登录会话使用 HttpOnly SameSite Cookie；旧的 `COPILOT2API_ADMIN_TOKEN` 仅作为已废弃的 `X-Admin-Token` 脚本兼容路径保留。
 - 在原生 `/v1/messages`（及 `/v1/messages/count_tokens`）路由上支持 Computer Use 工具：代理会把客户端的 `computer-use-*` beta 头转发到上游。代理仍不会盲目转发任意客户端 `anthropic-beta` 头，但现在放行 `computer-use-2025-11-24`（Claude Opus 4.8/4.7/4.6、Sonnet 4.6 等）与 `computer-use-2025-01-24`（更旧的模型），并与自动注入的 `context-management` beta 合并成单个 `anthropic-beta` 值。Copilot 上游本就支持 computer use；此前该 beta 头被剥离，导致 `computer_20251124` / `computer_20250124` 工具型被 `400` 拒绝。不带 `computer-use-*` 头的请求不受影响。
 - 新增原生 Anthropic Token 计数端点：`POST /v1/messages/count_tokens` 现已转发到上游 Copilot 的 Token 计数接口（此前返回 `404`）。请求会与 `/v1/messages` 一样做模型别名解析与 `cache_control.scope` 剥离，并原样返回上游的 `{ "input_tokens": N }` 响应。

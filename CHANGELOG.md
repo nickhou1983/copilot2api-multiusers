@@ -6,9 +6,10 @@
 
 ### Features
 
+- Change the default public API/admin listener ports from `7777/7778` to `8888/8889`, and update the Docker image plus setup docs to expose and reference the new defaults.
 - Add unauthenticated `GET /health` endpoints on both listeners so load balancers can probe the public API and admin listeners without API keys or admin sessions. The public listener returns `{ "status": "ok", "service": "copilot2api" }`, and the admin listener returns `{ "status": "ok", "service": "copilot2api-admin" }`.
 
-- Move the admin UI and `/admin/api/*` endpoints off the public API listener onto a separate admin listener (`COPILOT2API_ADMIN_HOST` / `COPILOT2API_ADMIN_PORT`, default `0.0.0.0:7778`). The public API listener on `COPILOT2API_HOST` / `COPILOT2API_PORT` no longer serves `/admin`, so deployments can expose inference routes without also exposing account management.
+- Move the admin UI and `/admin/api/*` endpoints off the public API listener onto a separate admin listener (`COPILOT2API_ADMIN_HOST` / `COPILOT2API_ADMIN_PORT`, default `0.0.0.0:8889`). The public API listener on `COPILOT2API_HOST` / `COPILOT2API_PORT` no longer serves `/admin`, so deployments can expose inference routes without also exposing account management.
 - Require username/password login for the admin UI with `COPILOT2API_ADMIN_USERNAME` and `COPILOT2API_ADMIN_PASSWORD`. Admin sessions use an HttpOnly SameSite cookie; the legacy `COPILOT2API_ADMIN_TOKEN` remains only as a deprecated `X-Admin-Token` compatibility path for scripted callers.
 - Support the Computer Use tool on the native `/v1/messages` (and `/v1/messages/count_tokens`) route by forwarding the client's `computer-use-*` beta header to the upstream. The proxy still does not blindly forward arbitrary client `anthropic-beta` headers, but it now allows `computer-use-2025-11-24` (Claude Opus 4.8/4.7/4.6, Sonnet 4.6, ...) and `computer-use-2025-01-24` (older models) through — merged with the auto-injected `context-management` beta into a single `anthropic-beta` value. The Copilot upstream already supports computer use; previously the beta header was stripped, so the `computer_20251124` / `computer_20250124` tool types were rejected with `400`. Requests that don't carry a `computer-use-*` header are unaffected.
 

@@ -24,9 +24,9 @@ var version = "dev"
 
 func main() {
 	var (
-		port        = flag.Int("port", 0, "Server port (env: COPILOT2API_PORT, default: 7777)")
+		port        = flag.Int("port", 0, "Server port (env: COPILOT2API_PORT, default: 8888)")
 		host        = flag.String("host", "", "Server host (env: COPILOT2API_HOST, default: 0.0.0.0)")
-		adminPort   = flag.Int("admin-port", 0, "Admin server port (env: COPILOT2API_ADMIN_PORT, default: 7778)")
+		adminPort   = flag.Int("admin-port", 0, "Admin server port (env: COPILOT2API_ADMIN_PORT, default: 8889)")
 		adminHost   = flag.String("admin-host", "", "Admin server host (env: COPILOT2API_ADMIN_HOST, default: 0.0.0.0)")
 		tokenDir    = flag.String("token-dir", "", "Token storage directory (env: COPILOT2API_TOKEN_DIR, default: ~/.config/copilot2api)")
 		showVersion = flag.Bool("version", false, "Show version and exit")
@@ -58,7 +58,7 @@ func main() {
 			}
 		}
 		if *port == 0 {
-			*port = 7777
+			*port = 8888
 		}
 	}
 	if *adminHost == "" {
@@ -75,7 +75,7 @@ func main() {
 			}
 		}
 		if *adminPort == 0 {
-			*adminPort = 7778
+			*adminPort = 8889
 		}
 	}
 	if *tokenDir == "" {
