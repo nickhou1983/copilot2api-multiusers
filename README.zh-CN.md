@@ -46,6 +46,7 @@ docker run -it --rm \
 挂载卷可在容器重启后保留你的 GitHub 凭据。示例会发布公开 API 端口（`7777`）和管理端口（`7778`）。
 
 > 提示：公开 API 监听 `0.0.0.0:7777`。管理界面由独立监听器服务在 `0.0.0.0:7778`。
+> 健康探针可对任一监听器调用无鉴权的 `GET /health`。公开监听器返回 `copilot2api`，管理监听器返回 `copilot2api-admin`。
 
 <details>
 <summary>Docker Compose</summary>
@@ -128,6 +129,8 @@ docker compose up --build
 ⚠️ 管理界面可以读取 API Key、显示已保存的 GitHub/Copilot Token，并触发 GitHub 认证。请设置 `COPILOT2API_ADMIN_USERNAME` 与 `COPILOT2API_ADMIN_PASSWORD`；若未设置且 `COPILOT2API_ADMIN_ENABLED` 不是 `false`，管理服务会拒绝启动。`COPILOT2API_ADMIN_TOKEN` 仅保留为面向脚本调用的已废弃请求头兼容方式。
 
 在 Azure VM + Application Gateway 部署中，请只把公网流量转发到 API 监听器（`7777`）。不要把管理监听器（`7778`）加入公网后端规则。建议用 NSG 限制只有 Application Gateway 子网可访问 VM 的 `7777`，管理访问则通过 SSH 隧道、Bastion、VPN，或另行配置强限制的管理 listener。
+
+为 Application Gateway 配置健康探针时，优先探测你暴露的后端端口上的 `GET /health`，不要使用 `/usage` 或模型接口，因为这些业务路由可能要求 API Key 或请求体。
 
 ## 配合 Claude Code 使用
 

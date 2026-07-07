@@ -6,6 +6,8 @@
 
 ### Features
 
+- Add unauthenticated `GET /health` endpoints on both listeners so load balancers can probe the public API and admin listeners without API keys or admin sessions. The public listener returns `{ "status": "ok", "service": "copilot2api" }`, and the admin listener returns `{ "status": "ok", "service": "copilot2api-admin" }`.
+
 - Move the admin UI and `/admin/api/*` endpoints off the public API listener onto a separate admin listener (`COPILOT2API_ADMIN_HOST` / `COPILOT2API_ADMIN_PORT`, default `0.0.0.0:7778`). The public API listener on `COPILOT2API_HOST` / `COPILOT2API_PORT` no longer serves `/admin`, so deployments can expose inference routes without also exposing account management.
 - Require username/password login for the admin UI with `COPILOT2API_ADMIN_USERNAME` and `COPILOT2API_ADMIN_PASSWORD`. Admin sessions use an HttpOnly SameSite cookie; the legacy `COPILOT2API_ADMIN_TOKEN` remains only as a deprecated `X-Admin-Token` compatibility path for scripted callers.
 - Support the Computer Use tool on the native `/v1/messages` (and `/v1/messages/count_tokens`) route by forwarding the client's `computer-use-*` beta header to the upstream. The proxy still does not blindly forward arbitrary client `anthropic-beta` headers, but it now allows `computer-use-2025-11-24` (Claude Opus 4.8/4.7/4.6, Sonnet 4.6, ...) and `computer-use-2025-01-24` (older models) through — merged with the auto-injected `context-management` beta into a single `anthropic-beta` value. The Copilot upstream already supports computer use; previously the beta header was stripped, so the `computer_20251124` / `computer_20250124` tool types were rejected with `400`. Requests that don't carry a `computer-use-*` header are unaffected.
@@ -32,6 +34,7 @@
 ### Docs
 
 - Document the separate admin listener, required admin login environment variables, Docker port mapping, and Azure Application Gateway guidance for exposing only the public API listener.
+- Document `GET /health` as the preferred Azure Application Gateway health probe path for both the public API listener and the admin listener.
 - Document the `/v1/messages/count_tokens` endpoint and native-passthrough fields (`context_management`, `search_result`) in both `README.md` and `README.zh-CN.md` (Features list and API Endpoints table).
 - Document multi-account, admin UI, and token-usage stats in the README, and add Simplified Chinese translations (`README.zh-CN.md`, `CHANGELOG.zh-CN.md`) with language switch links.
 

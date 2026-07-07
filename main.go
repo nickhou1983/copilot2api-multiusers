@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log/slog"
@@ -134,6 +135,7 @@ func main() {
 	mux := http.NewServeMux()
 
 	// Core routes
+	mux.HandleFunc("GET /health", handleHealth)
 	mux.Handle("/v1/chat/completions", openaiHandler)
 	mux.Handle("/v1/models", openaiHandler)
 	mux.Handle("/v1/embeddings", openaiHandler)
@@ -191,6 +193,7 @@ func main() {
 			os.Exit(1)
 		}
 		adminMux := http.NewServeMux()
+		adminMux.HandleFunc("GET /health", handleAdminHealth)
 		adminMux.Handle("/admin/", adminManager.Handler())
 		adminMux.HandleFunc("/admin", func(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, "/admin/", http.StatusFound)
@@ -282,4 +285,18 @@ func logAllRequests(next http.Handler) http.Handler {
 		slog.Debug("incoming request", "method", r.Method, "path", r.URL.Path, "query", r.URL.RawQuery)
 		next.ServeHTTP(w, r)
 	})
+}
+
+func handleHealth(w http.ResponseWriter, _ *http.Request) {
+	writeHealthJSON(w, map[string]string{"status": "ok", "service": "copilot2api"})
+}
+
+func handleAdminHealth(w http.ResponseWriter, _ *http.Request) {
+	writeHealthJSON(w, map[string]string{"status": "ok", "service": "copilot2api-admin"})
+}
+
+func writeHealthJSON(w http.ResponseWriter, payload map[string]string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(payload)
 }

@@ -46,6 +46,7 @@ docker run -it --rm \
 The volume mount persists your GitHub credentials across container restarts. The examples publish both the public API port (`7777`) and admin port (`7778`).
 
 > Tip: the public API listens on `0.0.0.0:7777`. The admin UI is served by a separate listener on `0.0.0.0:7778`.
+> Health probes can call `GET /health` on either listener without authentication. The public listener reports `copilot2api`; the admin listener reports `copilot2api-admin`.
 
 <details>
 <summary>Docker Compose</summary>
@@ -128,6 +129,8 @@ All changes are written back to `accounts.json` and applied to the running proxy
 ⚠️ The admin UI can read API keys, reveal stored GitHub/Copilot tokens, and trigger GitHub authentication. Set `COPILOT2API_ADMIN_USERNAME` and `COPILOT2API_ADMIN_PASSWORD`; the admin server refuses to start without them unless `COPILOT2API_ADMIN_ENABLED=false`. `COPILOT2API_ADMIN_TOKEN` is retained only as a deprecated header-only compatibility option for scripted callers.
 
 For Azure VM deployments behind Application Gateway, route public traffic only to the API listener (`7777`). Do not add the admin listener (`7778`) to the public backend rule. Restrict the VM NSG so only the Application Gateway subnet can reach `7777`, and use SSH tunnel, Bastion, VPN, or a separately locked-down listener if you need remote admin access.
+
+For Application Gateway health probes, prefer `GET /health` on the backend port you expose instead of `/usage` or model endpoints, because those routes can require API keys or request bodies.
 
 ## Usage with Claude Code
 
