@@ -11,5 +11,5 @@ COPY --from=builder /copilot2api /copilot2api
 ENV HOME=/root
 ENV COPILOT2API_HOST=0.0.0.0
 ENV COPILOT2API_PORT=7777
-EXPOSE 7777
+EXPOSE 7777 7778
 ENTRYPOINT ["/copilot2api"]

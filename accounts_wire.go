@@ -124,6 +124,14 @@ func buildRegistry(ctx context.Context, baseTokenDir string, transport *http.Tra
 	factory := func(c accounts.AccountConfig) (*accounts.Account, error) {
 		return newAccountHandlers(c.ID, c.APIKey, c.TokenDir, c.ResolveTokenDir(baseTokenDir), transport, statsStore.Recorder(c.ID))
 	}
-	mgr := accounts.NewManager(reg, factory, cfgPath, os.Getenv("COPILOT2API_ADMIN_TOKEN"), statsStore)
+	mgr := accounts.NewManager(
+		reg,
+		factory,
+		cfgPath,
+		os.Getenv("COPILOT2API_ADMIN_USERNAME"),
+		os.Getenv("COPILOT2API_ADMIN_PASSWORD"),
+		os.Getenv("COPILOT2API_ADMIN_TOKEN"),
+		statsStore,
+	)
 	return reg, mgr, statsStore, nil
 }

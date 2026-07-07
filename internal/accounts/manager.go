@@ -1,7 +1,11 @@
 package accounts
 
 import (
+	"crypto/rand"
+	"crypto/sha256"
+	"crypto/subtle"
 	_ "embed"
+	"encoding/base64"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -27,22 +31,28 @@ type Manager struct {
 	reg        *Registry
 	factory    AccountFactory
 	cfgPath    string
+	adminUser  string
+	adminPass  string
 	adminToken string
 	stats      *stats.Store
 
-	sessMu   sync.Mutex
-	sessions map[string]*deviceSession
+	sessMu        sync.Mutex
+	sessions      map[string]*deviceSession
+	adminSessions map[string]time.Time
 }
 
 // NewManager creates an admin manager bound to a multi-account registry.
-func NewManager(reg *Registry, factory AccountFactory, cfgPath, adminToken string, statsStore *stats.Store) *Manager {
+func NewManager(reg *Registry, factory AccountFactory, cfgPath, adminUser, adminPass, adminToken string, statsStore *stats.Store) *Manager {
 	return &Manager{
-		reg:        reg,
-		factory:    factory,
-		cfgPath:    cfgPath,
-		adminToken: adminToken,
-		stats:      statsStore,
-		sessions:   make(map[string]*deviceSession),
+		reg:           reg,
+		factory:       factory,
+		cfgPath:       cfgPath,
+		adminUser:     adminUser,
+		adminPass:     adminPass,
+		adminToken:    adminToken,
+		stats:         statsStore,
+		sessions:      make(map[string]*deviceSession),
+		adminSessions: make(map[string]time.Time),
 	}
 }
 
@@ -66,6 +76,9 @@ type accountView struct {
 func (m *Manager) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /admin/{$}", m.handleIndex)
+	mux.HandleFunc("GET /admin/api/session", m.handleSession)
+	mux.HandleFunc("POST /admin/api/login", m.handleLogin)
+	mux.HandleFunc("POST /admin/api/logout", m.handleLogout)
 	mux.HandleFunc("GET /admin/api/accounts", m.handleList)
 	mux.HandleFunc("POST /admin/api/accounts", m.handleCreate)
 	mux.HandleFunc("PUT /admin/api/accounts/{id}", m.handleUpdate)
@@ -80,21 +93,118 @@ func (m *Manager) Handler() http.Handler {
 	return m.withAuth(mux)
 }
 
-// withAuth optionally gates admin requests behind COPILOT2API_ADMIN_TOKEN.
+// withAuth gates admin APIs behind a login session. COPILOT2API_ADMIN_TOKEN is
+// kept as a header-only compatibility escape hatch for scripted callers.
 func (m *Manager) withAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if m.adminToken != "" {
-			provided := r.Header.Get("X-Admin-Token")
-			if provided == "" {
-				provided = r.URL.Query().Get("admin_token")
-			}
-			if provided != m.adminToken {
-				writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid admin token"})
-				return
-			}
+		if isPublicAdminRoute(r) || m.isAuthorized(r) {
+			next.ServeHTTP(w, r)
+			return
 		}
-		next.ServeHTTP(w, r)
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "login required"})
 	})
+}
+
+func isPublicAdminRoute(r *http.Request) bool {
+	return (r.Method == http.MethodGet && r.URL.Path == "/admin/") ||
+		(r.Method == http.MethodGet && r.URL.Path == "/admin/api/session") ||
+		(r.Method == http.MethodPost && r.URL.Path == "/admin/api/login")
+}
+
+func (m *Manager) isAuthorized(r *http.Request) bool {
+	if m.adminToken != "" && subtle.ConstantTimeCompare([]byte(r.Header.Get("X-Admin-Token")), []byte(m.adminToken)) == 1 {
+		return true
+	}
+	c, err := r.Cookie(adminSessionCookieName)
+	if err != nil || c.Value == "" {
+		return false
+	}
+	now := time.Now()
+	m.sessMu.Lock()
+	expires, ok := m.adminSessions[c.Value]
+	if ok && now.After(expires) {
+		delete(m.adminSessions, c.Value)
+		ok = false
+	}
+	m.sessMu.Unlock()
+	return ok
+}
+
+const (
+	adminSessionCookieName = "copilot2api_admin_session"
+	adminSessionTTL        = 12 * time.Hour
+)
+
+type loginRequest struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+func (m *Manager) handleSession(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]bool{"authenticated": m.isAuthorized(r)})
+}
+
+func (m *Manager) handleLogin(w http.ResponseWriter, r *http.Request) {
+	var req loginRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if !constantTimeEqual(req.Username, m.adminUser) || !constantTimeEqual(req.Password, m.adminPass) {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid username or password"})
+		return
+	}
+	token, err := newSessionToken()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to create session")
+		return
+	}
+	expires := time.Now().Add(adminSessionTTL)
+	m.sessMu.Lock()
+	m.adminSessions[token] = expires
+	m.sessMu.Unlock()
+	http.SetCookie(w, &http.Cookie{
+		Name:     adminSessionCookieName,
+		Value:    token,
+		Path:     "/admin",
+		Expires:  expires,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		Secure:   r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https",
+	})
+	writeJSON(w, http.StatusOK, map[string]bool{"authenticated": true})
+}
+
+func (m *Manager) handleLogout(w http.ResponseWriter, r *http.Request) {
+	if c, err := r.Cookie(adminSessionCookieName); err == nil {
+		m.sessMu.Lock()
+		delete(m.adminSessions, c.Value)
+		m.sessMu.Unlock()
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name:     adminSessionCookieName,
+		Value:    "",
+		Path:     "/admin",
+		MaxAge:   -1,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		Secure:   r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https",
+	})
+	writeJSON(w, http.StatusOK, map[string]bool{"authenticated": false})
+}
+
+func constantTimeEqual(a, b string) bool {
+	ah := sha256.Sum256([]byte(a))
+	bh := sha256.Sum256([]byte(b))
+	return subtle.ConstantTimeCompare(ah[:], bh[:]) == 1
+}
+
+func newSessionToken() (string, error) {
+	var b [32]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(b[:]), nil
 }
 
 func (m *Manager) handleIndex(w http.ResponseWriter, _ *http.Request) {

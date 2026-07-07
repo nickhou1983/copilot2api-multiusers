@@ -6,12 +6,14 @@
 
 ### 新特性
 
+- 将管理界面与 `/admin/api/*` 端点从公开 API 监听器拆到独立管理监听器（`COPILOT2API_ADMIN_HOST` / `COPILOT2API_ADMIN_PORT`，默认 `0.0.0.0:7778`）。`COPILOT2API_HOST` / `COPILOT2API_PORT` 上的公开 API 监听器不再服务 `/admin`，因此部署时可只暴露推理接口而不暴露账号管理面。
+- 管理界面现在必须通过 `COPILOT2API_ADMIN_USERNAME` 与 `COPILOT2API_ADMIN_PASSWORD` 用户名/密码登录。登录会话使用 HttpOnly SameSite Cookie；旧的 `COPILOT2API_ADMIN_TOKEN` 仅作为已废弃的 `X-Admin-Token` 脚本兼容路径保留。
 - 在原生 `/v1/messages`（及 `/v1/messages/count_tokens`）路由上支持 Computer Use 工具：代理会把客户端的 `computer-use-*` beta 头转发到上游。代理仍不会盲目转发任意客户端 `anthropic-beta` 头，但现在放行 `computer-use-2025-11-24`（Claude Opus 4.8/4.7/4.6、Sonnet 4.6 等）与 `computer-use-2025-01-24`（更旧的模型），并与自动注入的 `context-management` beta 合并成单个 `anthropic-beta` 值。Copilot 上游本就支持 computer use；此前该 beta 头被剥离，导致 `computer_20251124` / `computer_20250124` 工具型被 `400` 拒绝。不带 `computer-use-*` 头的请求不受影响。
 - 新增原生 Anthropic Token 计数端点：`POST /v1/messages/count_tokens` 现已转发到上游 Copilot 的 Token 计数接口（此前返回 `404`）。请求会与 `/v1/messages` 一样做模型别名解析与 `cache_control.scope` 剥离，并原样返回上游的 `{ "input_tokens": N }` 响应。
 - 在原生 `/v1/messages` 请求上透传 `context_management` 而非剥离它。当请求体包含 `context_management` 字段时，代理会保留该字段，并自动为上游请求加上 `anthropic-beta: context-management-2025-06-27` 头，使上下文编辑（如 `clear_tool_uses_20250919`）真正生效，并在 `usage` / `context_management.applied_edits` 中回传结果。
 - 新增多账号支持：通过 `accounts.json` 配置文件把 API Key 与 GitHub 账号 1:1 映射。每个账号使用独立的凭证存储与各自的模型缓存，因此 Token 刷新与基于能力的路由都按账号隔离。可用 `COPILOT2API_ACCOUNTS_FILE` 配置文件路径（默认为 `<token-dir>/accounts.json`）。
 - API Key 从 `Authorization: Bearer`、`x-api-key`、`x-goog-api-key` 或 `?key=` 查询参数中提取，覆盖 OpenAI、Anthropic 与 Gemini 客户端。
-- 新增 `/admin/` Web 管理界面（仅多账号模式）用于维护 API Key ↔ GitHub 账号映射：列出、新增、轮换 Key、删除账号，并支持通过浏览器驱动的 GitHub Device Flow 认证账号。改动会保存到 `accounts.json` 并实时生效、无需重启。可选用 `COPILOT2API_ADMIN_TOKEN`（以 `X-Admin-Token` 头或 `?admin_token=` 传入）加以保护。
+- 新增 `/admin/` Web 管理界面（仅多账号模式）用于维护 API Key ↔ GitHub 账号映射：列出、新增、轮换 Key、删除账号，并支持通过浏览器驱动的 GitHub Device Flow 认证账号。改动会保存到 `accounts.json` 并实时生效、无需重启。
 - 支持从空的 `accounts.json`（`{"accounts":[]}`）引导多账号模式，并完全通过管理界面填充。
 - 在管理界面新增 Token 用量统计页（新增「Stats」标签页），按账号、按模型展示 Token 计数 —— 输入、输出、缓存命中（prompt-cache）、缓存写入以及请求总数 —— 覆盖所有 OpenAI、Anthropic 与 Gemini 端点。用量持久化到 `<token-dir>/stats.json`，重启后仍保留。由新增的 `GET /admin/api/stats` 端点提供，`DELETE /admin/api/stats/{id}` 可重置单个账号。注意：OpenAI Chat Completions 流式仅在客户端发送 `stream_options.include_usage` 时才计入 Token 数；但请求本身始终计数。
 
@@ -26,6 +28,7 @@
 
 ### 文档
 
+- 记录独立管理监听器、必填的管理登录环境变量、Docker 端口映射，以及 Azure Application Gateway 仅暴露公开 API 监听器的部署建议。
 - 在 `README.md` 与 `README.zh-CN.md` 中记录 `/v1/messages/count_tokens` 端点及原生透传字段（`context_management`、`search_result`）（Features 列表与 API 端点表）。
 - 在 README 中记录多账号、管理界面与 Token 用量统计，并新增简体中文翻译（`README.zh-CN.md`、`CHANGELOG.zh-CN.md`）及语言切换链接。
 

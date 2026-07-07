@@ -6,6 +6,8 @@
 
 ### Features
 
+- Move the admin UI and `/admin/api/*` endpoints off the public API listener onto a separate admin listener (`COPILOT2API_ADMIN_HOST` / `COPILOT2API_ADMIN_PORT`, default `0.0.0.0:7778`). The public API listener on `COPILOT2API_HOST` / `COPILOT2API_PORT` no longer serves `/admin`, so deployments can expose inference routes without also exposing account management.
+- Require username/password login for the admin UI with `COPILOT2API_ADMIN_USERNAME` and `COPILOT2API_ADMIN_PASSWORD`. Admin sessions use an HttpOnly SameSite cookie; the legacy `COPILOT2API_ADMIN_TOKEN` remains only as a deprecated `X-Admin-Token` compatibility path for scripted callers.
 - Support the Computer Use tool on the native `/v1/messages` (and `/v1/messages/count_tokens`) route by forwarding the client's `computer-use-*` beta header to the upstream. The proxy still does not blindly forward arbitrary client `anthropic-beta` headers, but it now allows `computer-use-2025-11-24` (Claude Opus 4.8/4.7/4.6, Sonnet 4.6, ...) and `computer-use-2025-01-24` (older models) through — merged with the auto-injected `context-management` beta into a single `anthropic-beta` value. The Copilot upstream already supports computer use; previously the beta header was stripped, so the `computer_20251124` / `computer_20250124` tool types were rejected with `400`. Requests that don't carry a `computer-use-*` header are unaffected.
 
 - Add API key auto-generation: creating an account without specifying `api_key` now automatically generates a cryptographically random key (`sk-` prefix + 32 base62 characters). The admin UI includes a "Generate" button next to the API Key input, and a new `GET /admin/api/generate-key` endpoint returns a freshly generated key on demand.
@@ -14,7 +16,7 @@
 - Forward `context_management` on native `/v1/messages` requests instead of stripping it. When a request body includes a `context_management` field, the proxy preserves it and adds the `anthropic-beta: context-management-2025-06-27` header to the upstream call so context edits (e.g. `clear_tool_uses_20250919`) are actually applied and reported back in `usage`/`context_management.applied_edits`.
 - Add multi-account support: map API keys to GitHub accounts 1:1 via an `accounts.json` config file. Each account uses an isolated credential store and its own models cache, so token refresh and capability-based routing stay per-account. Configure the file path with `COPILOT2API_ACCOUNTS_FILE` (defaults to `<token-dir>/accounts.json`).
 - API keys are extracted from `Authorization: Bearer`, `x-api-key`, `x-goog-api-key`, or the `?key=` query parameter, covering OpenAI, Anthropic, and Gemini clients.
-- Add a web admin UI at `/admin/` (multi-account mode only) to maintain the API key ↔ GitHub account mapping: list, add, rotate keys, and delete accounts, plus authenticate accounts via a browser-driven GitHub Device Flow. Changes are saved to `accounts.json` and applied live without a restart. Optionally protect it with `COPILOT2API_ADMIN_TOKEN` (sent as `X-Admin-Token` header or `?admin_token=`).
+- Add a web admin UI at `/admin/` (multi-account mode only) to maintain the API key ↔ GitHub account mapping: list, add, rotate keys, and delete accounts, plus authenticate accounts via a browser-driven GitHub Device Flow. Changes are saved to `accounts.json` and applied live without a restart.
 - Bootstrap multi-account mode from an empty `accounts.json` (`{"accounts":[]}`) and populate it entirely through the admin UI.
 - Add a token-usage statistics page to the admin UI (new "Stats" tab) showing per-account, per-model token counts — input, output, cached (prompt-cache hits), cache-write, and request totals — across all OpenAI, Anthropic, and Gemini endpoints. Usage is persisted to `<token-dir>/stats.json` and survives restarts. Backed by a new `GET /admin/api/stats` endpoint, with `DELETE /admin/api/stats/{id}` to reset one account. Note: OpenAI Chat Completions streaming only contributes token counts when the client sends `stream_options.include_usage`; the request is always counted.
 
@@ -29,6 +31,7 @@
 
 ### Docs
 
+- Document the separate admin listener, required admin login environment variables, Docker port mapping, and Azure Application Gateway guidance for exposing only the public API listener.
 - Document the `/v1/messages/count_tokens` endpoint and native-passthrough fields (`context_management`, `search_result`) in both `README.md` and `README.zh-CN.md` (Features list and API Endpoints table).
 - Document multi-account, admin UI, and token-usage stats in the README, and add Simplified Chinese translations (`README.zh-CN.md`, `CHANGELOG.zh-CN.md`) with language switch links.
 

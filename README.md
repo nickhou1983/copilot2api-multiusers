@@ -35,14 +35,17 @@ Run it:
 
 ```bash
 docker run -it --rm \
-  -p 127.0.0.1:7777:7777 \
+  -p 7777:7777 \
+  -p 7778:7778 \
+  -e COPILOT2API_ADMIN_USERNAME=admin \
+  -e COPILOT2API_ADMIN_PASSWORD='change-me' \
   -v ~/.config/copilot2api:/root/.config/copilot2api \
   copilot2api-multiusers
 ```
 
-The volume mount persists your GitHub credentials across container restarts. The examples publish the port on `127.0.0.1` only so the proxy stays local by default.
+The volume mount persists your GitHub credentials across container restarts. The examples publish both the public API port (`7777`) and admin port (`7778`).
 
-> Tip: when running the admin UI / multi-account mode, you connect from your host browser to `http://127.0.0.1:7777/admin/`. The container listens on `0.0.0.0:7777` internally (set via `COPILOT2API_HOST`), so the published `127.0.0.1` port stays local-only.
+> Tip: the public API listens on `0.0.0.0:7777`. The admin UI is served by a separate listener on `0.0.0.0:7778`.
 
 <details>
 <summary>Docker Compose</summary>
@@ -52,7 +55,11 @@ services:
   copilot2api:
     build: .
     ports:
-      - "127.0.0.1:7777:7777"
+      - "7777:7777"
+      - "7778:7778"
+    environment:
+      COPILOT2API_ADMIN_USERNAME: admin
+      COPILOT2API_ADMIN_PASSWORD: change-me
     volumes:
       - ${HOME}/.config/copilot2api:/root/.config/copilot2api
 ```
@@ -65,7 +72,7 @@ docker compose up --build
 
 </details>
 
-The server starts on `http://127.0.0.1:7777` by default. Open the admin UI at **`http://127.0.0.1:7777/admin/`** to add and authenticate GitHub accounts via a browser-driven Device Flow (see [Multiple GitHub Accounts](#multiple-github-accounts)).
+The public API listens on `0.0.0.0:7777` by default. The admin UI listens on **`0.0.0.0:7778`** when `COPILOT2API_ADMIN_USERNAME` and `COPILOT2API_ADMIN_PASSWORD` are set; open `http://<server-ip>:7778/admin/` to add and authenticate GitHub accounts via a browser-driven Device Flow (see [Multiple GitHub Accounts](#multiple-github-accounts)).
 
 ## Security
 
@@ -73,11 +80,12 @@ The server starts on `http://127.0.0.1:7777` by default. Open the admin UI at **
 
 - Validates API keys by default: every request must present a key mapping to a configured account, otherwise it gets `401 Unauthorized` (see [Multiple GitHub Accounts](#multiple-github-accounts)).
 - Do not expose publicly — it becomes an open proxy consuming your Copilot quota
+- Keep the admin listener separate from the public API. Expose only `7777` through internet-facing gateways, and reach `7778` through loopback, SSH tunnel, VPN, or another restricted management path.
 - Each account's credentials are stored under `~/.config/copilot2api/<token_dir>/credentials.json`
 
 ## Multiple GitHub Accounts
 
-The proxy always runs in multi-account mode and maps API keys to GitHub accounts 1:1 via an `accounts.json` file in your token directory (`~/.config/copilot2api/accounts.json` by default, or set `COPILOT2API_ACCOUNTS_FILE`). **If the file does not exist it is created automatically as an empty config** (`{"accounts": []}`) on first start, so the admin UI is available out of the box — add and authenticate your accounts there (see [Admin UI](#admin-ui)).
+The proxy always runs in multi-account mode and maps API keys to GitHub accounts 1:1 via an `accounts.json` file in your token directory (`~/.config/copilot2api/accounts.json` by default, or set `COPILOT2API_ACCOUNTS_FILE`). **If the file does not exist it is created automatically as an empty config** (`{"accounts": []}`) on first start, so the admin UI can populate it after you configure admin credentials (see [Admin UI](#admin-ui)).
 
 You can also edit `accounts.json` by hand:
 
@@ -106,7 +114,7 @@ Requests **must** present a valid key or receive `401 Unauthorized`. Until at le
 
 ### Admin UI
 
-The proxy serves a web UI at **`http://127.0.0.1:7777/admin/`** to maintain the mapping without editing `accounts.json` by hand:
+The proxy serves a password-protected web UI on a separate admin listener, **`0.0.0.0:7778`** by default, to maintain the mapping without editing `accounts.json` by hand:
 
 - List accounts and their authentication status.
 - Add an account (id + API key + optional token dir) and authenticate it via a browser-driven GitHub Device Flow (shows the code + verification link, polls until done).
@@ -117,7 +125,9 @@ The proxy serves a web UI at **`http://127.0.0.1:7777/admin/`** to maintain the 
 
 All changes are written back to `accounts.json` and applied to the running proxy immediately — no restart needed.
 
-⚠️ The admin UI can read API keys and trigger GitHub authentication. Keep it local. To require a token, set `COPILOT2API_ADMIN_TOKEN`; the UI then expects it as an `X-Admin-Token` header or `?admin_token=<token>` query parameter (open `http://127.0.0.1:7777/admin/?admin_token=<token>`).
+⚠️ The admin UI can read API keys, reveal stored GitHub/Copilot tokens, and trigger GitHub authentication. Set `COPILOT2API_ADMIN_USERNAME` and `COPILOT2API_ADMIN_PASSWORD`; the admin server refuses to start without them unless `COPILOT2API_ADMIN_ENABLED=false`. `COPILOT2API_ADMIN_TOKEN` is retained only as a deprecated header-only compatibility option for scripted callers.
+
+For Azure VM deployments behind Application Gateway, route public traffic only to the API listener (`7777`). Do not add the admin listener (`7778`) to the public backend rule. Restrict the VM NSG so only the Application Gateway subnet can reach `7777`, and use SSH tunnel, Bastion, VPN, or a separately locked-down listener if you need remote admin access.
 
 ## Usage with Claude Code
 
@@ -272,9 +282,9 @@ message = client.messages.create(
 | `/api/provider/*` | POST | AmpCode provider-specific routes |
 | `/api/*` | ANY | AmpCode management proxy to ampcode.com |
 | `/usage` | GET | Copilot usage and quota info |
-| `/admin/` | GET | Web admin UI (multi-account mode only) |
-| `/admin/api/stats` | GET | Per-account / per-model token-usage statistics |
-| `/admin/api/stats/{id}` | DELETE | Reset usage statistics for one account |
+| `/admin/` | GET | Web admin UI on the separate admin listener |
+| `/admin/api/stats` | GET | Per-account / per-model token-usage statistics on the admin listener |
+| `/admin/api/stats/{id}` | DELETE | Reset usage statistics for one account on the admin listener |
 
 ## Configuration
 
@@ -283,8 +293,10 @@ message = client.messages.create(
 ```
 ./copilot2api [options]
 
-  -host string       Server host (default "127.0.0.1")
+  -host string       Server host (default "0.0.0.0")
   -port int          Server port (default 7777)
+  -admin-host string Admin server host (default "0.0.0.0")
+  -admin-port int    Admin server port (default 7778)
   -token-dir string  Token storage directory (default ~/.config/copilot2api)
   -debug             Enable debug logging
   -version           Show version and exit
@@ -296,11 +308,16 @@ Environment variables are used as defaults when flags are not provided:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `COPILOT2API_HOST` | Server host | `127.0.0.1` |
+| `COPILOT2API_HOST` | Server host | `0.0.0.0` |
 | `COPILOT2API_PORT` | Server port | `7777` |
 | `COPILOT2API_TOKEN_DIR` | Token storage directory | `~/.config/copilot2api` |
 | `COPILOT2API_ACCOUNTS_FILE` | Multi-account config file path (see [Multiple GitHub Accounts](#multiple-github-accounts)) | `<token-dir>/accounts.json` |
-| `COPILOT2API_ADMIN_TOKEN` | If set, the `/admin/` UI requires this token (`X-Admin-Token` header or `?admin_token=`) | _(unset, no auth)_ |
+| `COPILOT2API_ADMIN_ENABLED` | Start the separate admin server | `true` |
+| `COPILOT2API_ADMIN_HOST` | Admin server host | `0.0.0.0` |
+| `COPILOT2API_ADMIN_PORT` | Admin server port | `7778` |
+| `COPILOT2API_ADMIN_USERNAME` | Admin login username; required when admin is enabled | _(unset)_ |
+| `COPILOT2API_ADMIN_PASSWORD` | Admin login password; required when admin is enabled | _(unset)_ |
+| `COPILOT2API_ADMIN_TOKEN` | Deprecated compatibility token for `X-Admin-Token` scripted access | _(unset)_ |
 | `COPILOT2API_DEBUG` | Enable debug logging (`true`/`false`, `1`/`0`) | `false` |
 
 CLI flags take precedence over environment variables.
