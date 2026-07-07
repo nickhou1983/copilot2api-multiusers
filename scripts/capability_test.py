@@ -1073,7 +1073,7 @@ def headers_direct(token: str, beta):
         "Editor-Plugin-Version": EDITOR_PLUGIN_VERSION,
         "Copilot-Integration-Id": "vscode-chat",
         "Openai-Intent": "conversation-agent",
-        "X-Github-Api-Version": "2025-04-01",
+        "X-Github-Api-Version": "2026-06-01",
         "Content-Type": "application/json",
         "anthropic-version": ANTHROPIC_VERSION,
     }

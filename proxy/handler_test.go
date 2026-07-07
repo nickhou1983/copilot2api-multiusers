@@ -34,7 +34,7 @@ func TestAddCopilotHeaders(t *testing.T) {
 		"Copilot-Integration-Id": "vscode-chat",
 		"Openai-Intent":         "conversation-agent",
 		"Content-Type":          "application/json",
-		"X-Github-Api-Version":  "2025-04-01",
+		"X-Github-Api-Version":  "2026-06-01",
 	}
 
 	for header, expectedValue := range expectedHeaders {

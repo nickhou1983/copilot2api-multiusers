@@ -25,7 +25,7 @@ func AddHeaders(req *http.Request, token string) {
 	req.Header.Set("Copilot-Integration-Id", "vscode-chat")
 	req.Header.Set("Openai-Intent", "conversation-agent")
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Github-Api-Version", "2025-04-01")
+	req.Header.Set("X-Github-Api-Version", "2026-06-01")
 
 	// Generate request ID if not present
 	if req.Header.Get("X-Request-Id") == "" {

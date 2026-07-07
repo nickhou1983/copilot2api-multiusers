@@ -25,6 +25,7 @@
 
 ### Compatibility
 
+- Bump the `X-Github-Api-Version` header sent to the GitHub Copilot upstream from `2025-04-01` to `2026-06-01`. No client-facing API change; this only affects the version the proxy advertises upstream.
 - The proxy now always runs in multi-account mode: when no `accounts.json` exists at startup it is auto-created as an empty config (`{"accounts": []}`) and the admin UI is enabled out of the box. Requests must present a valid API key or receive `401 Unauthorized`; until at least one account is configured (e.g. via the admin UI), every request is rejected with `401`. This replaces the previous single-account, no-validation fallback that ran when the config file was absent.
 
 ### Docs
