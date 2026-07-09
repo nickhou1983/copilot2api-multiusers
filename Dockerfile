@@ -10,6 +10,8 @@ COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=builder /copilot2api /copilot2api
 ENV HOME=/root
 ENV COPILOT2API_HOST=0.0.0.0
-ENV COPILOT2API_PORT=7777
-EXPOSE 7777
+ENV COPILOT2API_PORT=8888
+ENV COPILOT2API_ADMIN_HOST=0.0.0.0
+ENV COPILOT2API_ADMIN_PORT=8889
+EXPOSE 8888 8889
 ENTRYPOINT ["/copilot2api"]

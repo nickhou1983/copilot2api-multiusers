@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log/slog"
@@ -23,8 +24,10 @@ var version = "dev"
 
 func main() {
 	var (
-		port        = flag.Int("port", 0, "Server port (env: COPILOT2API_PORT, default: 7777)")
-		host        = flag.String("host", "", "Server host (env: COPILOT2API_HOST, default: 127.0.0.1)")
+		port        = flag.Int("port", 0, "Server port (env: COPILOT2API_PORT, default: 8888)")
+		host        = flag.String("host", "", "Server host (env: COPILOT2API_HOST, default: 0.0.0.0)")
+		adminPort   = flag.Int("admin-port", 0, "Admin server port (env: COPILOT2API_ADMIN_PORT, default: 8889)")
+		adminHost   = flag.String("admin-host", "", "Admin server host (env: COPILOT2API_ADMIN_HOST, default: 0.0.0.0)")
 		tokenDir    = flag.String("token-dir", "", "Token storage directory (env: COPILOT2API_TOKEN_DIR, default: ~/.config/copilot2api)")
 		showVersion = flag.Bool("version", false, "Show version and exit")
 		debug       = flag.Bool("debug", false, "Enable debug logging (env: COPILOT2API_DEBUG)")
@@ -45,7 +48,7 @@ func main() {
 		if v := os.Getenv("COPILOT2API_HOST"); v != "" {
 			*host = v
 		} else {
-			*host = "127.0.0.1"
+			*host = "0.0.0.0"
 		}
 	}
 	if *port == 0 {
@@ -55,7 +58,24 @@ func main() {
 			}
 		}
 		if *port == 0 {
-			*port = 7777
+			*port = 8888
+		}
+	}
+	if *adminHost == "" {
+		if v := os.Getenv("COPILOT2API_ADMIN_HOST"); v != "" {
+			*adminHost = v
+		} else {
+			*adminHost = "0.0.0.0"
+		}
+	}
+	if *adminPort == 0 {
+		if v := os.Getenv("COPILOT2API_ADMIN_PORT"); v != "" {
+			if p, err := strconv.Atoi(v); err == nil {
+				*adminPort = p
+			}
+		}
+		if *adminPort == 0 {
+			*adminPort = 8889
 		}
 	}
 	if *tokenDir == "" {
@@ -115,6 +135,7 @@ func main() {
 	mux := http.NewServeMux()
 
 	// Core routes
+	mux.HandleFunc("GET /health", handleHealth)
 	mux.Handle("/v1/chat/completions", openaiHandler)
 	mux.Handle("/v1/models", openaiHandler)
 	mux.Handle("/v1/embeddings", openaiHandler)
@@ -124,15 +145,6 @@ func main() {
 	mux.Handle("/v1beta/models", geminiHandler)
 	mux.Handle("/v1beta/models/", geminiHandler)
 	mux.Handle("/usage", usageHandler)
-
-	// Admin UI for maintaining the API key ↔ GitHub account mapping (multi-account mode only).
-	if adminManager != nil {
-		mux.Handle("/admin/", adminManager.Handler())
-		mux.HandleFunc("/admin", func(w http.ResponseWriter, r *http.Request) {
-			http.Redirect(w, r, "/admin/", http.StatusFound)
-		})
-		slog.Info("admin UI enabled", "path", "/admin/", "token_protected", os.Getenv("COPILOT2API_ADMIN_TOKEN") != "")
-	}
 
 	// AmpCode routes — strip /amp prefix so existing handlers see /v1/...
 	mux.Handle("/amp/v1/chat/completions", http.StripPrefix("/amp", openaiHandler))
@@ -174,6 +186,27 @@ func main() {
 		Handler:     logAllRequests(mux),
 	}
 
+	var adminServer *http.Server
+	if adminManager != nil && adminEnabled() {
+		if os.Getenv("COPILOT2API_ADMIN_USERNAME") == "" || os.Getenv("COPILOT2API_ADMIN_PASSWORD") == "" {
+			slog.Error("admin server requires COPILOT2API_ADMIN_USERNAME and COPILOT2API_ADMIN_PASSWORD; set COPILOT2API_ADMIN_ENABLED=false to disable it")
+			os.Exit(1)
+		}
+		adminMux := http.NewServeMux()
+		adminMux.HandleFunc("GET /health", handleAdminHealth)
+		adminMux.Handle("/admin/", adminManager.Handler())
+		adminMux.HandleFunc("/admin", func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, "/admin/", http.StatusFound)
+		})
+		adminServer = &http.Server{
+			Addr:              fmt.Sprintf("%s:%d", *adminHost, *adminPort),
+			ReadHeaderTimeout: 10 * time.Second,
+			IdleTimeout:       120 * time.Second,
+			Handler:           logAllRequests(adminMux),
+		}
+		slog.Info("admin UI enabled on separate listener", "host", *adminHost, "port", *adminPort, "path", "/admin/", "legacy_token_enabled", os.Getenv("COPILOT2API_ADMIN_TOKEN") != "")
+	}
+
 	// Start server in goroutine
 	serverErr := make(chan error, 1)
 	go func() {
@@ -182,6 +215,14 @@ func main() {
 			serverErr <- err
 		}
 	}()
+	if adminServer != nil {
+		go func() {
+			slog.Info("starting admin server", "host", *adminHost, "port", *adminPort)
+			if err := adminServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				serverErr <- err
+			}
+		}()
+	}
 
 	// Wait for interrupt signal or server error
 	quit := make(chan os.Signal, 1)
@@ -203,8 +244,26 @@ func main() {
 		slog.Error("server forced to shutdown", "error", err)
 		os.Exit(1)
 	}
+	if adminServer != nil {
+		if err := adminServer.Shutdown(ctx); err != nil {
+			slog.Error("admin server forced to shutdown", "error", err)
+			os.Exit(1)
+		}
+	}
 
 	slog.Info("server stopped")
+}
+
+func adminEnabled() bool {
+	v := os.Getenv("COPILOT2API_ADMIN_ENABLED")
+	if v == "" {
+		return true
+	}
+	enabled, err := strconv.ParseBool(v)
+	if err != nil {
+		return true
+	}
+	return enabled
 }
 
 // newAmpReverseProxy creates a reverse proxy to ampcode.com that forwards the
@@ -226,4 +285,18 @@ func logAllRequests(next http.Handler) http.Handler {
 		slog.Debug("incoming request", "method", r.Method, "path", r.URL.Path, "query", r.URL.RawQuery)
 		next.ServeHTTP(w, r)
 	})
+}
+
+func handleHealth(w http.ResponseWriter, _ *http.Request) {
+	writeHealthJSON(w, map[string]string{"status": "ok", "service": "copilot2api"})
+}
+
+func handleAdminHealth(w http.ResponseWriter, _ *http.Request) {
+	writeHealthJSON(w, map[string]string{"status": "ok", "service": "copilot2api-admin"})
+}
+
+func writeHealthJSON(w http.ResponseWriter, payload map[string]string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(payload)
 }

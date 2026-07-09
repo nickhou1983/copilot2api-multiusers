@@ -28,21 +28,25 @@
 从源码构建镜像（本 fork 包含上游镜像没有的多账号与用量统计功能）：
 
 ```bash
-docker build -t copilot2api-multiusers .
+docker build -t copilot2api-multiusers-safeadmin .
 ```
 
 运行：
 
 ```bash
 docker run -it --rm \
-  -p 127.0.0.1:7777:7777 \
+  -p 8888:8888 \
+  -p 8889:8889 \
+  -e COPILOT2API_ADMIN_USERNAME=admin \
+  -e COPILOT2API_ADMIN_PASSWORD='change-me' \
   -v ~/.config/copilot2api:/root/.config/copilot2api \
-  copilot2api-multiusers
+  copilot2api-multiusers-safeadmin
 ```
 
-挂载卷可在容器重启后保留你的 GitHub 凭据。示例仅在 `127.0.0.1` 上发布端口，使代理默认只在本地可用。
+挂载卷可在容器重启后保留你的 GitHub 凭据。示例会发布公开 API 端口（`8888`）和管理端口（`8889`）。
 
-> 提示：使用管理界面 / 多账号模式时，从宿主机浏览器访问 `http://127.0.0.1:7777/admin/` 即可。容器内部监听 `0.0.0.0:7777`（由 `COPILOT2API_HOST` 设置），因此发布到 `127.0.0.1` 的端口仍仅限本地访问。
+> 提示：公开 API 监听 `0.0.0.0:8888`。管理界面由独立监听器服务在 `0.0.0.0:8889`。
+> 健康探针可对任一监听器调用无鉴权的 `GET /health`。公开监听器返回 `copilot2api`，管理监听器返回 `copilot2api-admin`。
 
 <details>
 <summary>Docker Compose</summary>
@@ -52,7 +56,11 @@ services:
   copilot2api:
     build: .
     ports:
-      - "127.0.0.1:7777:7777"
+      - "8888:8888"
+      - "8889:8889"
+    environment:
+      COPILOT2API_ADMIN_USERNAME: admin
+      COPILOT2API_ADMIN_PASSWORD: change-me
     volumes:
       - ${HOME}/.config/copilot2api:/root/.config/copilot2api
 ```
@@ -65,7 +73,7 @@ docker compose up --build
 
 </details>
 
-服务默认启动在 `http://127.0.0.1:7777`。打开管理界面 **`http://127.0.0.1:7777/admin/`**，通过浏览器驱动的 Device Flow 新增并认证 GitHub 账号（参见 [多 GitHub 账号](#多-github-账号)）。
+公开 API 默认监听 `0.0.0.0:8888`。设置 `COPILOT2API_ADMIN_USERNAME` 与 `COPILOT2API_ADMIN_PASSWORD` 后，管理界面会监听 **`0.0.0.0:8889`**，可打开 `http://<server-ip>:8889/admin/` 通过浏览器驱动的 Device Flow 新增并认证 GitHub 账号（参见 [多 GitHub 账号](#多-github-账号)）。
 
 ## 安全说明
 
@@ -73,11 +81,12 @@ docker compose up --build
 
 - 默认即校验 API Key：每个请求都必须携带映射到已配置账号的 Key，否则返回 `401 Unauthorized`（参见 [多 GitHub 账号](#多-github-账号)）。
 - 请勿公网暴露 —— 否则会成为一个开放代理，消耗你的 Copilot 配额。
+- 请将管理监听器与公开 API 分离。面向公网的网关只暴露 `8888`，`8889` 建议通过本机回环、SSH 隧道、VPN 或其他受限管理通道访问。
 - 各账号的凭据存储于 `~/.config/copilot2api/<token_dir>/credentials.json`。
 
 ## 多 GitHub 账号
 
-代理始终以多账号模式运行，通过 Token 目录下的 `accounts.json` 文件（默认 `~/.config/copilot2api/accounts.json`，或通过 `COPILOT2API_ACCOUNTS_FILE` 指定）将 API Key 与 GitHub 账号一对一映射。**若该文件不存在，首次启动时会自动创建为空配置**（`{"accounts": []}`），因此管理界面开箱即用 —— 直接在界面中新增并认证账号即可（参见 [管理界面](#管理界面)）。
+代理始终以多账号模式运行，通过 Token 目录下的 `accounts.json` 文件（默认 `~/.config/copilot2api/accounts.json`，或通过 `COPILOT2API_ACCOUNTS_FILE` 指定）将 API Key 与 GitHub 账号一对一映射。**若该文件不存在，首次启动时会自动创建为空配置**（`{"accounts": []}`），配置好管理账号密码后即可通过管理界面填充它（参见 [管理界面](#管理界面)）。
 
 你也可以手动编辑 `accounts.json`：
 
@@ -106,7 +115,7 @@ docker compose up --build
 
 ### 管理界面
 
-代理会在 **`http://127.0.0.1:7777/admin/`** 提供一个 Web 界面，无需手动编辑 `accounts.json` 即可维护映射：
+代理会在独立管理监听器上提供一个带密码保护的 Web 界面，默认监听 **`0.0.0.0:8889`**，无需手动编辑 `accounts.json` 即可维护映射：
 
 - 列出账号及其认证状态。
 - 新增账号（id + API Key + 可选 token 目录），并通过浏览器驱动的 GitHub Device Flow 完成认证（显示验证码与验证链接，并轮询直到完成）。
@@ -117,7 +126,11 @@ docker compose up --build
 
 所有更改都会写回 `accounts.json`，并立即应用到正在运行的代理 —— 无需重启。
 
-⚠️ 管理界面可以读取 API Key 并触发 GitHub 认证，请仅在本地使用。若需鉴权，可设置 `COPILOT2API_ADMIN_TOKEN`；此时界面会要求以 `X-Admin-Token` 请求头或 `?admin_token=<token>` 查询参数提供（访问 `http://127.0.0.1:7777/admin/?admin_token=<token>`）。
+⚠️ 管理界面可以读取 API Key、显示已保存的 GitHub/Copilot Token，并触发 GitHub 认证。请设置 `COPILOT2API_ADMIN_USERNAME` 与 `COPILOT2API_ADMIN_PASSWORD`；若未设置且 `COPILOT2API_ADMIN_ENABLED` 不是 `false`，管理服务会拒绝启动。`COPILOT2API_ADMIN_TOKEN` 仅保留为面向脚本调用的已废弃请求头兼容方式。
+
+在 Azure VM + Application Gateway 部署中，请只把公网流量转发到 API 监听器（`8888`）。不要把管理监听器（`8889`）加入公网后端规则。建议用 NSG 限制只有 Application Gateway 子网可访问 VM 的 `8888`，管理访问则通过 SSH 隧道、Bastion、VPN，或另行配置强限制的管理 listener。
+
+为 Application Gateway 配置健康探针时，优先探测你暴露的后端端口上的 `GET /health`，不要使用 `/usage` 或模型接口，因为这些业务路由可能要求 API Key 或请求体。
 
 ## 配合 Claude Code 使用
 
@@ -126,7 +139,7 @@ docker compose up --build
 ```json
 {
   "env": {
-    "ANTHROPIC_BASE_URL": "http://127.0.0.1:7777",
+    "ANTHROPIC_BASE_URL": "http://127.0.0.1:8888",
     "ANTHROPIC_API_KEY": "dummy",
     "ANTHROPIC_MODEL": "claude-opus-4.6",
     "ANTHROPIC_SMALL_FAST_MODEL": "claude-haiku-4.5",
@@ -158,7 +171,7 @@ web_search = "disabled"
 
 [model_providers.copilot2api]
 name = "copilot2api"
-base_url = "http://127.0.0.1:7777/v1"
+base_url = "http://127.0.0.1:8888/v1"
 wire_api = "responses"
 api_key = "dummy"
 ```
@@ -168,7 +181,7 @@ api_key = "dummy"
 添加到 `~/.gemini/.env`：
 
 ```env
-GOOGLE_GEMINI_BASE_URL=http://127.0.0.1:7777
+GOOGLE_GEMINI_BASE_URL=http://127.0.0.1:8888
 GEMINI_API_KEY=dummy
 GEMINI_MODEL=claude-opus-4.6-1m
 ```
@@ -178,14 +191,14 @@ GEMINI_MODEL=claude-opus-4.6-1m
 设置 `AMP_URL` 环境变量指向 copilot2api：
 
 ```bash
-AMP_URL=http://127.0.0.1:7777/amp amp
+AMP_URL=http://127.0.0.1:8888/amp amp
 ```
 
 或添加到 `~/.config/amp/settings.json`：
 
 ```json
 {
-  "amp.url": "http://127.0.0.1:7777/amp"
+  "amp.url": "http://127.0.0.1:8888/amp"
 }
 ```
 
@@ -196,21 +209,21 @@ AMP_URL=http://127.0.0.1:7777/amp amp
 
 ```bash
 # OpenAI 对话补全
-curl http://localhost:7777/v1/chat/completions \
+curl http://localhost:8888/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{"model":"gpt-5.3-codex","messages":[{"role":"user","content":"Hello!"}]}'
 
 # Anthropic 消息
-curl http://localhost:7777/v1/messages \
+curl http://localhost:8888/v1/messages \
   -H "Content-Type: application/json" \
   -H "x-api-key: dummy" \
   -d '{"model":"claude-sonnet-4.6","messages":[{"role":"user","content":"Hello!"}],"max_tokens":100}'
 
 # 列出模型
-curl http://localhost:7777/v1/models
+curl http://localhost:8888/v1/models
 
 # 查看用量/配额
-curl http://localhost:7777/usage
+curl http://localhost:8888/usage
 ```
 
 </details>
@@ -225,7 +238,7 @@ import openai
 
 client = openai.OpenAI(
     api_key="dummy",
-    base_url="http://127.0.0.1:7777/v1"
+    base_url="http://127.0.0.1:8888/v1"
 )
 
 response = client.chat.completions.create(
@@ -241,7 +254,7 @@ import anthropic
 
 client = anthropic.Anthropic(
     api_key="dummy",
-    base_url="http://127.0.0.1:7777"
+    base_url="http://127.0.0.1:8888"
 )
 
 message = client.messages.create(
@@ -272,9 +285,9 @@ message = client.messages.create(
 | `/api/provider/*` | POST | AmpCode 特定 provider 路由 |
 | `/api/*` | ANY | AmpCode 管理类反向代理到 ampcode.com |
 | `/usage` | GET | Copilot 用量与配额信息 |
-| `/admin/` | GET | Web 管理界面（仅多账号模式） |
-| `/admin/api/stats` | GET | 按账号 / 按模型的 Token 用量统计 |
-| `/admin/api/stats/{id}` | DELETE | 重置单个账号的用量统计 |
+| `/admin/` | GET | 独立管理监听器上的 Web 管理界面 |
+| `/admin/api/stats` | GET | 独立管理监听器上的按账号 / 按模型 Token 用量统计 |
+| `/admin/api/stats/{id}` | DELETE | 独立管理监听器上的单账号用量统计重置 |
 
 ## 配置
 
@@ -283,8 +296,10 @@ message = client.messages.create(
 ```
 ./copilot2api [options]
 
-  -host string       服务监听地址（默认 "127.0.0.1"）
-  -port int          服务端口（默认 7777）
+  -host string       服务监听地址（默认 "0.0.0.0"）
+  -port int          服务端口（默认 8888）
+  -admin-host string 管理服务监听地址（默认 "0.0.0.0"）
+  -admin-port int    管理服务端口（默认 8889）
   -token-dir string  Token 存储目录（默认 ~/.config/copilot2api）
   -debug             开启调试日志
   -version           显示版本并退出
@@ -296,11 +311,16 @@ message = client.messages.create(
 
 | 变量 | 说明 | 默认值 |
 |----------|-------------|---------|
-| `COPILOT2API_HOST` | 服务监听地址 | `127.0.0.1` |
-| `COPILOT2API_PORT` | 服务端口 | `7777` |
+| `COPILOT2API_HOST` | 服务监听地址 | `0.0.0.0` |
+| `COPILOT2API_PORT` | 服务端口 | `8888` |
 | `COPILOT2API_TOKEN_DIR` | Token 存储目录 | `~/.config/copilot2api` |
 | `COPILOT2API_ACCOUNTS_FILE` | 多账号配置文件路径（参见 [多 GitHub 账号](#多-github-账号)） | `<token-dir>/accounts.json` |
-| `COPILOT2API_ADMIN_TOKEN` | 若设置，`/admin/` 界面将要求此 Token（`X-Admin-Token` 请求头或 `?admin_token=`） | _（未设置，无鉴权）_ |
+| `COPILOT2API_ADMIN_ENABLED` | 是否启动独立管理服务 | `true` |
+| `COPILOT2API_ADMIN_HOST` | 管理服务监听地址 | `0.0.0.0` |
+| `COPILOT2API_ADMIN_PORT` | 管理服务端口 | `8889` |
+| `COPILOT2API_ADMIN_USERNAME` | 管理登录用户名；启用管理服务时必填 | _（未设置）_ |
+| `COPILOT2API_ADMIN_PASSWORD` | 管理登录密码；启用管理服务时必填 | _（未设置）_ |
+| `COPILOT2API_ADMIN_TOKEN` | 已废弃的兼容 Token，仅用于 `X-Admin-Token` 脚本访问 | _（未设置）_ |
 | `COPILOT2API_DEBUG` | 开启调试日志（`true`/`false`、`1`/`0`） | `false` |
 
 命令行参数优先级高于环境变量。

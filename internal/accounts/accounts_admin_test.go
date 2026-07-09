@@ -150,39 +150,62 @@ func newManagerForTest(t *testing.T) (*Manager, string) {
 	factory := func(c AccountConfig) (*Account, error) {
 		return &Account{ID: c.ID, APIKey: c.APIKey, TokenDir: c.TokenDir, OpenAI: idHandler(c.ID)}, nil
 	}
-	return NewManager(reg, factory, cfgPath, "", nil), cfgPath
+	return NewManager(reg, factory, cfgPath, "admin", "password", "", nil), cfgPath
 }
 
 func do(h http.Handler, method, path, body string) *httptest.ResponseRecorder {
+	return doWithCookie(h, method, path, body, nil)
+}
+
+func doWithCookie(h http.Handler, method, path, body string, cookie *http.Cookie) *httptest.ResponseRecorder {
 	var r *http.Request
 	if body != "" {
 		r = httptest.NewRequest(method, path, strings.NewReader(body))
 	} else {
 		r = httptest.NewRequest(method, path, nil)
 	}
+	if cookie != nil {
+		r.AddCookie(cookie)
+	}
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, r)
 	return w
 }
 
+func loginCookie(t *testing.T, h http.Handler) *http.Cookie {
+	t.Helper()
+	w := do(h, "POST", "/admin/api/login", `{"username":"admin","password":"password"}`)
+	if w.Code != http.StatusOK {
+		t.Fatalf("login: %d %s", w.Code, w.Body.String())
+	}
+	for _, c := range w.Result().Cookies() {
+		if c.Name == adminSessionCookieName {
+			return c
+		}
+	}
+	t.Fatal("login did not set admin session cookie")
+	return nil
+}
+
 func TestManagerCRUD(t *testing.T) {
 	m, cfgPath := newManagerForTest(t)
 	h := m.Handler()
+	cookie := loginCookie(t, h)
 
 	// Create.
-	if w := do(h, "POST", "/admin/api/accounts", `{"id":"alice","api_key":"k1"}`); w.Code != http.StatusCreated {
+	if w := doWithCookie(h, "POST", "/admin/api/accounts", `{"id":"alice","api_key":"k1"}`, cookie); w.Code != http.StatusCreated {
 		t.Fatalf("create: %d %s", w.Code, w.Body.String())
 	}
 	// Duplicate id -> 409.
-	if w := do(h, "POST", "/admin/api/accounts", `{"id":"alice","api_key":"k2"}`); w.Code != http.StatusConflict {
+	if w := doWithCookie(h, "POST", "/admin/api/accounts", `{"id":"alice","api_key":"k2"}`, cookie); w.Code != http.StatusConflict {
 		t.Fatalf("dup create: %d", w.Code)
 	}
 	// Missing api_key -> auto-generated, should succeed.
-	if w := do(h, "POST", "/admin/api/accounts", `{"id":"x"}`); w.Code != http.StatusCreated {
+	if w := doWithCookie(h, "POST", "/admin/api/accounts", `{"id":"x"}`, cookie); w.Code != http.StatusCreated {
 		t.Fatalf("auto-gen key create: expected 201, got %d %s", w.Code, w.Body.String())
 	}
 	// Missing id -> 400.
-	if w := do(h, "POST", "/admin/api/accounts", `{"api_key":"k9"}`); w.Code != http.StatusBadRequest {
+	if w := doWithCookie(h, "POST", "/admin/api/accounts", `{"api_key":"k9"}`, cookie); w.Code != http.StatusBadRequest {
 		t.Fatalf("bad create: expected 400, got %d", w.Code)
 	}
 
@@ -193,7 +216,7 @@ func TestManagerCRUD(t *testing.T) {
 	}
 
 	// List.
-	w := do(h, "GET", "/admin/api/accounts", "")
+	w := doWithCookie(h, "GET", "/admin/api/accounts", "", cookie)
 	if w.Code != http.StatusOK {
 		t.Fatalf("list: %d", w.Code)
 	}
@@ -206,7 +229,7 @@ func TestManagerCRUD(t *testing.T) {
 	}
 
 	// Rotate key.
-	if w := do(h, "PUT", "/admin/api/accounts/alice", `{"api_key":"k1-new"}`); w.Code != http.StatusOK {
+	if w := doWithCookie(h, "PUT", "/admin/api/accounts/alice", `{"api_key":"k1-new"}`, cookie); w.Code != http.StatusOK {
 		t.Fatalf("update: %d %s", w.Code, w.Body.String())
 	}
 	if m.reg.Get("alice").APIKey != "k1-new" {
@@ -214,19 +237,19 @@ func TestManagerCRUD(t *testing.T) {
 	}
 
 	// Update missing account -> 404.
-	if w := do(h, "PUT", "/admin/api/accounts/ghost", `{"api_key":"z"}`); w.Code != http.StatusNotFound {
+	if w := doWithCookie(h, "PUT", "/admin/api/accounts/ghost", `{"api_key":"z"}`, cookie); w.Code != http.StatusNotFound {
 		t.Fatalf("update ghost: %d", w.Code)
 	}
 
 	// Delete.
-	if w := do(h, "DELETE", "/admin/api/accounts/alice", ""); w.Code != http.StatusOK {
+	if w := doWithCookie(h, "DELETE", "/admin/api/accounts/alice", "", cookie); w.Code != http.StatusOK {
 		t.Fatalf("delete: %d", w.Code)
 	}
 	if m.reg.Get("alice") != nil {
 		t.Fatal("alice still present")
 	}
 	// Also delete the auto-generated account.
-	if w := do(h, "DELETE", "/admin/api/accounts/x", ""); w.Code != http.StatusOK {
+	if w := doWithCookie(h, "DELETE", "/admin/api/accounts/x", "", cookie); w.Code != http.StatusOK {
 		t.Fatalf("delete x: %d", w.Code)
 	}
 	cfg, _ = LoadConfig(cfgPath)
@@ -235,30 +258,39 @@ func TestManagerCRUD(t *testing.T) {
 	}
 }
 
-func TestManagerAdminTokenGate(t *testing.T) {
+func TestManagerAdminLoginGate(t *testing.T) {
 	cfgPath := filepath.Join(t.TempDir(), "accounts.json")
 	reg, _ := NewRegistry(nil)
 	factory := func(c AccountConfig) (*Account, error) {
 		return &Account{ID: c.ID, APIKey: c.APIKey}, nil
 	}
-	m := NewManager(reg, factory, cfgPath, "secret", nil)
+	m := NewManager(reg, factory, cfgPath, "admin", "password", "secret", nil)
 	h := m.Handler()
 
-	// No token -> 401.
 	if w := do(h, "GET", "/admin/api/accounts", ""); w.Code != http.StatusUnauthorized {
-		t.Fatalf("no token: %d", w.Code)
+		t.Fatalf("no login: %d", w.Code)
 	}
-	// With token header -> 200.
+
+	if w := do(h, "POST", "/admin/api/login", `{"username":"admin","password":"wrong"}`); w.Code != http.StatusUnauthorized {
+		t.Fatalf("wrong password: %d", w.Code)
+	}
+
+	cookie := loginCookie(t, h)
+	w := doWithCookie(h, "GET", "/admin/api/accounts", "", cookie)
+	if w.Code != http.StatusOK {
+		t.Fatalf("with login: %d", w.Code)
+	}
+
 	r := httptest.NewRequest("GET", "/admin/api/accounts", nil)
 	r.Header.Set("X-Admin-Token", "secret")
-	w := httptest.NewRecorder()
+	w = httptest.NewRecorder()
 	h.ServeHTTP(w, r)
 	if w.Code != http.StatusOK {
-		t.Fatalf("with token: %d", w.Code)
+		t.Fatalf("legacy token header: %d", w.Code)
 	}
-	// With token query param -> 200.
-	if w := do(h, "GET", "/admin/api/accounts?admin_token=secret", ""); w.Code != http.StatusOK {
-		t.Fatalf("query token: %d", w.Code)
+
+	if w := do(h, "GET", "/admin/api/accounts?admin_token=secret", ""); w.Code != http.StatusUnauthorized {
+		t.Fatalf("query token should not authenticate: %d", w.Code)
 	}
 }
 
@@ -298,14 +330,19 @@ func TestManagerTokensEndpoint(t *testing.T) {
 		}
 		return &Account{ID: c.ID, APIKey: c.APIKey, TokenDir: c.TokenDir, Auth: ac, OpenAI: idHandler(c.ID)}, nil
 	}
-	m := NewManager(reg, factory, cfgPath, "", nil)
+	m := NewManager(reg, factory, cfgPath, "admin", "password", "", nil)
 	h := m.Handler()
+	cookie := loginCookie(t, h)
 
-	if w := do(h, "POST", "/admin/api/accounts", `{"id":"alice","api_key":"k1"}`); w.Code != http.StatusCreated {
+	if w := doWithCookie(h, "POST", "/admin/api/accounts", `{"id":"alice","api_key":"k1"}`, cookie); w.Code != http.StatusCreated {
 		t.Fatalf("create: %d %s", w.Code, w.Body.String())
 	}
 
-	w := do(h, "GET", "/admin/api/accounts/alice/tokens", "")
+	if w := do(h, "GET", "/admin/api/accounts/alice/tokens", ""); w.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated tokens: %d", w.Code)
+	}
+
+	w := doWithCookie(h, "GET", "/admin/api/accounts/alice/tokens", "", cookie)
 	if w.Code != http.StatusOK {
 		t.Fatalf("tokens: %d %s", w.Code, w.Body.String())
 	}
@@ -321,7 +358,7 @@ func TestManagerTokensEndpoint(t *testing.T) {
 	}
 
 	// Unknown account -> 404.
-	if w := do(h, "GET", "/admin/api/accounts/ghost/tokens", ""); w.Code != http.StatusNotFound {
+	if w := doWithCookie(h, "GET", "/admin/api/accounts/ghost/tokens", "", cookie); w.Code != http.StatusNotFound {
 		t.Fatalf("ghost tokens: %d", w.Code)
 	}
 }
@@ -334,8 +371,9 @@ func TestManagerStatsEndpoint(t *testing.T) {
 		return &Account{ID: c.ID, APIKey: c.APIKey}, nil
 	}
 	store := stats.NewStore(statsPath)
-	m := NewManager(reg, factory, cfgPath, "", store)
+	m := NewManager(reg, factory, cfgPath, "admin", "password", "", store)
 	h := m.Handler()
+	cookie := loginCookie(t, h)
 
 	// Record usage for two accounts/models.
 	store.Recorder("alice").Record("gpt-5", stats.Usage{Input: 100, Output: 20, Cached: 30})
@@ -343,7 +381,7 @@ func TestManagerStatsEndpoint(t *testing.T) {
 	store.Recorder("bob").Record("claude", stats.Usage{Input: 1, Output: 1, CacheCreation: 7})
 
 	// GET /admin/api/stats returns per-account aggregates.
-	w := do(h, "GET", "/admin/api/stats", "")
+	w := doWithCookie(h, "GET", "/admin/api/stats", "", cookie)
 	if w.Code != http.StatusOK {
 		t.Fatalf("stats: %d %s", w.Code, w.Body.String())
 	}
@@ -362,10 +400,10 @@ func TestManagerStatsEndpoint(t *testing.T) {
 	}
 
 	// Reset one account.
-	if w := do(h, "DELETE", "/admin/api/stats/alice", ""); w.Code != http.StatusOK {
+	if w := doWithCookie(h, "DELETE", "/admin/api/stats/alice", "", cookie); w.Code != http.StatusOK {
 		t.Fatalf("reset: %d", w.Code)
 	}
-	w = do(h, "GET", "/admin/api/stats", "")
+	w = doWithCookie(h, "GET", "/admin/api/stats", "", cookie)
 	got = nil
 	_ = json.Unmarshal(w.Body.Bytes(), &got)
 	if len(got) != 1 || got[0].ID != "bob" {
