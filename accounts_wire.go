@@ -52,6 +52,7 @@ func newAccountHandlers(id, apiKey, tokenDirRaw, tokenDirAbs string, transport *
 		TokenDir:  tokenDirRaw,
 		Auth:      authClient,
 		Recorder:  rec,
+		Models:    modelsCache,
 		OpenAI:    proxyHandler,
 		Anthropic: anthropic.NewHandler(authClient, transport, modelsCache),
 		Gemini:    gemini.NewHandler(authClient, transport, modelsCache),

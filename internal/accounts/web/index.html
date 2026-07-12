@@ -42,6 +42,10 @@
     background: #0c0e12; border: 1px solid var(--border); border-radius: 7px;
     color: var(--text); padding: 8px 10px; font-size: 13px; min-width: 200px;
   }
+  select {
+    background: #0c0e12; border: 1px solid var(--border); border-radius: 7px;
+    color: var(--text); padding: 7px 10px; font-size: 13px;
+  }
   .actions { display: flex; gap: 6px; }
   .muted { color: var(--muted); }
   .toast { position: fixed; bottom: 20px; right: 20px; padding: 12px 16px; border-radius: 8px; font-size: 13px; display: none; }
@@ -74,6 +78,7 @@
 </header>
 <nav class="tabs">
   <button id="tab-accounts" class="active" data-view="accounts">Accounts</button>
+  <button id="tab-models" data-view="models">Models</button>
   <button id="tab-stats" data-view="stats">Stats</button>
 </nav>
 <main>
@@ -94,6 +99,20 @@
       <thead><tr><th>ID</th><th>API Key</th><th>Token dir</th><th>Status</th><th>Actions</th></tr></thead>
       <tbody id="rows"><tr><td colspan="5" class="muted">Loading…</td></tr></tbody>
     </table>
+  </section>
+  </div>
+
+  <div id="view-models" class="view">
+  <section class="panel">
+    <div class="acct-head">
+      <h2 style="margin:0">Upstream models</h2>
+      <div class="row" style="align-items:center">
+        <select id="models-account"></select>
+        <button class="ghost" id="models-refresh">Refresh</button>
+      </div>
+    </div>
+    <p class="muted small">Models advertised by the GitHub Copilot upstream <code>/models</code> endpoint for the selected account.</p>
+    <div id="models-body"><p class="muted">Loading…</p></div>
   </section>
   </div>
 
@@ -313,6 +332,7 @@ function showView(name) {
   document.querySelectorAll("nav.tabs button").forEach(b => b.classList.toggle("active", b.dataset.view === name));
   document.querySelectorAll(".view").forEach(v => v.classList.toggle("active", v.id === "view-" + name));
   if (name === "stats") loadStats();
+  if (name === "models") initModels();
 }
 document.querySelectorAll("nav.tabs button").forEach(b => b.addEventListener("click", () => showView(b.dataset.view)));
 
@@ -387,6 +407,78 @@ document.getElementById("stats-body").addEventListener("click", async (ev) => {
     loadStats();
   } catch (e) { toast(e.message, "err"); }
 });
+
+// --- Models ---
+let modelsInited = false;
+async function initModels() {
+  const sel = document.getElementById("models-account");
+  if (!modelsInited) {
+    modelsInited = true;
+    try {
+      const accounts = await api("GET", "/admin/api/accounts");
+      const authed = accounts.filter(a => a.authenticated);
+      sel.innerHTML = authed.map(a => `<option value="${a.id}">${a.id}</option>`).join("");
+      if (!authed.length) {
+        document.getElementById("models-body").innerHTML = '<p class="muted">No authenticated accounts. Authenticate one first.</p>';
+        return;
+      }
+    } catch (e) {
+      document.getElementById("models-body").innerHTML = `<p class="badge no">${e.message}</p>`;
+      return;
+    }
+  }
+  if (sel.value) loadModels();
+}
+
+function endpointBadges(m) {
+  const eps = m.supported_endpoints || [];
+  return eps.map(e => `<code>${e.replace(/^\//, "")}</code>`).join(" ");
+}
+
+function modelRows(list) {
+  return list.map(m => {
+    const cap = m.capabilities || {};
+    const lim = cap.limits || {};
+    const flags = [];
+    if (m.preview) flags.push('<span class="badge pending">preview</span>');
+    if (m.model_picker_enabled) flags.push('<span class="badge ok">picker</span>');
+    return `<tr>
+      <td><code>${m.id}</code>${m.name && m.name !== m.id ? `<div class="small muted">${m.name}</div>` : ""}</td>
+      <td>${m.vendor || cap.family || '<span class="muted">—</span>'}</td>
+      <td class="small muted">${m.version || "—"}</td>
+      <td class="num">${lim.max_context_window_tokens ? fmtNum(lim.max_context_window_tokens) : "—"}</td>
+      <td class="num">${lim.max_output_tokens ? fmtNum(lim.max_output_tokens) : "—"}</td>
+      <td class="small">${endpointBadges(m) || '<span class="muted">—</span>'}</td>
+      <td>${flags.join(" ")}</td>
+    </tr>`;
+  }).join("");
+}
+
+async function loadModels() {
+  const body = document.getElementById("models-body");
+  const id = document.getElementById("models-account").value;
+  if (!id) return;
+  body.innerHTML = '<p class="muted">Loading…</p>';
+  try {
+    const resp = await api("GET", "/admin/api/accounts/" + encodeURIComponent(id) + "/models");
+    const list = (resp.data || []).slice().sort((a, b) => a.id.localeCompare(b.id));
+    if (!list.length) {
+      body.innerHTML = '<p class="muted">Upstream returned no models.</p>';
+      return;
+    }
+    body.innerHTML = `<p class="small muted">${list.length} models</p>
+      <table>
+        <thead><tr><th>Model</th><th>Vendor</th><th>Version</th>
+        <th class="num">Context</th><th class="num">Max output</th><th>Endpoints</th><th></th></tr></thead>
+        <tbody>${modelRows(list)}</tbody>
+      </table>`;
+  } catch (e) {
+    body.innerHTML = `<p class="badge no">${e.message}</p>`;
+  }
+}
+
+document.getElementById("models-refresh").addEventListener("click", loadModels);
+document.getElementById("models-account").addEventListener("change", loadModels);
 
 load();
 </script>

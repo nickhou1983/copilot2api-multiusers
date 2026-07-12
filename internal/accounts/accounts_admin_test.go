@@ -1,6 +1,7 @@
 package accounts
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -323,6 +324,64 @@ func TestManagerTokensEndpoint(t *testing.T) {
 	// Unknown account -> 404.
 	if w := do(h, "GET", "/admin/api/accounts/ghost/tokens", ""); w.Code != http.StatusNotFound {
 		t.Fatalf("ghost tokens: %d", w.Code)
+	}
+}
+
+type fakeModels struct {
+	raw []byte
+	err error
+}
+
+func (f fakeModels) GetRaw(context.Context) ([]byte, error) { return f.raw, f.err }
+
+func TestManagerModelsEndpoint(t *testing.T) {
+	cfgPath := filepath.Join(t.TempDir(), "accounts.json")
+	reg, _ := NewRegistry(nil)
+	raw := []byte(`{"data":[{"id":"gpt-5","capabilities":{"limits":{"max_context_window_tokens":128000}}}]}`)
+	factory := func(c AccountConfig) (*Account, error) {
+		return &Account{ID: c.ID, APIKey: c.APIKey, Models: fakeModels{raw: raw}}, nil
+	}
+	m := NewManager(reg, factory, cfgPath, "", nil)
+	h := m.Handler()
+
+	if w := do(h, "POST", "/admin/api/accounts", `{"id":"alice","api_key":"k1"}`); w.Code != http.StatusCreated {
+		t.Fatalf("create: %d %s", w.Code, w.Body.String())
+	}
+
+	w := do(h, "GET", "/admin/api/accounts/alice/models", "")
+	if w.Code != http.StatusOK {
+		t.Fatalf("models: %d %s", w.Code, w.Body.String())
+	}
+	if ct := w.Header().Get("Content-Type"); ct != "application/json" {
+		t.Fatalf("models content-type: %s", ct)
+	}
+	var resp struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(resp.Data) != 1 || resp.Data[0].ID != "gpt-5" {
+		t.Fatalf("unexpected models: %s", w.Body.String())
+	}
+
+	// Unknown account -> 404.
+	if w := do(h, "GET", "/admin/api/accounts/ghost/models", ""); w.Code != http.StatusNotFound {
+		t.Fatalf("ghost models: %d", w.Code)
+	}
+}
+
+func TestManagerModelsEndpointNoSource(t *testing.T) {
+	m, _ := newManagerForTest(t)
+	h := m.Handler()
+	if w := do(h, "POST", "/admin/api/accounts", `{"id":"alice","api_key":"k1"}`); w.Code != http.StatusCreated {
+		t.Fatalf("create: %d %s", w.Code, w.Body.String())
+	}
+	// Account has no models source -> 503.
+	if w := do(h, "GET", "/admin/api/accounts/alice/models", ""); w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("models without source: %d %s", w.Code, w.Body.String())
 	}
 }
 

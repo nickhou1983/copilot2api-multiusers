@@ -1,6 +1,7 @@
 package accounts
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -10,6 +11,12 @@ import (
 	"github.com/whtsky/copilot2api/auth"
 	"github.com/whtsky/copilot2api/internal/stats"
 )
+
+// ModelsSource serves the upstream /models response for an account. It is
+// implemented by the per-account models cache.
+type ModelsSource interface {
+	GetRaw(ctx context.Context) ([]byte, error)
+}
 
 // Protocol identifies which per-account handler a route should dispatch to.
 type Protocol int
@@ -40,6 +47,9 @@ type Account struct {
 
 	// Recorder accumulates this account's token usage. May be nil.
 	Recorder *stats.Recorder
+
+	// Models serves the upstream /models response for this account. May be nil.
+	Models ModelsSource
 
 	OpenAI    http.Handler
 	Anthropic http.Handler

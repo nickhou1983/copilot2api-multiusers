@@ -17,6 +17,7 @@
 - Add a web admin UI at `/admin/` (multi-account mode only) to maintain the API key ↔ GitHub account mapping: list, add, rotate keys, and delete accounts, plus authenticate accounts via a browser-driven GitHub Device Flow. Changes are saved to `accounts.json` and applied live without a restart. Optionally protect it with `COPILOT2API_ADMIN_TOKEN` (sent as `X-Admin-Token` header or `?admin_token=`).
 - Bootstrap multi-account mode from an empty `accounts.json` (`{"accounts":[]}`) and populate it entirely through the admin UI.
 - Add a token-usage statistics page to the admin UI (new "Stats" tab) showing per-account, per-model token counts — input, output, cached (prompt-cache hits), cache-write, and request totals — across all OpenAI, Anthropic, and Gemini endpoints. Usage is persisted to `<token-dir>/stats.json` and survives restarts. Backed by a new `GET /admin/api/stats` endpoint, with `DELETE /admin/api/stats/{id}` to reset one account. Note: OpenAI Chat Completions streaming only contributes token counts when the client sends `stream_options.include_usage`; the request is always counted.
+- Add an upstream-models page to the admin UI (new "Models" tab) listing the models the GitHub Copilot upstream advertises for a selected account — model ID, vendor, version, context window, max output tokens, supported endpoints, and preview/picker flags. Backed by a new `GET /admin/api/accounts/{id}/models` endpoint that serves the account's cached upstream `/models` response.
 
 ### Bug Fixes
 

@@ -73,6 +73,7 @@ func (m *Manager) Handler() http.Handler {
 	mux.HandleFunc("POST /admin/api/accounts/{id}/auth/start", m.handleAuthStart)
 	mux.HandleFunc("GET /admin/api/accounts/{id}/auth/status", m.handleAuthStatus)
 	mux.HandleFunc("GET /admin/api/accounts/{id}/tokens", m.handleTokens)
+	mux.HandleFunc("GET /admin/api/accounts/{id}/models", m.handleModels)
 	mux.HandleFunc("GET /admin/api/generate-key", m.handleGenerateKey)
 	mux.HandleFunc("GET /admin/api/stats", m.handleStats)
 	mux.HandleFunc("DELETE /admin/api/stats", m.handleStatsResetAll)
@@ -327,6 +328,33 @@ func (m *Manager) handleTokens(w http.ResponseWriter, r *http.Request) {
 		"copilot_usable":     info.CopilotUsable,
 		"base_url":           info.BaseURL,
 	})
+}
+
+// handleModels proxies the account's cached upstream /models response so the
+// admin UI can list the models GitHub Copilot supports.
+func (m *Manager) handleModels(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	acct := m.reg.Get(id)
+	if acct == nil {
+		writeError(w, http.StatusNotFound, "account not found: "+id)
+		return
+	}
+	if acct.Models == nil {
+		writeError(w, http.StatusServiceUnavailable, "models not available for account: "+id)
+		return
+	}
+	if acct.Auth != nil && !acct.Auth.IsAuthenticated() {
+		writeError(w, http.StatusConflict, "account not authenticated: "+id)
+		return
+	}
+	raw, err := acct.Models.GetRaw(r.Context())
+	if err != nil {
+		writeError(w, http.StatusBadGateway, "failed to fetch models: "+err.Error())
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(raw)
 }
 
 func (m *Manager) handleStats(w http.ResponseWriter, _ *http.Request) {
