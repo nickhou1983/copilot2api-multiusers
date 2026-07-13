@@ -122,7 +122,7 @@
       <h2 style="margin:0">Token usage</h2>
       <button class="ghost" id="stats-refresh">Refresh</button>
     </div>
-    <p class="muted small">Per-account, per-model token usage. Persisted to <code>stats.json</code>. Cached = prompt-cache hits.</p>
+    <p class="muted small">Per-account, per-model token usage. Persisted to <code>stats.json</code>. Cached = prompt-cache hits. Cache hit = cached / (input + cached + cache write).</p>
     <div id="stats-body"><p class="muted">Loading…</p></div>
   </section>
   </div>
@@ -338,6 +338,11 @@ document.querySelectorAll("nav.tabs button").forEach(b => b.addEventListener("cl
 
 // --- Stats ---
 function fmtNum(n) { return (n || 0).toLocaleString(); }
+function cacheHitRate(m) {
+  const denom = (m.input || 0) + (m.cached || 0) + (m.cache_creation || 0);
+  if (!denom) return "—";
+  return ((m.cached || 0) / denom * 100).toFixed(1) + "%";
+}
 function fmtTime(t) {
   if (!t || t.startsWith("0001-01-01")) return "—";
   const d = new Date(t);
@@ -348,6 +353,7 @@ function statsTable(acct) {
   const head = `<thead><tr>
     <th>Model</th><th class="num">Requests</th><th class="num">Input</th>
     <th class="num">Output</th><th class="num">Cached</th><th class="num">Cache write</th>
+    <th class="num">Cache hit</th>
     <th class="num">Total</th><th>Last used</th></tr></thead>`;
   const rows = acct.models.map(m => `<tr>
     <td><code>${m.model}</code></td>
@@ -356,6 +362,7 @@ function statsTable(acct) {
     <td class="num">${fmtNum(m.output)}</td>
     <td class="num">${fmtNum(m.cached)}</td>
     <td class="num">${fmtNum(m.cache_creation)}</td>
+    <td class="num">${cacheHitRate(m)}</td>
     <td class="num">${fmtNum(m.total)}</td>
     <td class="small muted">${fmtTime(m.last_used)}</td>
   </tr>`).join("");
@@ -368,6 +375,7 @@ function statsTable(acct) {
     <td class="num">${fmtNum(t.output)}</td>
     <td class="num">${fmtNum(t.cached)}</td>
     <td class="num">${fmtNum(t.cache_creation)}</td>
+    <td class="num">${cacheHitRate(t)}</td>
     <td class="num">${fmtNum(totalAll)}</td>
     <td></td>
   </tr>`;

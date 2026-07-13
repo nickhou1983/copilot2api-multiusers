@@ -15,6 +15,7 @@
 - 支持从空的 `accounts.json`（`{"accounts":[]}`）引导多账号模式，并完全通过管理界面填充。
 - 在管理界面新增 Token 用量统计页（新增「Stats」标签页），按账号、按模型展示 Token 计数 —— 输入、输出、缓存命中（prompt-cache）、缓存写入以及请求总数 —— 覆盖所有 OpenAI、Anthropic 与 Gemini 端点。用量持久化到 `<token-dir>/stats.json`，重启后仍保留。由新增的 `GET /admin/api/stats` 端点提供，`DELETE /admin/api/stats/{id}` 可重置单个账号。注意：OpenAI Chat Completions 流式仅在客户端发送 `stream_options.include_usage` 时才计入 Token 数；但请求本身始终计数。
 - 在管理界面新增上游模型页（新增「Models」标签页），按所选账号列出 GitHub Copilot 上游支持的模型 —— 模型 ID、厂商、版本、上下文窗口、最大输出 Token 数、支持的端点，以及 preview/picker 标记。由新增的 `GET /admin/api/accounts/{id}/models` 端点提供，返回该账号缓存的上游 `/models` 响应。
+- 在管理界面 Stats 标签页新增「Cache hit」列，按模型与账号合计展示提示词缓存命中率，计算公式为 cached / (input + cached + cache write)（基于输入侧 Token）。无输入 Token 记录时显示"—"。
 
 ### Bug 修复
 

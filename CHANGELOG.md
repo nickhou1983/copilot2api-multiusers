@@ -18,6 +18,7 @@
 - Bootstrap multi-account mode from an empty `accounts.json` (`{"accounts":[]}`) and populate it entirely through the admin UI.
 - Add a token-usage statistics page to the admin UI (new "Stats" tab) showing per-account, per-model token counts — input, output, cached (prompt-cache hits), cache-write, and request totals — across all OpenAI, Anthropic, and Gemini endpoints. Usage is persisted to `<token-dir>/stats.json` and survives restarts. Backed by a new `GET /admin/api/stats` endpoint, with `DELETE /admin/api/stats/{id}` to reset one account. Note: OpenAI Chat Completions streaming only contributes token counts when the client sends `stream_options.include_usage`; the request is always counted.
 - Add an upstream-models page to the admin UI (new "Models" tab) listing the models the GitHub Copilot upstream advertises for a selected account — model ID, vendor, version, context window, max output tokens, supported endpoints, and preview/picker flags. Backed by a new `GET /admin/api/accounts/{id}/models` endpoint that serves the account's cached upstream `/models` response.
+- Add a "Cache hit" column to the admin UI Stats tab showing the prompt-cache hit rate per model and per account total, computed as cached / (input + cached + cache write) over input-side tokens. Shows "—" when no input tokens are recorded.
 
 ### Bug Fixes
 
