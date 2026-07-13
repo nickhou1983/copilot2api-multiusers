@@ -4,231 +4,526 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>GitHub Copilot 模型能力与 Copilot2API 支持 — 测试总结报告</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
 <style>
+/* ============================================================
+   TECHNICAL DOSSIER · TD-2607
+   1970s aerospace / IBM engineering-manual aesthetic:
+   warm paper, international orange, ruled hairlines,
+   mono data, drafting hatches, stamped verdicts.
+   ============================================================ */
 :root {
-  --surface-1: #fcfcfb;
-  --page: #f9f9f7;
-  --text-primary: #0b0b0b;
-  --text-secondary: #52514e;
-  --text-muted: #898781;
-  --grid: #e1e0d9;
-  --baseline: #c3c2b7;
-  --border: rgba(11,11,11,0.10);
-  --series-1: #2a78d6;  /* Anthropic */
-  --series-2: #1baf7a;  /* Bedrock */
-  --series-3: #eda100;  /* Vertex */
-  --seq-450: #2a78d6;
-  --seq-250: #86b6ef;
-  --status-good: #0ca30c;
-  --status-good-text: #006300;
-  --status-warning: #fab219;
-  --status-serious: #ec835a;
-  --status-critical: #d03b3b;
-  --tint-good: rgba(12,163,12,0.12);
-  --tint-warning: rgba(250,178,25,0.16);
-  --tint-serious: rgba(236,131,90,0.15);
-  --tint-critical: rgba(208,59,59,0.12);
-  --tint-info: rgba(42,120,214,0.10);
+  --paper:        #f2efe4;
+  --paper-raise:  #f7f5ec;
+  --paper-sink:   #eae6d7;
+  --ink:          #1a1913;
+  --ink-soft:     #4c4a3f;
+  --ink-faint:    #8b8878;
+  --rule:         #1a1913;            /* heavy rules */
+  --hairline:     #c9c5b2;            /* light rules */
+  --hairline-lo:  #dcd8c8;
+  --orange:       #e03e00;            /* international orange */
+  --orange-ink:   #b83300;
+  --pass:         #1d6e38;
+  --fail:         #b3261e;
+  --warn:         #8f6400;
+  --info:         #2b52b8;
+  --anthropic:    #2b52b8;
+  --bedrock:      #0e7f6b;
+  --vertex:       #b57a00;
+  --tint-pass:    rgba(29,110,56,.09);
+  --tint-fail:    rgba(179,38,30,.08);
+  --tint-warn:    rgba(143,100,0,.10);
+  --tint-info:    rgba(43,82,184,.08);
+  --tint-orange:  rgba(224,62,0,.08);
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --disp: "Archivo", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --body: "Archivo", -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
 }
-@media (prefers-color-scheme: dark) {
-  :root {
-    --surface-1: #1a1a19;
-    --page: #0d0d0d;
-    --text-primary: #ffffff;
-    --text-secondary: #c3c2b7;
-    --text-muted: #898781;
-    --grid: #2c2c2a;
-    --baseline: #383835;
-    --border: rgba(255,255,255,0.10);
-    --series-1: #3987e5;
-    --series-2: #199e70;
-    --series-3: #c98500;
-    --seq-450: #3987e5;
-    --seq-250: #1c5cab;
-    --status-good-text: #0ca30c;
-    --tint-good: rgba(12,163,12,0.18);
-    --tint-warning: rgba(250,178,25,0.16);
-    --tint-serious: rgba(236,131,90,0.18);
-    --tint-critical: rgba(208,59,59,0.22);
-    --tint-info: rgba(57,135,229,0.16);
-  }
-}
+
 * { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
 body {
   margin: 0;
-  background: var(--page);
-  color: var(--text-primary);
-  font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--body);
   font-size: 15px;
-  line-height: 1.65;
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+  /* faint drafting grid + paper grain */
+  background-image:
+    linear-gradient(rgba(26,25,19,.028) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(26,25,19,.028) 1px, transparent 1px);
+  background-size: 28px 28px;
 }
-.wrap { max-width: 1080px; margin: 0 auto; padding: 32px 24px 72px; }
-header.page-head { padding: 40px 0 8px; }
-.page-head h1 { font-size: 28px; line-height: 1.3; margin: 0 0 8px; letter-spacing: -0.01em; }
-.page-head .sub { color: var(--text-secondary); margin: 0; max-width: 72ch; }
-.page-head .meta { color: var(--text-muted); font-size: 13px; margin-top: 12px; }
-section { margin-top: 44px; }
-h2 { font-size: 21px; margin: 0 0 6px; letter-spacing: -0.01em; }
-h3 { font-size: 16px; margin: 26px 0 8px; }
-.section-lede { color: var(--text-secondary); margin: 0 0 18px; max-width: 78ch; }
-.card {
-  background: var(--surface-1);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 20px 22px;
+/* paper grain overlay */
+body::before {
+  content: "";
+  position: fixed; inset: 0;
+  pointer-events: none;
+  z-index: 999;
+  opacity: .5;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='linear' slope='0.045'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
 }
-/* ---- KPI row ---- */
-.kpi-row {
+
+.wrap { max-width: 1120px; margin: 0 auto; padding: 0 28px 96px; }
+
+::selection { background: var(--orange); color: var(--paper); }
+
+/* ---------- masthead ---------- */
+.doc-topline {
+  display: flex; justify-content: space-between; align-items: baseline;
+  gap: 16px; flex-wrap: wrap;
+  font-family: var(--mono); font-size: 11.5px; letter-spacing: .14em;
+  text-transform: uppercase;
+  padding: 18px 0 10px;
+  border-bottom: 3px solid var(--rule);
+}
+.doc-topline .doc-no { color: var(--orange); font-weight: 600; }
+.doc-topline .doc-org { color: var(--ink-soft); }
+
+header.masthead { padding: 34px 0 0; }
+.masthead .kicker {
+  font-family: var(--mono); font-size: 12px; font-weight: 600;
+  letter-spacing: .22em; text-transform: uppercase;
+  color: var(--orange);
+  margin: 0 0 14px;
+  display: flex; align-items: center; gap: 12px;
+}
+.masthead .kicker::after {
+  content: ""; flex: 1; height: 1px; background: var(--hairline);
+}
+.masthead h1 {
+  font-family: var(--disp);
+  font-size: clamp(30px, 4.6vw, 46px);
+  font-weight: 800;
+  font-stretch: 112%;
+  line-height: 1.14;
+  letter-spacing: -0.015em;
+  margin: 0;
+  max-width: 21em;
+  text-wrap: balance;
+}
+.masthead h1 .amp { color: var(--orange); }
+.masthead .sub {
+  color: var(--ink-soft); margin: 20px 0 0; max-width: 74ch;
+  font-size: 15px;
+}
+/* title block — engineering drawing style */
+.title-block {
+  margin-top: 30px;
+  border-top: 3px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 12px;
-  margin-top: 20px;
+  grid-template-columns: repeat(4, 1fr);
 }
-.stat-tile {
-  background: var(--surface-1);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 16px 18px;
+.title-block .tb-cell {
+  padding: 12px 16px 14px 0;
+  border-right: 1px solid var(--hairline);
+  margin-right: 16px;
 }
-.stat-tile .label { font-size: 13px; color: var(--text-secondary); }
-.stat-tile .value { font-size: 30px; font-weight: 600; line-height: 1.2; margin-top: 4px; }
-.stat-tile .note { font-size: 12.5px; color: var(--text-muted); margin-top: 4px; }
-.stat-tile .value .unit { font-size: 16px; font-weight: 500; color: var(--text-secondary); margin-left: 2px; }
-/* ---- badges (status: icon + label, never color alone) ---- */
-.badge {
-  display: inline-flex; align-items: center; gap: 5px;
-  padding: 1.5px 9px; border-radius: 999px;
-  font-size: 12.5px; font-weight: 500; white-space: nowrap;
-  color: var(--text-primary);
+.title-block .tb-cell:last-child { border-right: none; margin-right: 0; }
+.tb-cell .tb-k {
+  font-family: var(--mono); font-size: 10.5px; font-weight: 600;
+  letter-spacing: .16em; text-transform: uppercase;
+  color: var(--ink-faint);
 }
-.badge.ok { background: var(--tint-good); }
-.badge.no { background: var(--tint-critical); }
-.badge.warn { background: var(--tint-warning); }
-.badge.info { background: var(--tint-info); }
-.badge.diff { background: var(--tint-serious); }
-/* ---- hosting dots (categorical: dot + label, fixed slot order) ---- */
-.dot {
-  display: inline-block; width: 9px; height: 9px; border-radius: 50%;
-  margin-right: 6px; vertical-align: baseline;
-  box-shadow: 0 0 0 2px var(--surface-1);
+.tb-cell .tb-v { font-size: 13.5px; margin-top: 3px; color: var(--ink); }
+.tb-cell .tb-v code { background: none; padding: 0; }
+
+/* ---------- KPI instrument strip ---------- */
+.kpi-strip {
+  margin-top: 44px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border: 1.5px solid var(--rule);
+  background: var(--paper-raise);
+  box-shadow: 6px 6px 0 rgba(26,25,19,.07);
 }
-.host { display: inline-flex; align-items: center; white-space: nowrap; margin-right: 12px; font-size: 13.5px; }
-.host:last-child { margin-right: 0; }
-.dot.anthropic { background: var(--series-1); }
-.dot.bedrock { background: var(--series-2); }
-.dot.vertex { background: var(--series-3); }
-/* ---- tables ---- */
-.tbl-scroll { overflow-x: auto; }
-table { border-collapse: collapse; width: 100%; font-size: 14px; }
-th, td { text-align: left; padding: 9px 12px; vertical-align: top; }
-thead th {
-  font-size: 12.5px; color: var(--text-muted); font-weight: 600;
-  border-bottom: 1px solid var(--baseline);
-  white-space: nowrap;
+.kpi {
+  padding: 18px 20px 16px;
+  border-right: 1px solid var(--hairline);
+  border-bottom: 1px solid var(--hairline);
+  position: relative;
 }
-tbody td { border-bottom: 1px solid var(--grid); }
-tbody tr:last-child td { border-bottom: none; }
-td.num { font-variant-numeric: tabular-nums; }
-code {
-  font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 12.5px;
-  background: var(--tint-info);
-  border-radius: 4px;
-  padding: 1px 5px;
+.kpi:nth-child(3n) { border-right: none; }
+.kpi:nth-child(n+4) { border-bottom: none; }
+.kpi .k-idx {
+  position: absolute; top: 10px; right: 14px;
+  font-family: var(--mono); font-size: 10px; color: var(--ink-faint);
+  letter-spacing: .1em;
 }
-.err-quote {
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  font-size: 12px; color: var(--text-secondary);
-  display: block; margin-top: 3px;
+.kpi .k-label {
+  font-family: var(--mono); font-size: 11px; font-weight: 600;
+  letter-spacing: .14em; text-transform: uppercase; color: var(--ink-soft);
 }
-/* ---- chips ---- */
-.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-.chip {
-  background: var(--tint-good);
-  border-radius: 8px; padding: 4px 11px;
-  font-size: 13px; white-space: nowrap;
-}
-/* ---- conclusions list ---- */
-ol.conclusions { margin: 14px 0 0; padding-left: 22px; }
-ol.conclusions li { margin-bottom: 12px; max-width: 82ch; }
-ol.conclusions li strong { display: inline; }
-ul.notes { margin: 10px 0 0; padding-left: 22px; color: var(--text-secondary); }
-ul.notes li { margin-bottom: 7px; max-width: 82ch; }
-/* ---- mini bar chart (token overhead) ---- */
-.mini-chart { margin-top: 16px; }
-.mini-chart .row { display: grid; grid-template-columns: 220px 1fr; align-items: center; gap: 12px; margin-bottom: 10px; }
-.mini-chart .cat { font-size: 13.5px; color: var(--text-secondary); text-align: right; }
-.mini-chart .track { position: relative; height: 22px; }
-.mini-chart .bar {
-  height: 22px; border-radius: 0 4px 4px 0;
-  background: var(--seq-450);
-  display: inline-flex; align-items: center;
-  transition: opacity .15s;
-}
-.mini-chart .row:hover .bar { opacity: .85; }
-.mini-chart .bar-label {
-  position: absolute; top: 0; height: 22px; display: flex; align-items: center;
-  font-size: 13px; font-weight: 600; color: var(--text-primary); padding-left: 8px;
+.kpi .k-value {
+  font-family: var(--mono); font-weight: 600;
+  font-size: 40px; line-height: 1.15; margin-top: 6px;
   font-variant-numeric: tabular-nums;
 }
-.mini-chart .axis-note { font-size: 12px; color: var(--text-muted); margin-top: 2px; padding-left: 232px; }
-.baseline-rule { border-left: 1px solid var(--baseline); }
-/* ---- footer ---- */
-footer { margin-top: 56px; padding-top: 18px; border-top: 1px solid var(--grid); color: var(--text-muted); font-size: 12.5px; }
-footer ul { margin: 6px 0 0; padding-left: 20px; }
+.kpi .k-value .unit {
+  font-size: 15px; font-weight: 500; color: var(--orange); margin-left: 4px;
+}
+.kpi .k-note { font-size: 12.5px; color: var(--ink-faint); margin-top: 4px; line-height: 1.5; }
+
+/* ---------- sections ---------- */
+section.sec { margin-top: 72px; }
+.sec-head {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 18px;
+  align-items: start;
+  border-top: 3px solid var(--rule);
+  padding-top: 14px;
+}
+.sec-head .sec-no {
+  font-family: var(--mono); font-weight: 600;
+  font-size: 40px; line-height: 1;
+  color: var(--orange);
+  letter-spacing: -0.02em;
+}
+.sec-head .sec-label {
+  font-family: var(--mono); font-size: 10.5px; font-weight: 600;
+  letter-spacing: .2em; text-transform: uppercase; color: var(--ink-faint);
+  margin-bottom: 2px;
+}
+.sec-head h2 {
+  font-family: var(--disp);
+  font-size: 24px; font-weight: 750; font-stretch: 108%;
+  letter-spacing: -0.01em;
+  margin: 0; line-height: 1.3;
+}
+.sec-lede { color: var(--ink-soft); margin: 16px 0 0; max-width: 80ch; }
+
+h3.sub-head {
+  font-family: var(--disp);
+  font-size: 16px; font-weight: 700; font-stretch: 106%;
+  margin: 34px 0 12px;
+  display: flex; align-items: baseline; gap: 10px;
+}
+h3.sub-head .h3-no {
+  font-family: var(--mono); font-size: 12.5px; font-weight: 600;
+  color: var(--orange);
+}
+
+/* ---------- panels & tables ---------- */
+.panel {
+  background: var(--paper-raise);
+  border: 1.5px solid var(--rule);
+  box-shadow: 6px 6px 0 rgba(26,25,19,.07);
+}
+.tbl-scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; padding: 11px 16px; vertical-align: top; }
+thead th {
+  font-family: var(--mono); font-size: 10.5px; font-weight: 600;
+  letter-spacing: .14em; text-transform: uppercase;
+  color: var(--ink-soft);
+  border-bottom: 2px solid var(--rule);
+  white-space: nowrap;
+  background: var(--paper-sink);
+}
+tbody td { border-bottom: 1px solid var(--hairline-lo); }
+tbody tr:last-child td { border-bottom: none; }
+tbody tr { transition: background .12s; }
+tbody tr:hover { background: var(--tint-orange); }
+td.num { font-variant-numeric: tabular-nums; font-family: var(--mono); font-size: 13px; }
+
+code {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  background: var(--paper-sink);
+  border: 1px solid var(--hairline-lo);
+  border-radius: 0;
+  padding: 0 4px;
+  white-space: nowrap;
+}
+.err-quote {
+  font-family: var(--mono);
+  font-size: 11.5px; color: var(--ink-faint);
+  display: block; margin-top: 4px;
+  padding-left: 10px;
+  border-left: 2px solid var(--hairline);
+}
+
+/* ---------- stamped verdict badges ---------- */
+.badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-family: var(--mono); font-size: 11px; font-weight: 600;
+  letter-spacing: .04em;
+  padding: 1px 8px;
+  border: 1.5px solid currentColor;
+  white-space: nowrap;
+  text-transform: none;
+  transform: rotate(-.4deg);
+  background: var(--paper-raise);
+}
+.badge.ok   { color: var(--pass); background: var(--tint-pass); }
+.badge.no   { color: var(--fail); background: var(--tint-fail); }
+.badge.warn { color: var(--warn); background: var(--tint-warn); }
+.badge.info { color: var(--info); background: var(--tint-info); }
+.badge.diff { color: var(--orange-ink); background: var(--tint-orange); }
+
+/* ---------- hosting legend marks ---------- */
+.host {
+  display: inline-flex; align-items: center; white-space: nowrap;
+  margin-right: 14px; font-size: 13px;
+  font-family: var(--mono);
+}
+.host:last-child { margin-right: 0; }
+.dot {
+  display: inline-block; width: 10px; height: 10px;
+  margin-right: 7px;
+  border: 1.5px solid var(--ink);
+}
+.dot.anthropic { background: var(--anthropic); }
+.dot.bedrock   { background: var(--bedrock); }
+.dot.vertex    { background: var(--vertex); }
+
+/* ---------- capability chips ---------- */
+.chips { display: flex; flex-wrap: wrap; gap: 0; margin-top: 14px; border: 1.5px solid var(--rule); background: var(--paper-raise); box-shadow: 6px 6px 0 rgba(26,25,19,.07); }
+.chip {
+  font-family: var(--mono); font-size: 12px;
+  padding: 7px 13px;
+  border-right: 1px solid var(--hairline-lo);
+  border-bottom: 1px solid var(--hairline-lo);
+  white-space: nowrap;
+  display: inline-flex; align-items: center; gap: 7px;
+  flex-grow: 1;
+}
+.chip::before {
+  content: "✓";
+  color: var(--pass); font-weight: 600; font-size: 11px;
+}
+
+/* ---------- numbered conclusions ---------- */
+ol.conclusions { margin: 22px 0 0; padding: 0; list-style: none; counter-reset: concl; }
+ol.conclusions li {
+  counter-increment: concl;
+  position: relative;
+  padding: 14px 0 14px 62px;
+  border-bottom: 1px solid var(--hairline-lo);
+  max-width: 86ch;
+}
+ol.conclusions li:first-child { border-top: 1px solid var(--hairline-lo); }
+ol.conclusions li::before {
+  content: counter(concl, decimal-leading-zero);
+  position: absolute; left: 0; top: 15px;
+  font-family: var(--mono); font-size: 22px; font-weight: 600;
+  color: var(--orange);
+  letter-spacing: -0.02em;
+}
+ol.conclusions li strong { font-weight: 700; }
+
+ul.notes { margin: 16px 0 0; padding-left: 0; list-style: none; color: var(--ink-soft); }
+ul.notes li {
+  margin-bottom: 9px; max-width: 84ch;
+  padding-left: 20px; position: relative;
+  font-size: 14px;
+}
+ul.notes li::before {
+  content: "▸";
+  position: absolute; left: 2px; top: 0;
+  color: var(--orange); font-size: 11px;
+}
+
+/* ---------- drafting-hatch bar chart ---------- */
+.mini-chart { padding: 20px 22px 16px; }
+.mini-chart .row {
+  display: grid; grid-template-columns: 240px 1fr; align-items: center;
+  gap: 14px; margin-bottom: 14px;
+}
+.mini-chart .cat { font-size: 13px; color: var(--ink-soft); text-align: right; font-family: var(--mono); }
+.mini-chart .track { position: relative; height: 26px; border-left: 2px solid var(--rule); }
+.mini-chart .bar {
+  height: 26px;
+  border: 1.5px solid var(--ink);
+  border-left: none;
+  background: var(--orange);
+  transition: opacity .15s;
+}
+.mini-chart .bar.hatch {
+  background:
+    repeating-linear-gradient(45deg,
+      var(--ink) 0, var(--ink) 1.5px,
+      transparent 1.5px, transparent 7px),
+    var(--paper-raise);
+}
+.mini-chart .row:hover .bar { opacity: .8; }
+.mini-chart .bar-label {
+  position: absolute; top: 0; height: 26px; display: flex; align-items: center;
+  font-family: var(--mono); font-size: 13.5px; font-weight: 600;
+  color: var(--ink); padding-left: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.mini-chart .axis-note {
+  font-size: 12px; color: var(--ink-faint); margin-top: 4px; padding-left: 254px;
+  font-family: var(--mono); font-size: 11.5px;
+}
+.mult-callout {
+  font-family: var(--mono); font-weight: 600; color: var(--orange);
+}
+
+/* ---------- footer colophon ---------- */
+footer {
+  margin-top: 88px;
+  border-top: 3px solid var(--rule);
+  padding-top: 18px;
+  color: var(--ink-soft); font-size: 12.5px;
+}
+footer .colophon-label {
+  font-family: var(--mono); font-size: 10.5px; font-weight: 600;
+  letter-spacing: .2em; text-transform: uppercase; color: var(--ink-faint);
+  margin-bottom: 8px;
+}
+footer ul { margin: 6px 0 0; padding-left: 0; list-style: none; }
+footer ul li { padding-left: 20px; position: relative; margin-bottom: 6px; }
+footer ul li::before {
+  content: "▸"; position: absolute; left: 2px; color: var(--orange); font-size: 10px;
+}
+footer .method { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--hairline-lo); }
+footer .end-mark {
+  margin-top: 26px;
+  font-family: var(--mono); font-size: 11px; letter-spacing: .22em;
+  text-transform: uppercase; color: var(--ink-faint);
+  display: flex; align-items: center; gap: 14px;
+}
+footer .end-mark::before, footer .end-mark::after {
+  content: ""; flex: 1; height: 1px; background: var(--hairline);
+}
+
+/* ---------- reveal motion ---------- */
+@media (prefers-reduced-motion: no-preference) {
+  .masthead .kicker, .masthead h1, .masthead .sub, .title-block, .kpi-strip {
+    opacity: 0; transform: translateY(14px);
+    animation: rise .7s cubic-bezier(.2,.7,.2,1) forwards;
+  }
+  .masthead h1   { animation-delay: .08s; }
+  .masthead .sub { animation-delay: .16s; }
+  .title-block   { animation-delay: .24s; }
+  .kpi-strip     { animation-delay: .34s; }
+  @keyframes rise { to { opacity: 1; transform: none; } }
+  .reveal { opacity: 0; transform: translateY(18px); transition: opacity .6s cubic-bezier(.2,.7,.2,1), transform .6s cubic-bezier(.2,.7,.2,1); }
+  .reveal.in { opacity: 1; transform: none; }
+}
+
+/* ---------- responsive ---------- */
+@media (max-width: 860px) {
+  .title-block { grid-template-columns: repeat(2, 1fr); }
+  .title-block .tb-cell:nth-child(2) { border-right: none; }
+  .title-block .tb-cell:nth-child(-n+2) { border-bottom: 1px solid var(--hairline); }
+  .kpi-strip { grid-template-columns: repeat(2, 1fr); }
+  .kpi:nth-child(3n) { border-right: 1px solid var(--hairline); }
+  .kpi:nth-child(2n) { border-right: none; }
+  .kpi:nth-child(n+4) { border-bottom: 1px solid var(--hairline); }
+  .kpi:nth-child(n+5) { border-bottom: none; }
+}
 @media (max-width: 640px) {
-  .mini-chart .row { grid-template-columns: 1fr; gap: 2px; }
+  .wrap { padding: 0 18px 72px; }
+  .kpi-strip { grid-template-columns: 1fr; }
+  .kpi { border-right: none !important; border-bottom: 1px solid var(--hairline) !important; }
+  .kpi:last-child { border-bottom: none !important; }
+  .mini-chart .row { grid-template-columns: 1fr; gap: 4px; }
   .mini-chart .cat { text-align: left; }
   .mini-chart .axis-note { padding-left: 0; }
+  .sec-head { grid-template-columns: 1fr; gap: 6px; }
+  ol.conclusions li { padding-left: 48px; }
+}
+
+@media print {
+  body::before { display: none; }
+  .panel, .kpi-strip, .chips { box-shadow: none; }
+  .reveal { opacity: 1 !important; transform: none !important; }
 }
 </style>
 </head>
 <body>
 <div class="wrap">
 
-<header class="page-head">
-  <h1>GitHub Copilot 模型能力与 Copilot2API 支持</h1>
+<div class="doc-topline">
+  <span class="doc-no">TECHNICAL DOSSIER&nbsp;·&nbsp;TD-2607</span>
+  <span class="doc-org">COPILOT2API — CAPABILITY TEST PROGRAM</span>
+</div>
+
+<header class="masthead">
+  <p class="kicker">三层实测对照 · Test Summary Report</p>
+  <h1>GitHub Copilot 模型能力<span class="amp"> × </span>Copilot2API 支持</h1>
   <p class="sub">基于三层实测对照的能力总结：① Anthropic 原生官方文档（参照系）· ② GitHub Copilot 上游直连（<code>api.enterprise.githubcopilot.com</code>，企业账号）· ③ 经 Copilot2API 代理（<code>/v1/messages</code> 原生透传）。凡早期结论已被后续复测修正的，一律以最新结论为准。</p>
-  <p class="meta">报告日期 2026-07-13 · 数据来源见页脚 · 姊妹文档：<code>scripts/copilot-models-capability-summary.md</code></p>
+
+  <div class="title-block">
+    <div class="tb-cell">
+      <div class="tb-k">Report Date / 报告日期</div>
+      <div class="tb-v">2026-07-13</div>
+    </div>
+    <div class="tb-cell">
+      <div class="tb-k">Method / 方法</div>
+      <div class="tb-v">三层对照实测</div>
+    </div>
+    <div class="tb-cell">
+      <div class="tb-k">Sources / 数据来源</div>
+      <div class="tb-v">见页脚出处清单</div>
+    </div>
+    <div class="tb-cell">
+      <div class="tb-k">Companion / 姊妹文档</div>
+      <div class="tb-v"><code>scripts/copilot-models-capability-summary.md</code></div>
+    </div>
+  </div>
 </header>
 
 <!-- ==================== KPI ==================== -->
-<div class="kpi-row">
-  <div class="stat-tile">
-    <div class="label">能力矩阵用例</div>
-    <div class="value">95</div>
-    <div class="note">Opus 4.8 × 47 项 + Sonnet 4.6 × 48 项</div>
+<div class="kpi-strip" role="list" aria-label="关键指标">
+  <div class="kpi" role="listitem">
+    <span class="k-idx">FIG.01</span>
+    <div class="k-label">能力矩阵用例</div>
+    <div class="k-value">95</div>
+    <div class="k-note">Opus 4.8 × 47 项 + Sonnet 4.6 × 48 项</div>
   </div>
-  <div class="stat-tile">
-    <div class="label">直连 vs 经代理分叉</div>
-    <div class="value">2<span class="unit">处</span></div>
-    <div class="note">均为代理有意设计，非缺陷</div>
+  <div class="kpi" role="listitem">
+    <span class="k-idx">FIG.02</span>
+    <div class="k-label">直连 vs 经代理分叉</div>
+    <div class="k-value">2<span class="unit">处</span></div>
+    <div class="k-note">均为代理有意设计，非缺陷</div>
   </div>
-  <div class="stat-tile">
-    <div class="label">覆盖 Claude 模型</div>
-    <div class="value">10</div>
-    <div class="note">Fable 5 / Sonnet 5 / Opus 4.5–4.8 / Sonnet 4.5–4.6 / Haiku 4.5</div>
+  <div class="kpi" role="listitem">
+    <span class="k-idx">FIG.03</span>
+    <div class="k-label">覆盖 Claude 模型</div>
+    <div class="k-value">10</div>
+    <div class="k-note">Fable 5 / Sonnet 5 / Opus 4.5–4.8 / Sonnet 4.5–4.6 / Haiku 4.5</div>
   </div>
-  <div class="stat-tile">
-    <div class="label">上游托管后端</div>
-    <div class="value">3<span class="unit">朵云</span></div>
-    <div class="note">Anthropic · Bedrock · Vertex，动态漂移</div>
+  <div class="kpi" role="listitem">
+    <span class="k-idx">FIG.04</span>
+    <div class="k-label">上游托管后端</div>
+    <div class="k-value">3<span class="unit">朵云</span></div>
+    <div class="k-note">Anthropic · Bedrock · Vertex，动态漂移</div>
   </div>
-  <div class="stat-tile">
-    <div class="label">上游硬性不支持</div>
-    <div class="value">5<span class="unit">项</span></div>
-    <div class="note">web_search / web_fetch / 外链图 / 300K 输出 / fast mode 加速</div>
+  <div class="kpi" role="listitem">
+    <span class="k-idx">FIG.05</span>
+    <div class="k-label">上游硬性不支持</div>
+    <div class="k-value">5<span class="unit">项</span></div>
+    <div class="k-note">web_search / web_fetch / 外链图 / 300K 输出 / fast mode 加速</div>
   </div>
-  <div class="stat-tile">
-    <div class="label">Computer use 端到端</div>
-    <div class="value">4/4</div>
-    <div class="note">2026-07-12 复验全部通过（含 agent 循环）</div>
+  <div class="kpi" role="listitem">
+    <span class="k-idx">FIG.06</span>
+    <div class="k-label">Computer Use 端到端</div>
+    <div class="k-value">4/4</div>
+    <div class="k-note">2026-07-12 复验全部通过（含 agent 循环）</div>
   </div>
 </div>
 
-<!-- ==================== 总体结论 ==================== -->
-<section>
-  <h2>一、总体结论</h2>
+<!-- ==================== 一、总体结论 ==================== -->
+<section class="sec reveal">
+  <div class="sec-head">
+    <div class="sec-no">01</div>
+    <div>
+      <div class="sec-label">Section 01 — Overall Findings</div>
+      <h2>总体结论</h2>
+    </div>
+  </div>
   <ol class="conclusions">
     <li><strong>Copilot 上游对 Claude 模型的 Anthropic Messages API 支持度非常高。</strong>核心能力（文本 / 流式 / 工具调用 / 视觉 / PDF / 思考 / 缓存 / 1M 上下文 / structured outputs / computer use 等）在 Opus 4.8 与 Sonnet 4.6 上全部可用；与 Anthropic 原生的差距集中在少数服务端工具（web_search / web_fetch）、外链图片和 300K 扩展输出。</li>
     <li><strong>Copilot2API 代理与上游直连几乎完全等价。</strong>95 项矩阵中仅 2 处「不一致」，且都是代理有意为之（剥离非标准 <code>cache_control.scope</code>、剥离非白名单客户端 beta 头）。computer use 曾是第 3 处差异，已于 2026-07-07 修复（放行 <code>computer-use-*</code> beta 头）。</li>
@@ -237,11 +532,17 @@ footer ul { margin: 6px 0 0; padding-left: 20px; }
   </ol>
 </section>
 
-<!-- ==================== 托管架构 ==================== -->
-<section>
-  <h2>二、上游托管架构（2026-07-12 指纹实测）</h2>
-  <p class="section-lede">通过消息 ID 前缀识别后端：<code>msg_01…</code> = Anthropic 第一方 · <code>msg_bdrk_…</code> = AWS Bedrock · <code>msg_vrtx_…</code> = Google Vertex。与 GitHub 官方 model-hosting 文档一致（AWS + Anthropic PBC + GCP 三方托管）；同一模型的落点<strong>不固定</strong>，失败呈短时间窗内连续出现的特征（疑似路由粘性）。</p>
-  <div class="card tbl-scroll">
+<!-- ==================== 二、托管架构 ==================== -->
+<section class="sec reveal">
+  <div class="sec-head">
+    <div class="sec-no">02</div>
+    <div>
+      <div class="sec-label">Section 02 — Upstream Hosting Topology</div>
+      <h2>上游托管架构（2026-07-12 指纹实测）</h2>
+    </div>
+  </div>
+  <p class="sec-lede">通过消息 ID 前缀识别后端：<code>msg_01…</code> = Anthropic 第一方 · <code>msg_bdrk_…</code> = AWS Bedrock · <code>msg_vrtx_…</code> = Google Vertex。与 GitHub 官方 model-hosting 文档一致（AWS + Anthropic PBC + GCP 三方托管）；同一模型的落点<strong>不固定</strong>，失败呈短时间窗内连续出现的特征（疑似路由粘性）。</p>
+  <div class="panel tbl-scroll">
     <table>
       <thead>
         <tr><th>模型</th><th>观测到的落点</th><th>说明</th></tr>
@@ -270,7 +571,7 @@ footer ul { margin: 6px 0 0; padding-left: 20px; }
         <tr>
           <td><code>claude-opus-4.7</code> · <code>claude-opus-4.5</code></td>
           <td><span class="host"><span class="dot vertex"></span>Vertex</span></td>
-          <td>采样期内固定落 Vertex，structured outputs 持续失败（见 §四）</td>
+          <td>采样期内固定落 Vertex，structured outputs 持续失败（见 §04）</td>
         </tr>
       </tbody>
     </table>
@@ -281,17 +582,23 @@ footer ul { margin: 6px 0 0; padding-left: 20px; }
   </ul>
 </section>
 
-<!-- ==================== 能力矩阵 ==================== -->
-<section>
-  <h2>三、模型能力矩阵（Copilot 上游实测）</h2>
+<!-- ==================== 三、能力矩阵 ==================== -->
+<section class="sec reveal">
+  <div class="sec-head">
+    <div class="sec-no">03</div>
+    <div>
+      <div class="sec-label">Section 03 — Capability Matrix</div>
+      <h2>模型能力矩阵（Copilot 上游实测）</h2>
+    </div>
+  </div>
 
-  <h3>3.1 三层全绿的能力（Opus 4.8 与 Sonnet 4.6 一致：原生 ✅ / 直连 ✅ / 经代理 ✅）</h3>
+  <h3 class="sub-head"><span class="h3-no">3.1</span>三层全绿的能力（Opus 4.8 与 Sonnet 4.6 一致：原生 ✅ / 直连 ✅ / 经代理 ✅）</h3>
   <div class="chips">
     <span class="chip">text</span><span class="chip">streaming</span><span class="chip">function_calling</span><span class="chip">parallel_tools</span><span class="chip">vision_base64</span><span class="chip">pdf_document</span><span class="chip">extended_thinking</span><span class="chip">server_tool_bash / text_editor / memory</span><span class="chip">prompt_cache（1024 下限 + 1h TTL）</span><span class="chip">context_management</span><span class="chip">citations</span><span class="chip">computer_use</span><span class="chip">count_tokens</span><span class="chip">context_1m（原生 1M 窗口）</span><span class="chip">stop_sequences</span><span class="chip">metadata</span><span class="chip">service_tier</span><span class="chip">tool_choice 全部 5 种变体</span><span class="chip">structured_outputs</span><span class="chip">code_execution（真实执行）</span><span class="chip">search_result</span><span class="chip">interleaved_thinking</span><span class="chip">token_efficient_tools</span><span class="chip">fine_grained_tool_streaming</span><span class="chip">effort max</span><span class="chip">model_discovery（34 模型 · max_ctx 1M）</span>
   </div>
 
-  <h3>3.2 旗舰双模型关键差异（原生约束「此消彼长」，Copilot 忠实体现）</h3>
-  <div class="card tbl-scroll">
+  <h3 class="sub-head"><span class="h3-no">3.2</span>旗舰双模型关键差异（原生约束「此消彼长」，Copilot 忠实体现）</h3>
+  <div class="panel tbl-scroll">
     <table>
       <thead>
         <tr><th>能力</th><th>Sonnet 4.6</th><th>Opus 4.8</th></tr>
@@ -341,8 +648,8 @@ footer ul { margin: 6px 0 0; padding-left: 20px; }
     </table>
   </div>
 
-  <h3>3.3 Copilot 上游硬性不支持的 Anthropic 原生能力（2026-07-07 用最新 GA 工具型号复测确认）</h3>
-  <div class="card tbl-scroll">
+  <h3 class="sub-head"><span class="h3-no">3.3</span>Copilot 上游硬性不支持的 Anthropic 原生能力（2026-07-07 用最新 GA 工具型号复测确认）</h3>
+  <div class="panel tbl-scroll">
     <table>
       <thead>
         <tr><th>能力</th><th>实测</th><th>上游报错</th></tr>
@@ -377,8 +684,8 @@ footer ul { margin: 6px 0 0; padding-left: 20px; }
     </table>
   </div>
 
-  <h3>3.4 其余 Claude 模型（2026-06-27 两层对比 + 07-12 补测）</h3>
-  <div class="card tbl-scroll">
+  <h3 class="sub-head"><span class="h3-no">3.4</span>其余 Claude 模型（2026-06-27 两层对比 + 07-12 补测）</h3>
+  <div class="panel tbl-scroll">
     <table>
       <thead>
         <tr><th>模型</th><th>结论摘要</th></tr>
@@ -409,11 +716,17 @@ footer ul { margin: 6px 0 0; padding-left: 20px; }
   </div>
 </section>
 
-<!-- ==================== Structured Outputs ==================== -->
-<section>
-  <h2>四、Structured Outputs 专项（2026-07-12 ~ 07-13，最新）</h2>
-  <p class="section-lede">两种机制：A = JSON outputs（<code>output_config.format</code>，json_schema）；B = strict tool use（<code>strict: true</code> + 强制 tool_choice）。<strong>可用性完全取决于路由落点</strong>：</p>
-  <div class="card tbl-scroll">
+<!-- ==================== 四、Structured Outputs ==================== -->
+<section class="sec reveal">
+  <div class="sec-head">
+    <div class="sec-no">04</div>
+    <div>
+      <div class="sec-label">Section 04 — Structured Outputs</div>
+      <h2>Structured Outputs 专项（2026-07-12 ~ 07-13，最新）</h2>
+    </div>
+  </div>
+  <p class="sec-lede">两种机制：A = JSON outputs（<code>output_config.format</code>，json_schema）；B = strict tool use（<code>strict: true</code> + 强制 tool_choice）。<strong>可用性完全取决于路由落点</strong>：</p>
+  <div class="panel tbl-scroll">
     <table>
       <thead>
         <tr><th>落点</th><th>机制 A（json outputs）</th><th>机制 B（strict tool）</th><th>备注</th></tr>
@@ -441,24 +754,24 @@ footer ul { margin: 6px 0 0; padding-left: 20px; }
     </table>
   </div>
 
-  <h3>同一 schema 下的输入 token 开销（机制对比）</h3>
-  <div class="card">
+  <h3 class="sub-head"><span class="h3-no">FIG.07</span>同一 schema 下的输入 token 开销（机制对比）</h3>
+  <div class="panel">
     <div class="mini-chart" role="img" aria-label="输入 token 开销对比：json outputs 227，strict tool use 721，约 3 倍">
       <div class="row">
-        <div class="cat">机制 A · <code>output_config.format</code></div>
-        <div class="track baseline-rule">
+        <div class="cat">A · output_config.format</div>
+        <div class="track">
           <div class="bar" style="width: calc(227 / 721 * 100%)" title="json outputs：227 input tokens"></div>
           <div class="bar-label" style="left: calc(227 / 721 * 100%)">227</div>
         </div>
       </div>
       <div class="row">
-        <div class="cat">机制 B · strict tool use</div>
-        <div class="track baseline-rule">
-          <div class="bar" style="width: 100%" title="strict tool use：721 input tokens"></div>
-          <div class="bar-label" style="left: 100%; transform: translateX(calc(-100% - 8px)); color: #fff;">721</div>
+        <div class="cat">B · strict tool use</div>
+        <div class="track">
+          <div class="bar hatch" style="width: 100%" title="strict tool use：721 input tokens"></div>
+          <div class="bar-label" style="left: 100%; transform: translateX(calc(-100% - 10px));">721</div>
         </div>
       </div>
-      <div class="axis-note">input tokens（同一 weather schema · Bedrock 落点实测）——约 3 倍差距，只需结构化输出时优先用机制 A</div>
+      <div class="axis-note">input tokens · 同一 weather schema · Bedrock 落点实测 —— <span class="mult-callout">≈ 3×</span> 差距，只需结构化输出时优先用机制 A</div>
     </div>
   </div>
 
@@ -469,13 +782,19 @@ footer ul { margin: 6px 0 0; padding-left: 20px; }
   </ul>
 </section>
 
-<!-- ==================== Copilot2API ==================== -->
-<section>
-  <h2>五、Copilot2API 代理支持情况</h2>
+<!-- ==================== 五、Copilot2API ==================== -->
+<section class="sec reveal">
+  <div class="sec-head">
+    <div class="sec-no">05</div>
+    <div>
+      <div class="sec-label">Section 05 — Proxy Conformance</div>
+      <h2>Copilot2API 代理支持情况</h2>
+    </div>
+  </div>
 
-  <h3>5.1 原生 <code>/v1/messages</code> 透传：与直连等价</h3>
-  <p class="section-lede">95 项矩阵中，直连与经代理仅 2 处有意分叉：</p>
-  <div class="card tbl-scroll">
+  <h3 class="sub-head"><span class="h3-no">5.1</span>原生 <code>/v1/messages</code> 透传：与直连等价</h3>
+  <p class="sec-lede">95 项矩阵中，直连与经代理仅 2 处有意分叉：</p>
+  <div class="panel tbl-scroll">
     <table>
       <thead>
         <tr><th>分叉点</th><th>直连</th><th>经代理</th><th>性质</th></tr>
@@ -503,8 +822,8 @@ footer ul { margin: 6px 0 0; padding-left: 20px; }
     <li><code>POST /v1/messages/count_tokens</code> 已代理到上游计数器（此前 404）；<code>search_result</code> 内容块的裸字符串 <code>source</code> 已修复解析；1M 上下文 <code>anthropic-beta: context-1m</code> 处理已修复（仅在必要且 <code>-1m</code> 变体真实存在时切换）。</li>
   </ul>
 
-  <h3>5.2 已知缺口（转换路径）</h3>
-  <div class="card tbl-scroll">
+  <h3 class="sub-head"><span class="h3-no">5.2</span>已知缺口（转换路径）</h3>
+  <div class="panel tbl-scroll">
     <table>
       <thead>
         <tr><th>缺口</th><th>位置</th><th>影响</th></tr>
@@ -539,13 +858,19 @@ footer ul { margin: 6px 0 0; padding-left: 20px; }
     </table>
   </div>
 
-  <h3>5.3 代理自身功能面（与模型能力正交）</h3>
-  <p class="section-lede">多账号（API key ↔ GitHub 账号 1:1，<code>accounts.json</code>）· Web 管理台 <code>/admin/</code>（Device Flow 认证、key 轮换 / 自动生成、token 用量统计含缓存命中率、上游模型列表页）· API key 多来源提取（<code>Authorization: Bearer</code> / <code>x-api-key</code> / <code>x-goog-api-key</code> / <code>?key=</code>，覆盖 OpenAI / Anthropic / Gemini 客户端）· Gemini <code>/v1beta</code> 兼容端点 · <code>/chat/completions</code> ↔ <code>/responses</code> 智能回退。</p>
+  <h3 class="sub-head"><span class="h3-no">5.3</span>代理自身功能面（与模型能力正交）</h3>
+  <p class="sec-lede">多账号（API key ↔ GitHub 账号 1:1，<code>accounts.json</code>）· Web 管理台 <code>/admin/</code>（Device Flow 认证、key 轮换 / 自动生成、token 用量统计含缓存命中率、上游模型列表页）· API key 多来源提取（<code>Authorization: Bearer</code> / <code>x-api-key</code> / <code>x-goog-api-key</code> / <code>?key=</code>，覆盖 OpenAI / Anthropic / Gemini 客户端）· Gemini <code>/v1beta</code> 兼容端点 · <code>/chat/completions</code> ↔ <code>/responses</code> 智能回退。</p>
 </section>
 
-<!-- ==================== 使用建议 ==================== -->
-<section>
-  <h2>六、使用建议</h2>
+<!-- ==================== 六、使用建议 ==================== -->
+<section class="sec reveal">
+  <div class="sec-head">
+    <div class="sec-no">06</div>
+    <div>
+      <div class="sec-label">Section 06 — Operating Recommendations</div>
+      <h2>使用建议</h2>
+    </div>
+  </div>
   <ol class="conclusions">
     <li><strong>Claude 模型一律走原生 <code>/v1/messages</code></strong>（Anthropic SDK 指到代理即可）：透传路径能力最全，structured outputs、computer use、1M 上下文、prompt cache 全部端到端可用；不要经 OpenAI 兼容端点用 Claude 的 structured outputs。</li>
     <li><strong>structured outputs 生产使用需容错</strong>：对 Vertex 组织策略 400（报文含 <code>vertexai.allowedPartnerModelFeatures</code> / <code>FAILED_PRECONDITION</code>）做重试；优先选路由稳定落 Anthropic 的模型（opus-4.8 / fable-5 / sonnet-5）；只需结构化输出时用 <code>output_config.format</code>（比 strict tool 省约 3 倍输入 token）；避免依赖 opus-4.8-fast 的 strict tool。</li>
@@ -555,17 +880,30 @@ footer ul { margin: 6px 0 0; padding-left: 20px; }
   </ol>
 </section>
 
-<footer>
-  <div>数据来源（按时间倒序）：</div>
+<footer class="reveal">
+  <div class="colophon-label">Sources / 数据来源（按时间倒序）</div>
   <ul>
     <li><code>scripts/out/session-test-report-2026-07-12.md</code> — Computer use 端到端 / 托管平台指纹 / Structured outputs 全模型遍历与平台约定矩阵（2026-07-12 ~ 07-13，最新）</li>
     <li><code>scripts/opus48-capability-report.md</code> · <code>scripts/sonnet46-capability-report.md</code> — 三层对照 47 / 48 项（2026-06-27 生成，2026-07-07 修订）</li>
     <li><code>scripts/out/claude-haiku-4.5-compare.md</code> · <code>claude-opus-4.6-compare.md</code> · <code>claude-opus-4.7-compare.md</code> — 其余模型两层对比（2026-06-27）</li>
     <li><code>scripts/opus48-features.md</code> — Anthropic 官方文档参照系（2026-06-29）· <code>CHANGELOG.md</code> [Unreleased] — 代理侧行为与修复</li>
   </ul>
-  <div style="margin-top:10px;">测试方法：三层对照（Anthropic 原生官方文档 / Copilot 上游直连 / 经 Copilot2API 代理），主力工具 <code>scripts/capability_test.py</code> 与 <code>scripts/structured_outputs_platform_test.py</code>。token / 账号信息从不打印或落盘。</div>
+  <div class="method">测试方法：三层对照（Anthropic 原生官方文档 / Copilot 上游直连 / 经 Copilot2API 代理），主力工具 <code>scripts/capability_test.py</code> 与 <code>scripts/structured_outputs_platform_test.py</code>。token / 账号信息从不打印或落盘。</div>
+  <div class="end-mark">End of Dossier · TD-2607 · 2026-07-13</div>
 </footer>
 
 </div>
+
+<script>
+(function () {
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) {
+      if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); }
+    });
+  }, { rootMargin: "0px 0px -8% 0px", threshold: 0.05 });
+  document.querySelectorAll(".reveal").forEach(function (el) { io.observe(el); });
+})();
+</script>
 </body>
 </html>
