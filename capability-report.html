@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GitHub Copilot 模型能力与 Copilot2API 支持 — 测试总结报告</title>
+<style>
+:root {
+  --surface-1: #fcfcfb;
+  --page: #f9f9f7;
+  --text-primary: #0b0b0b;
+  --text-secondary: #52514e;
+  --text-muted: #898781;
+  --grid: #e1e0d9;
+  --baseline: #c3c2b7;
+  --border: rgba(11,11,11,0.10);
+  --series-1: #2a78d6;  /* Anthropic */
+  --series-2: #1baf7a;  /* Bedrock */
+  --series-3: #eda100;  /* Vertex */
+  --seq-450: #2a78d6;
+  --seq-250: #86b6ef;
+  --status-good: #0ca30c;
+  --status-good-text: #006300;
+  --status-warning: #fab219;
+  --status-serious: #ec835a;
+  --status-critical: #d03b3b;
+  --tint-good: rgba(12,163,12,0.12);
+  --tint-warning: rgba(250,178,25,0.16);
+  --tint-serious: rgba(236,131,90,0.15);
+  --tint-critical: rgba(208,59,59,0.12);
+  --tint-info: rgba(42,120,214,0.10);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface-1: #1a1a19;
+    --page: #0d0d0d;
+    --text-primary: #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted: #898781;
+    --grid: #2c2c2a;
+    --baseline: #383835;
+    --border: rgba(255,255,255,0.10);
+    --series-1: #3987e5;
+    --series-2: #199e70;
+    --series-3: #c98500;
+    --seq-450: #3987e5;
+    --seq-250: #1c5cab;
+    --status-good-text: #0ca30c;
+    --tint-good: rgba(12,163,12,0.18);
+    --tint-warning: rgba(250,178,25,0.16);
+    --tint-serious: rgba(236,131,90,0.18);
+    --tint-critical: rgba(208,59,59,0.22);
+    --tint-info: rgba(57,135,229,0.16);
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--text-primary);
+  font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-size: 15px;
+  line-height: 1.65;
+}
+.wrap { max-width: 1080px; margin: 0 auto; padding: 32px 24px 72px; }
+header.page-head { padding: 40px 0 8px; }
+.page-head h1 { font-size: 28px; line-height: 1.3; margin: 0 0 8px; letter-spacing: -0.01em; }
+.page-head .sub { color: var(--text-secondary); margin: 0; max-width: 72ch; }
+.page-head .meta { color: var(--text-muted); font-size: 13px; margin-top: 12px; }
+section { margin-top: 44px; }
+h2 { font-size: 21px; margin: 0 0 6px; letter-spacing: -0.01em; }
+h3 { font-size: 16px; margin: 26px 0 8px; }
+.section-lede { color: var(--text-secondary); margin: 0 0 18px; max-width: 78ch; }
+.card {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px 22px;
+}
+/* ---- KPI row ---- */
+.kpi-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin-top: 20px;
+}
+.stat-tile {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 18px;
+}
+.stat-tile .label { font-size: 13px; color: var(--text-secondary); }
+.stat-tile .value { font-size: 30px; font-weight: 600; line-height: 1.2; margin-top: 4px; }
+.stat-tile .note { font-size: 12.5px; color: var(--text-muted); margin-top: 4px; }
+.stat-tile .value .unit { font-size: 16px; font-weight: 500; color: var(--text-secondary); margin-left: 2px; }
+/* ---- badges (status: icon + label, never color alone) ---- */
+.badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 1.5px 9px; border-radius: 999px;
+  font-size: 12.5px; font-weight: 500; white-space: nowrap;
+  color: var(--text-primary);
+}
+.badge.ok { background: var(--tint-good); }
+.badge.no { background: var(--tint-critical); }
+.badge.warn { background: var(--tint-warning); }
+.badge.info { background: var(--tint-info); }
+.badge.diff { background: var(--tint-serious); }
+/* ---- hosting dots (categorical: dot + label, fixed slot order) ---- */
+.dot {
+  display: inline-block; width: 9px; height: 9px; border-radius: 50%;
+  margin-right: 6px; vertical-align: baseline;
+  box-shadow: 0 0 0 2px var(--surface-1);
+}
+.host { display: inline-flex; align-items: center; white-space: nowrap; margin-right: 12px; font-size: 13.5px; }
+.host:last-child { margin-right: 0; }
+.dot.anthropic { background: var(--series-1); }
+.dot.bedrock { background: var(--series-2); }
+.dot.vertex { background: var(--series-3); }
+/* ---- tables ---- */
+.tbl-scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; padding: 9px 12px; vertical-align: top; }
+thead th {
+  font-size: 12.5px; color: var(--text-muted); font-weight: 600;
+  border-bottom: 1px solid var(--baseline);
+  white-space: nowrap;
+}
+tbody td { border-bottom: 1px solid var(--grid); }
+tbody tr:last-child td { border-bottom: none; }
+td.num { font-variant-numeric: tabular-nums; }
+code {
+  font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12.5px;
+  background: var(--tint-info);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+.err-quote {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 12px; color: var(--text-secondary);
+  display: block; margin-top: 3px;
+}
+/* ---- chips ---- */
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.chip {
+  background: var(--tint-good);
+  border-radius: 8px; padding: 4px 11px;
+  font-size: 13px; white-space: nowrap;
+}
+/* ---- conclusions list ---- */
+ol.conclusions { margin: 14px 0 0; padding-left: 22px; }
+ol.conclusions li { margin-bottom: 12px; max-width: 82ch; }
+ol.conclusions li strong { display: inline; }
+ul.notes { margin: 10px 0 0; padding-left: 22px; color: var(--text-secondary); }
+ul.notes li { margin-bottom: 7px; max-width: 82ch; }
+/* ---- mini bar chart (token overhead) ---- */
+.mini-chart { margin-top: 16px; }
+.mini-chart .row { display: grid; grid-template-columns: 220px 1fr; align-items: center; gap: 12px; margin-bottom: 10px; }
+.mini-chart .cat { font-size: 13.5px; color: var(--text-secondary); text-align: right; }
+.mini-chart .track { position: relative; height: 22px; }
+.mini-chart .bar {
+  height: 22px; border-radius: 0 4px 4px 0;
+  background: var(--seq-450);
+  display: inline-flex; align-items: center;
+  transition: opacity .15s;
+}
+.mini-chart .row:hover .bar { opacity: .85; }
+.mini-chart .bar-label {
+  position: absolute; top: 0; height: 22px; display: flex; align-items: center;
+  font-size: 13px; font-weight: 600; color: var(--text-primary); padding-left: 8px;
+  font-variant-numeric: tabular-nums;
+}
+.mini-chart .axis-note { font-size: 12px; color: var(--text-muted); margin-top: 2px; padding-left: 232px; }
+.baseline-rule { border-left: 1px solid var(--baseline); }
+/* ---- footer ---- */
+footer { margin-top: 56px; padding-top: 18px; border-top: 1px solid var(--grid); color: var(--text-muted); font-size: 12.5px; }
+footer ul { margin: 6px 0 0; padding-left: 20px; }
+@media (max-width: 640px) {
+  .mini-chart .row { grid-template-columns: 1fr; gap: 2px; }
+  .mini-chart .cat { text-align: left; }
+  .mini-chart .axis-note { padding-left: 0; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="page-head">
+  <h1>GitHub Copilot 模型能力与 Copilot2API 支持</h1>
+  <p class="sub">基于三层实测对照的能力总结：① Anthropic 原生官方文档（参照系）· ② GitHub Copilot 上游直连（<code>api.enterprise.githubcopilot.com</code>，企业账号）· ③ 经 Copilot2API 代理（<code>/v1/messages</code> 原生透传）。凡早期结论已被后续复测修正的，一律以最新结论为准。</p>
+  <p class="meta">报告日期 2026-07-13 · 数据来源见页脚 · 姊妹文档：<code>scripts/copilot-models-capability-summary.md</code></p>
+</header>
+
+<!-- ==================== KPI ==================== -->
+<div class="kpi-row">
+  <div class="stat-tile">
+    <div class="label">能力矩阵用例</div>
+    <div class="value">95</div>
+    <div class="note">Opus 4.8 × 47 项 + Sonnet 4.6 × 48 项</div>
+  </div>
+  <div class="stat-tile">
+    <div class="label">直连 vs 经代理分叉</div>
+    <div class="value">2<span class="unit">处</span></div>
+    <div class="note">均为代理有意设计，非缺陷</div>
+  </div>
+  <div class="stat-tile">
+    <div class="label">覆盖 Claude 模型</div>
+    <div class="value">10</div>
+    <div class="note">Fable 5 / Sonnet 5 / Opus 4.5–4.8 / Sonnet 4.5–4.6 / Haiku 4.5</div>
+  </div>
+  <div class="stat-tile">
+    <div class="label">上游托管后端</div>
+    <div class="value">3<span class="unit">朵云</span></div>
+    <div class="note">Anthropic · Bedrock · Vertex，动态漂移</div>
+  </div>
+  <div class="stat-tile">
+    <div class="label">上游硬性不支持</div>
+    <div class="value">5<span class="unit">项</span></div>
+    <div class="note">web_search / web_fetch / 外链图 / 300K 输出 / fast mode 加速</div>
+  </div>
+  <div class="stat-tile">
+    <div class="label">Computer use 端到端</div>
+    <div class="value">4/4</div>
+    <div class="note">2026-07-12 复验全部通过（含 agent 循环）</div>
+  </div>
+</div>
+
+<!-- ==================== 总体结论 ==================== -->
+<section>
+  <h2>一、总体结论</h2>
+  <ol class="conclusions">
+    <li><strong>Copilot 上游对 Claude 模型的 Anthropic Messages API 支持度非常高。</strong>核心能力（文本 / 流式 / 工具调用 / 视觉 / PDF / 思考 / 缓存 / 1M 上下文 / structured outputs / computer use 等）在 Opus 4.8 与 Sonnet 4.6 上全部可用；与 Anthropic 原生的差距集中在少数服务端工具（web_search / web_fetch）、外链图片和 300K 扩展输出。</li>
+    <li><strong>Copilot2API 代理与上游直连几乎完全等价。</strong>95 项矩阵中仅 2 处「不一致」，且都是代理有意为之（剥离非标准 <code>cache_control.scope</code>、剥离非白名单客户端 beta 头）。computer use 曾是第 3 处差异，已于 2026-07-07 修复（放行 <code>computer-use-*</code> beta 头）。</li>
+    <li><strong>上游由三朵云动态托管，落点随时间漂移。</strong>实际影响：structured outputs 在 Vertex 落点因 GitHub 的 GCP 组织策略被 400 拒绝，会漂到 Vertex 的模型间歇性失败——客户端只能重试，无法通过改写请求规避。</li>
+    <li><strong>代理的已知缺口在转换路径。</strong>Anthropic→Responses / Chat Completions 转换会静默丢弃 <code>output_config.format</code> 与工具 <code>strict</code> 字段；上游的 OpenAI 兼容端点也会静默忽略 <code>response_format.json_schema</code>。只有走原生 <code>/v1/messages</code> 透传才能保证 structured outputs 生效。</li>
+  </ol>
+</section>
+
+<!-- ==================== 托管架构 ==================== -->
+<section>
+  <h2>二、上游托管架构（2026-07-12 指纹实测）</h2>
+  <p class="section-lede">通过消息 ID 前缀识别后端：<code>msg_01…</code> = Anthropic 第一方 · <code>msg_bdrk_…</code> = AWS Bedrock · <code>msg_vrtx_…</code> = Google Vertex。与 GitHub 官方 model-hosting 文档一致（AWS + Anthropic PBC + GCP 三方托管）；同一模型的落点<strong>不固定</strong>，失败呈短时间窗内连续出现的特征（疑似路由粘性）。</p>
+  <div class="card tbl-scroll">
+    <table>
+      <thead>
+        <tr><th>模型</th><th>观测到的落点</th><th>说明</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>claude-opus-4.8</code> · <code>claude-fable-5</code> · <code>claude-sonnet-5</code></td>
+          <td><span class="host"><span class="dot anthropic"></span>Anthropic</span></td>
+          <td>采样期内稳定；opus-4.8 带 <code>inference_geo: "global"</code></td>
+        </tr>
+        <tr>
+          <td><code>claude-sonnet-4.6</code></td>
+          <td><span class="host"><span class="dot bedrock"></span>Bedrock（为主）</span><span class="host"><span class="dot vertex"></span>Vertex（漂移）</span></td>
+          <td>07-13 复现连续 3 次落 Vertex 并命中组织策略 400（修正早期「固定 Bedrock」结论）</td>
+        </tr>
+        <tr>
+          <td><code>claude-haiku-4.5</code></td>
+          <td><span class="host"><span class="dot bedrock"></span>Bedrock</span><span class="host"><span class="dot vertex"></span>Vertex</span><span class="host"><span class="dot anthropic"></span>Anthropic</span></td>
+          <td>三处均观测到，路由动态</td>
+        </tr>
+        <tr>
+          <td><code>claude-sonnet-4.5</code></td>
+          <td><span class="host"><span class="dot vertex"></span>Vertex</span><span class="host"><span class="dot bedrock"></span>Bedrock</span></td>
+          <td>路由动态</td>
+        </tr>
+        <tr>
+          <td><code>claude-opus-4.7</code> · <code>claude-opus-4.5</code></td>
+          <td><span class="host"><span class="dot vertex"></span>Vertex</span></td>
+          <td>采样期内固定落 Vertex，structured outputs 持续失败（见 §四）</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <ul class="notes">
+    <li>GitHub 网关剥除全部上游响应 headers，仅保留自有 headers（<code>x-quota-snapshot-*</code> 等）；Bedrock 落点保留 <code>msg_bdrk_</code> / <code>toolu_bdrk_</code> 原始 ID，并附加 Copilot 私有计价字段 <code>copilot_usage</code>。</li>
+    <li>上游 API 层只接受 <strong>Claude API 约定</strong>（平面模型 ID + <code>output_config.format</code> / strict tool use）：Bedrock 风格模型命名（4 种变体）全部 400；<code>anthropic_version</code> 字段完全不校验（垃圾值也通过，属被忽略而非被支持）；真实 Vertex SDK 因端点路径差异无法直连。</li>
+  </ul>
+</section>
+
+<!-- ==================== 能力矩阵 ==================== -->
+<section>
+  <h2>三、模型能力矩阵（Copilot 上游实测）</h2>
+
+  <h3>3.1 三层全绿的能力（Opus 4.8 与 Sonnet 4.6 一致：原生 ✅ / 直连 ✅ / 经代理 ✅）</h3>
+  <div class="chips">
+    <span class="chip">text</span><span class="chip">streaming</span><span class="chip">function_calling</span><span class="chip">parallel_tools</span><span class="chip">vision_base64</span><span class="chip">pdf_document</span><span class="chip">extended_thinking</span><span class="chip">server_tool_bash / text_editor / memory</span><span class="chip">prompt_cache（1024 下限 + 1h TTL）</span><span class="chip">context_management</span><span class="chip">citations</span><span class="chip">computer_use</span><span class="chip">count_tokens</span><span class="chip">context_1m（原生 1M 窗口）</span><span class="chip">stop_sequences</span><span class="chip">metadata</span><span class="chip">service_tier</span><span class="chip">tool_choice 全部 5 种变体</span><span class="chip">structured_outputs</span><span class="chip">code_execution（真实执行）</span><span class="chip">search_result</span><span class="chip">interleaved_thinking</span><span class="chip">token_efficient_tools</span><span class="chip">fine_grained_tool_streaming</span><span class="chip">effort max</span><span class="chip">model_discovery（34 模型 · max_ctx 1M）</span>
+  </div>
+
+  <h3>3.2 旗舰双模型关键差异（原生约束「此消彼长」，Copilot 忠实体现）</h3>
+  <div class="card tbl-scroll">
+    <table>
+      <thead>
+        <tr><th>能力</th><th>Sonnet 4.6</th><th>Opus 4.8</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>非默认 <code>temperature</code> / <code>top_p</code> / <code>top_k</code></td>
+          <td><span class="badge ok">✓ 原生支持</span> 三层一致</td>
+          <td><span class="badge no">✕ 原生 400</span> <span class="badge warn">△ Copilot 容忍(200)</span><span class="err-quote">原生 vs Copilot 的行为偏差，效果无保证</span></td>
+        </tr>
+        <tr>
+          <td>手动思考预算 <code>thinking:{enabled, budget_tokens}</code></td>
+          <td><span class="badge ok">✓ 支持</span></td>
+          <td><span class="badge no">✕ 400</span> 仅 adaptive</td>
+        </tr>
+        <tr>
+          <td>effort 档位</td>
+          <td><code>low/medium/high/max</code>（拒 <code>xhigh</code>）</td>
+          <td><code>low/medium/high/xhigh/max</code>（默认 high）</td>
+        </tr>
+        <tr>
+          <td>会话内 <code>role:"system"</code>（mid-conv system）</td>
+          <td><span class="badge no">✕ 400</span><span class="err-quote">Unexpected role "system"</span></td>
+          <td><span class="badge ok">✓ 支持</span> 须满足占位规则</td>
+        </tr>
+        <tr>
+          <td>fast mode（<code>speed:"fast"</code> + beta）</td>
+          <td><span class="badge warn">△ 原生无；Copilot 容忍(200)</span></td>
+          <td><span class="badge warn">△ Copilot 容忍(200)，无真实 2.5× 加速</span></td>
+        </tr>
+        <tr>
+          <td>prompt cache 最小前缀</td>
+          <td class="num">1024 token（常规）</td>
+          <td class="num">1024 token（4.8 由 2048 下调，实测生效）</td>
+        </tr>
+        <tr>
+          <td>输出上限</td>
+          <td class="num">128K（<code>max_tokens=200000</code> → 400）</td>
+          <td class="num">128K（同左；<code>output-300k</code> beta 仅 Anthropic Batch API）</td>
+        </tr>
+        <tr>
+          <td>知识截止</td>
+          <td>Aug 2025（可靠）</td>
+          <td>Jan 2026</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>3.3 Copilot 上游硬性不支持的 Anthropic 原生能力（2026-07-07 用最新 GA 工具型号复测确认）</h3>
+  <div class="card tbl-scroll">
+    <table>
+      <thead>
+        <tr><th>能力</th><th>实测</th><th>上游报错</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>web_search</code>（任何版本 / beta 组合）</td>
+          <td><span class="badge no">✕ 400</span></td>
+          <td><span class="err-quote">The use of the web search tool is not supported.</span></td>
+        </tr>
+        <tr>
+          <td><code>web_fetch</code>（工具与 beta 头双白名单均堵）</td>
+          <td><span class="badge no">✕ 400</span></td>
+          <td><span class="err-quote">rejected tool(s): web_fetch / unsupported beta header(s)</span></td>
+        </tr>
+        <tr>
+          <td>外链图片 <code>image.source.type=url</code></td>
+          <td><span class="badge no">✕ 400</span></td>
+          <td><span class="err-quote">external image URLs are not supported（仅收 base64）</span></td>
+        </tr>
+        <tr>
+          <td>300K 扩展输出（<code>output-300k</code> beta）</td>
+          <td><span class="badge no">✕ 400</span></td>
+          <td><span class="err-quote">128K 硬上限</span></td>
+        </tr>
+        <tr>
+          <td>fast mode 真实加速</td>
+          <td><span class="badge warn">△ 200 但无效</span></td>
+          <td><span class="err-quote">字段 / beta 被容忍，不实现加速</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>3.4 其余 Claude 模型（2026-06-27 两层对比 + 07-12 补测）</h3>
+  <div class="card tbl-scroll">
+    <table>
+      <thead>
+        <tr><th>模型</th><th>结论摘要</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>claude-haiku-4.5</code></td>
+          <td>核心能力全部可用（含 structured outputs / 1M 上下文 / interleaved thinking）。<span class="badge no">✕ 不支持 reasoning effort</span>（任何档位 400）；<code>code_execution_20250825</code> 工具型号被拒；06-27 该轮 prompt cache 未命中（cc=0），未复测定论。</td>
+        </tr>
+        <tr>
+          <td><code>claude-opus-4.6</code></td>
+          <td>能力面与 4.8 接近；effort 支持 <code>low/medium/high/max</code>（无 <code>xhigh</code>）；<span class="badge ok">✓ 支持手动思考预算</span>（与 4.7/4.8 相反）；<code>code_execution</code> 型号在 06-27 该轮被拒；128K 输出上限一致。</td>
+        </tr>
+        <tr>
+          <td><code>claude-opus-4.7</code></td>
+          <td>effort 含 <code>xhigh</code>（与 4.8 同）；采样参数硬约束、adaptive-only 思考（同 4.8）；缓存最小前缀 2048（4.8 才降到 1024）；06-27 该轮因落 Vertex，structured outputs 400；<code>code_execution</code> 型号被拒。</td>
+        </tr>
+        <tr>
+          <td><code>claude-fable-5</code> · <code>claude-sonnet-5</code></td>
+          <td>07-12 实测落 Anthropic 第一方，structured outputs 两种机制均 <span class="badge ok">✓ OK</span>；未跑全量矩阵。</td>
+        </tr>
+        <tr>
+          <td><code>claude-opus-4.8-fast</code></td>
+          <td><span class="badge warn">△ strict tool use 不可靠</span>：首轮缺 required 键，复测出现工具调用标记泄漏进字符串值，疑似 strict 约束未真正启用 grammar 强制；<code>output_config.format</code> 机制正常。</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ==================== Structured Outputs ==================== -->
+<section>
+  <h2>四、Structured Outputs 专项（2026-07-12 ~ 07-13，最新）</h2>
+  <p class="section-lede">两种机制：A = JSON outputs（<code>output_config.format</code>，json_schema）；B = strict tool use（<code>strict: true</code> + 强制 tool_choice）。<strong>可用性完全取决于路由落点</strong>：</p>
+  <div class="card tbl-scroll">
+    <table>
+      <thead>
+        <tr><th>落点</th><th>机制 A（json outputs）</th><th>机制 B（strict tool）</th><th>备注</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="host"><span class="dot anthropic"></span>Anthropic 第一方</span></td>
+          <td><span class="badge ok">✓ 通过</span></td>
+          <td><span class="badge ok">✓ 通过</span></td>
+          <td></td>
+        </tr>
+        <tr>
+          <td><span class="host"><span class="dot bedrock"></span>AWS Bedrock</span></td>
+          <td><span class="badge ok">✓ 通过</span></td>
+          <td><span class="badge ok">✓ 通过</span></td>
+          <td>10/10 双重指纹绑定验证（<code>msg_bdrk_</code> + <code>toolu_bdrk_</code>）</td>
+        </tr>
+        <tr>
+          <td><span class="host"><span class="dot vertex"></span>Google Vertex</span></td>
+          <td><span class="badge no">✕ 400</span></td>
+          <td><span class="badge no">✕ 400</span></td>
+          <td>GitHub 的 GCP 组织策略 <code>vertexai.allowedPartnerModelFeatures</code> 未放行 <code>structured_outputs</code>——Copilot 侧配置缺口，非 Vertex 平台能力问题</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>同一 schema 下的输入 token 开销（机制对比）</h3>
+  <div class="card">
+    <div class="mini-chart" role="img" aria-label="输入 token 开销对比：json outputs 227，strict tool use 721，约 3 倍">
+      <div class="row">
+        <div class="cat">机制 A · <code>output_config.format</code></div>
+        <div class="track baseline-rule">
+          <div class="bar" style="width: calc(227 / 721 * 100%)" title="json outputs：227 input tokens"></div>
+          <div class="bar-label" style="left: calc(227 / 721 * 100%)">227</div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="cat">机制 B · strict tool use</div>
+        <div class="track baseline-rule">
+          <div class="bar" style="width: 100%" title="strict tool use：721 input tokens"></div>
+          <div class="bar-label" style="left: 100%; transform: translateX(calc(-100% - 8px)); color: #fff;">721</div>
+        </div>
+      </div>
+      <div class="axis-note">input tokens（同一 weather schema · Bedrock 落点实测）——约 3 倍差距，只需结构化输出时优先用机制 A</div>
+    </div>
+  </div>
+
+  <ul class="notes">
+    <li>因路由动态漂移，会漂到 Vertex 的模型（sonnet-4.6 / sonnet-4.5 / haiku-4.5 / opus-4.7 / opus-4.5 等）<strong>间歇性失败</strong>；失败时返回 Google 原生格式错误（<code>FAILED_PRECONDITION</code>）。<strong>生产建议：对该特定 400 做客户端重试。</strong></li>
+    <li>废弃的 <code>output_format</code> 字段返回 400 并指引改用 <code>output_config.format</code>——证明特性链路是真实实现而非透传巧合。</li>
+    <li><strong>OpenAI 兼容端点 <code>/chat/completions</code> 的 <code>response_format.json_schema</code> 被上游静默忽略</strong>（HTTP 200 但输出不受约束）。</li>
+  </ul>
+</section>
+
+<!-- ==================== Copilot2API ==================== -->
+<section>
+  <h2>五、Copilot2API 代理支持情况</h2>
+
+  <h3>5.1 原生 <code>/v1/messages</code> 透传：与直连等价</h3>
+  <p class="section-lede">95 项矩阵中，直连与经代理仅 2 处有意分叉：</p>
+  <div class="card tbl-scroll">
+    <table>
+      <thead>
+        <tr><th>分叉点</th><th>直连</th><th>经代理</th><th>性质</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>cache_control.scope</code>（非 Anthropic 标准字段）</td>
+          <td><span class="badge no">✕ 400</span></td>
+          <td><span class="badge ok">✓ 200</span></td>
+          <td><span class="badge diff">↔ 有意剥离</span> 既定行为</td>
+        </tr>
+        <tr>
+          <td>客户端 <code>anthropic-beta</code> 头（白名单外，如 <code>code-execution-2025-08-25</code>）</td>
+          <td><span class="badge no">✕ 400</span> 上游 allowlist 拒</td>
+          <td><span class="badge ok">✓ 200</span> 剥头后工具照常执行</td>
+          <td><span class="badge diff">↔ 有意剥离</span> 白名单策略</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <ul class="notes">
+    <li><strong>beta 头白名单策略</strong>：放行 <code>computer-use-*</code>（2026-07-07 新增，<code>anthropic/handler.go</code> 的 <code>extractComputerUseBetas</code>，覆盖 <code>/v1/messages</code> 与 <code>/count_tokens</code>）；当 body 含 <code>context_management</code> 字段时自动注入 <code>context-management</code> beta；其余全部剥离。仅靠 header 的特性（interleaved_thinking / token_efficient_tools / fine_grained_tool_streaming / extended_cache_ttl）以普通请求形式到达上游且全部成功。</li>
+    <li><strong>Computer use 端到端已打通</strong>（2026-07-12 四用例复验）：新版 <code>computer-use-2025-11-24</code> + <code>computer_20251124</code>（Opus 4.8 / Sonnet 4.6）与旧版 <code>computer-use-2025-01-24</code> + <code>computer_20250124</code>（Sonnet 4.5 等旧模型）均经代理正常返回 <code>tool_use</code>；负向对照（不带 beta 头 → 400）证明 header 转发正是关键路径；完整 agent 循环（请求截图 → 回传截图 tool_result → 下一动作）可用。</li>
+    <li><code>output_config.format</code> / strict tool 在 native 路由<strong>逐字节透传</strong>，端到端 schema 严格生效（07-12 经代理落 Bedrock 实测通过）。</li>
+    <li><code>POST /v1/messages/count_tokens</code> 已代理到上游计数器（此前 404）；<code>search_result</code> 内容块的裸字符串 <code>source</code> 已修复解析；1M 上下文 <code>anthropic-beta: context-1m</code> 处理已修复（仅在必要且 <code>-1m</code> 变体真实存在时切换）。</li>
+  </ul>
+
+  <h3>5.2 已知缺口（转换路径）</h3>
+  <div class="card tbl-scroll">
+    <table>
+      <thead>
+        <tr><th>缺口</th><th>位置</th><th>影响</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>AnthropicOutputConfig</code> 缺 <code>Format</code> 字段</td>
+          <td><code>anthropic/responses_convert.go:342</code></td>
+          <td>Anthropic→Responses 转换时 <code>output_config.format</code> 被静默丢弃</td>
+        </tr>
+        <tr>
+          <td><code>AnthropicTool</code> 缺 <code>Strict</code> 字段</td>
+          <td><code>proxy/convert.go:246</code></td>
+          <td>strict 被硬编码为 false，strict tool use 失效</td>
+        </tr>
+        <tr>
+          <td>上游 <code>/chat/completions</code> 忽略 <code>response_format.json_schema</code></td>
+          <td>上游行为</td>
+          <td>OpenAI 客户端要用 structured outputs，需代理侧转换或显式报错（当前静默忽略）</td>
+        </tr>
+        <tr>
+          <td>Responses 路由（如 gpt-5.4）</td>
+          <td>转换路径</td>
+          <td>reasoning 模型拒非默认 <code>top_p</code>（400）；<code>stop_sequences</code> 被丢弃</td>
+        </tr>
+        <tr>
+          <td>Chat Completions 路由（如 gemini-3.5-flash）</td>
+          <td>转换路径</td>
+          <td><code>top_k</code> / <code>service_tier</code> 被丢弃；<code>disable_parallel_tool_use</code> 已接线但模型可能忽略</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>5.3 代理自身功能面（与模型能力正交）</h3>
+  <p class="section-lede">多账号（API key ↔ GitHub 账号 1:1，<code>accounts.json</code>）· Web 管理台 <code>/admin/</code>（Device Flow 认证、key 轮换 / 自动生成、token 用量统计含缓存命中率、上游模型列表页）· API key 多来源提取（<code>Authorization: Bearer</code> / <code>x-api-key</code> / <code>x-goog-api-key</code> / <code>?key=</code>，覆盖 OpenAI / Anthropic / Gemini 客户端）· Gemini <code>/v1beta</code> 兼容端点 · <code>/chat/completions</code> ↔ <code>/responses</code> 智能回退。</p>
+</section>
+
+<!-- ==================== 使用建议 ==================== -->
+<section>
+  <h2>六、使用建议</h2>
+  <ol class="conclusions">
+    <li><strong>Claude 模型一律走原生 <code>/v1/messages</code></strong>（Anthropic SDK 指到代理即可）：透传路径能力最全，structured outputs、computer use、1M 上下文、prompt cache 全部端到端可用；不要经 OpenAI 兼容端点用 Claude 的 structured outputs。</li>
+    <li><strong>structured outputs 生产使用需容错</strong>：对 Vertex 组织策略 400（报文含 <code>vertexai.allowedPartnerModelFeatures</code> / <code>FAILED_PRECONDITION</code>）做重试；优先选路由稳定落 Anthropic 的模型（opus-4.8 / fable-5 / sonnet-5）；只需结构化输出时用 <code>output_config.format</code>（比 strict tool 省约 3 倍输入 token）；避免依赖 opus-4.8-fast 的 strict tool。</li>
+    <li><strong>按模型选参数</strong>：Opus 4.7/4.8 用 <code>output_config.effort</code>（可到 <code>xhigh</code>/<code>max</code>），不要设手动 thinking 预算与非默认采样参数（即使 Copilot 容忍，效果无保证）；Sonnet 4.6 / Haiku 4.5 / Opus ≤4.6 可用手动 <code>budget_tokens</code> 与采样参数；Haiku 4.5 不支持 effort。</li>
+    <li><strong>不要指望的能力</strong>：web_search、web_fetch、外链图片 URL、&gt;128K 输出、fast mode 真实加速——这些是 Copilot 上游硬限制，换任何 beta 头 / 工具版本都打不通；图片一律转 base64 内嵌。</li>
+    <li><strong>computer use 记得带对 beta 头</strong>：新模型（Opus 4.6+ / Sonnet 4.6）用 <code>computer-use-2025-11-24</code> + <code>computer_20251124</code>，旧模型用 <code>computer-use-2025-01-24</code> + <code>computer_20250124</code>；代理会放行转发。</li>
+  </ol>
+</section>
+
+<footer>
+  <div>数据来源（按时间倒序）：</div>
+  <ul>
+    <li><code>scripts/out/session-test-report-2026-07-12.md</code> — Computer use 端到端 / 托管平台指纹 / Structured outputs 全模型遍历与平台约定矩阵（2026-07-12 ~ 07-13，最新）</li>
+    <li><code>scripts/opus48-capability-report.md</code> · <code>scripts/sonnet46-capability-report.md</code> — 三层对照 47 / 48 项（2026-06-27 生成，2026-07-07 修订）</li>
+    <li><code>scripts/out/claude-haiku-4.5-compare.md</code> · <code>claude-opus-4.6-compare.md</code> · <code>claude-opus-4.7-compare.md</code> — 其余模型两层对比（2026-06-27）</li>
+    <li><code>scripts/opus48-features.md</code> — Anthropic 官方文档参照系（2026-06-29）· <code>CHANGELOG.md</code> [Unreleased] — 代理侧行为与修复</li>
+  </ul>
+  <div style="margin-top:10px;">测试方法：三层对照（Anthropic 原生官方文档 / Copilot 上游直连 / 经 Copilot2API 代理），主力工具 <code>scripts/capability_test.py</code> 与 <code>scripts/structured_outputs_platform_test.py</code>。token / 账号信息从不打印或落盘。</div>
+</footer>
+
+</div>
+</body>
+</html>
