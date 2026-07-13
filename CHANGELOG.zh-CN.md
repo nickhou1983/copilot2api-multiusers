@@ -29,6 +29,7 @@
 
 ### 文档
 
+- 将 `docs/copilot-capability-report.html` 从滚动长页报告重新设计为 17 页 16:9 HTML 幻灯片（支持键盘 / 滚轮 / 触摸翻页、打印导出 PDF、页内文本编辑）；报告内容全部保留。
 - 在 `README.md` 与 `README.zh-CN.md` 中记录 `/v1/messages/count_tokens` 端点及原生透传字段（`context_management`、`search_result`）（Features 列表与 API 端点表）。
 - 在 README 中记录多账号、管理界面与 Token 用量统计，并新增简体中文翻译（`README.zh-CN.md`、`CHANGELOG.zh-CN.md`）及语言切换链接。
 

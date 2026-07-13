@@ -32,6 +32,7 @@
 
 ### Docs
 
+- Redesign `docs/copilot-capability-report.html` from a scrolling report page into a 17-slide 16:9 HTML presentation (keyboard/wheel/touch navigation, print-to-PDF support, inline text editing); all report content is preserved.
 - Document the `/v1/messages/count_tokens` endpoint and native-passthrough fields (`context_management`, `search_result`) in both `README.md` and `README.zh-CN.md` (Features list and API Endpoints table).
 - Document multi-account, admin UI, and token-usage stats in the README, and add Simplified Chinese translations (`README.zh-CN.md`, `CHANGELOG.zh-CN.md`) with language switch links.
 
