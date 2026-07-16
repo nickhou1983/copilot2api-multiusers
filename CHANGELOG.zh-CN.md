@@ -7,6 +7,7 @@
 ### 新特性
 
 - 在原生 `/v1/messages`（及 `/v1/messages/count_tokens`）路由上支持 Computer Use 工具：代理会把客户端的 `computer-use-*` beta 头转发到上游。代理仍不会盲目转发任意客户端 `anthropic-beta` 头，但现在放行 `computer-use-2025-11-24`（Claude Opus 4.8/4.7/4.6、Sonnet 4.6 等）与 `computer-use-2025-01-24`（更旧的模型），并与自动注入的 `context-management` beta 合并成单个 `anthropic-beta` 值。Copilot 上游本就支持 computer use；此前该 beta 头被剥离，导致 `computer_20251124` / `computer_20250124` 工具型被 `400` 拒绝。不带 `computer-use-*` 头的请求不受影响。
+- 在原生 `/v1/messages`（及 `/v1/messages/count_tokens`）路由上转发客户端的 `interleaved-thinking-*` beta 头（如 `interleaved-thinking-2025-05-14`）到上游，复用 `computer-use-*` 所在的同一白名单。此前剥离该头是良性的（请求仍成功且能产出 thinking 块），但转发后可确保多步工具调用之间 thinking 块的穿插位置与直连上游完全一致。其他客户端 `anthropic-beta` token 仍会被剥离。
 - 在原生 `/v1/messages`（及 `/v1/messages/count_tokens`）路由上支持服务端上下文压缩（compaction）：当 `context_management.edits` 包含 `compact_*` 编辑类型（如 `compact_20260112`）时，代理会自动附加上游要求的 `anthropic-beta: compact-2026-01-12` 头。此前客户端的 compaction beta 头会被剥离，导致上游以 `400` 拒绝该编辑类型；实测确认带上该 beta 后 Copilot 上游支持 compaction。
 - 新增原生 Anthropic Token 计数端点：`POST /v1/messages/count_tokens` 现已转发到上游 Copilot 的 Token 计数接口（此前返回 `404`）。请求会与 `/v1/messages` 一样做模型别名解析与 `cache_control.scope` 剥离，并原样返回上游的 `{ "input_tokens": N }` 响应。
 - 在原生 `/v1/messages` 请求上透传 `context_management` 而非剥离它。当请求体包含 `context_management` 字段时，代理会保留该字段，并自动为上游请求加上 `anthropic-beta: context-management-2025-06-27` 头，使上下文编辑（如 `clear_tool_uses_20250919`）真正生效，并在 `usage` / `context_management.applied_edits` 中回传结果。
@@ -33,11 +34,14 @@
 - 将 `docs/copilot-capability-report.html` 从滚动长页报告重新设计为 17 页 16:9 HTML 幻灯片（支持键盘 / 滚轮 / 触摸翻页、打印导出 PDF、页内文本编辑）；报告内容全部保留。
 - 在 `README.md` 与 `README.zh-CN.md` 中记录 `/v1/messages/count_tokens` 端点及原生透传字段（`context_management`、`search_result`）（Features 列表与 API 端点表）。
 - 在 README 中记录多账号、管理界面与 Token 用量统计，并新增简体中文翻译（`README.zh-CN.md`、`CHANGELOG.zh-CN.md`）及语言切换链接。
+- 新增 `scripts/capability-request-response-guide.md` —— 一份基于全量矩阵实测生成的中文学习指南：逐条列出每个能力用例的作用说明、实际发送的请求（端点、beta 头、JSON 请求体）与观测到的响应（解析后的 JSON，流式用例为 SSE 事件样本），并在代理与直连上游行为不同处单独标注。
 
 ### 测试
 
 - 新增 `scripts/capability_test.py`，一个零依赖的能力对比测试器：对真实 GitHub Copilot 上游与运行中的 copilot2api 代理执行同一套 Anthropic Messages API 测试矩阵，并输出 Markdown 对比报告及脱敏后的原始 JSON 附件。支持 `--target direct|proxy|both`（可选 `--start-proxy` 自动拉起本地代理）。矩阵覆盖约 36 项能力 —— 文本/流式、function 与并行工具、`tool_choice` 变体、采样参数（`temperature`/`top_p`/`top_k`/`stop_sequences`/`metadata`/`service_tier`）、视觉、PDF 文档、扩展/交错思考、server 工具、prompt 缓存（含 1 小时 `extended_cache_ttl`）、`context_management`、`count_tokens`、`structured_outputs`、`search_result`、citations、1M 上下文，以及拒绝类用例（web search、computer use、web fetch、code execution）。它能精确定位代理与上游的差异；在本版修复之后，原生路径上仅剩 `cache_control.scope` 一处刻意保留的差异，而转换路径（`/responses`、`/chat/completions`）仍会丢弃部分字段（如 `stop_sequences`、`disable_parallel_tool_use`）。存储的 Token 绝不会被打印或写入输出。详见 `scripts/README.md`。
 - 扩展能力矩阵以覆盖官方 Claude 平台功能清单的剩余部分（新增 12 项用例，均以真实上游校准）。实测确认 Copilot 上游支持：`strict_tool_use`（严格工具调用，结构化输出的另一半）、`tool_search`（GA 的 tool-search server 工具 + `defer_loading`）、`compaction`（经由代理新增的自动 beta 头）。固化为拒绝/缺失行为：`auto_prompt_cache`（顶层 `cache_control`）、`inference_geo`、`mcp_connector`、`programmatic_tool_calling`、`agent_skills`、`advisor_tool`、`server_side_fallback`，以及独立端点探针 `batches_endpoint`（`/v1/messages/batches`）与 `files_endpoint`（`/v1/files`）（直连与代理均为 404）。
+- 将 `code_execution` / `code_execution_beta_header` 的期望重新校准为**拒绝**：Copilot 上游已将 `code_execution` server 工具从其接受的工具类型列表中移除（早前运行确实执行过代码）。两个用例保留为行为固化探针，若上游恢复该工具将转为 DIFF 报警。
+- 能力测试的原始 JSON 附件现在会记录每个用例的出站请求（方法、端点、`anthropic-beta`、截断后的请求体）以及流式 SSE 事件样本，可用一次运行学习真实的请求/响应形态。
 
 ## [0.3.1] - 2026-04-26
 

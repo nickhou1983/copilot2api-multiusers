@@ -108,28 +108,31 @@ func TestNormalizeNativeMessagesBody_RemovesCacheControlScope(t *testing.T) {
 	}
 }
 
-func TestExtractComputerUseBetas(t *testing.T) {
+func TestExtractForwardedBetas(t *testing.T) {
 	cases := []struct {
 		name   string
 		values []string
 		want   []string
 	}{
 		{"empty", nil, nil},
-		{"none", []string{"context-1m-2025-08-07,interleaved-thinking-2025-05-14"}, nil},
+		{"none", []string{"context-1m-2025-08-07,token-efficient-tools-2025-02-19"}, nil},
 		{"new only", []string{"computer-use-2025-11-24"}, []string{"computer-use-2025-11-24"}},
 		{"old only", []string{"computer-use-2025-01-24"}, []string{"computer-use-2025-01-24"}},
+		{"interleaved thinking", []string{"interleaved-thinking-2025-05-14"}, []string{"interleaved-thinking-2025-05-14"}},
+		{"interleaved thinking mixed with stripped tokens", []string{"context-1m-2025-08-07,interleaved-thinking-2025-05-14"}, []string{"interleaved-thinking-2025-05-14"}},
+		{"computer use and interleaved thinking", []string{"interleaved-thinking-2025-05-14,computer-use-2025-11-24"}, []string{"interleaved-thinking-2025-05-14", "computer-use-2025-11-24"}},
 		{"mixed with others", []string{"context-management-2025-06-27,computer-use-2025-11-24"}, []string{"computer-use-2025-11-24"}},
 		{"both versions", []string{"computer-use-2025-11-24,computer-use-2025-01-24"}, []string{"computer-use-2025-11-24", "computer-use-2025-01-24"}},
 		{"dedup", []string{"computer-use-2025-11-24,computer-use-2025-11-24"}, []string{"computer-use-2025-11-24"}},
 		{"spaces around tokens", []string{" context-1m-2025-08-07 , computer-use-2025-11-24 "}, []string{"computer-use-2025-11-24"}},
 		{"multiple header lines", []string{"context-1m-2025-08-07", "computer-use-2025-11-24"}, []string{"computer-use-2025-11-24"}},
-		{"embedded substring not matched", []string{"xcomputer-use-2025-11-24", "computer-use-2025-11-24-extra"}, nil},
+		{"embedded substring not matched", []string{"xcomputer-use-2025-11-24", "computer-use-2025-11-24-extra", "xinterleaved-thinking-2025-05-14", "interleaved-thinking-2025-05-14-extra"}, nil},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := extractComputerUseBetas(tc.values)
+			got := extractForwardedBetas(tc.values)
 			if !slices.Equal(got, tc.want) {
-				t.Fatalf("extractComputerUseBetas(%v) = %v, want %v", tc.values, got, tc.want)
+				t.Fatalf("extractForwardedBetas(%v) = %v, want %v", tc.values, got, tc.want)
 			}
 		})
 	}

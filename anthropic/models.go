@@ -39,6 +39,20 @@ var context1mRe = regexp.MustCompile(`\bcontext-1m\b`)
 // larger token. The date is written as YYYY-MM-DD.
 var computerUseBetaRe = regexp.MustCompile(`^computer-use-\d{4}-\d{2}-\d{2}$`)
 
+// interleavedThinkingBetaRe matches a single interleaved-thinking beta token,
+// e.g. "interleaved-thinking-2025-05-14". Forwarding it lets thinking blocks
+// appear between tool calls exactly as on a direct upstream connection;
+// stripping it was benign (requests still succeeded) but could change where
+// thinking blocks are placed in multi-step tool use.
+var interleavedThinkingBetaRe = regexp.MustCompile(`^interleaved-thinking-\d{4}-\d{2}-\d{2}$`)
+
+// forwardedBetaRes is the allowlist of client anthropic-beta tokens the proxy
+// forwards to the upstream on the native route. Each pattern is anchored and
+// matched against individual comma-separated tokens. Tokens matching none of
+// these patterns are stripped (the proxy never blindly forwards client beta
+// headers).
+var forwardedBetaRes = []*regexp.Regexp{computerUseBetaRe, interleavedThinkingBetaRe}
+
 // oneMillionContextTokens is the threshold (in tokens) at which a model is
 // considered to already provide a 1M context window natively.
 const oneMillionContextTokens = 1_000_000
