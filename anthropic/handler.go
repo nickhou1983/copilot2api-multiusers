@@ -125,7 +125,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 			reqBody = newBody
 		}
-		h.handleNativeMessagesPassthrough(w, r, reqBody, anthropicReq.Stream, topLevelInfo.HasContextManagement, computerUseBetas)
+		h.handleNativeMessagesPassthrough(w, r, reqBody, anthropicReq.Stream, topLevelInfo, computerUseBetas)
 		return
 	}
 
@@ -159,8 +159,8 @@ func (h *Handler) validateRequest(req AnthropicMessagesRequest) error {
 	return nil
 }
 
-func (h *Handler) handleNativeMessagesPassthrough(w http.ResponseWriter, r *http.Request, body []byte, stream bool, hasContextManagement bool, computerUseBetas []string) {
-	extraHeaders := buildUpstreamBetaHeaders(collectUpstreamBetas(hasContextManagement, computerUseBetas))
+func (h *Handler) handleNativeMessagesPassthrough(w http.ResponseWriter, r *http.Request, body []byte, stream bool, topLevelInfo topLevelFieldInspection, computerUseBetas []string) {
+	extraHeaders := buildUpstreamBetaHeaders(collectUpstreamBetas(topLevelInfo.HasContextManagement, topLevelInfo.HasCompactionEdit, computerUseBetas))
 	if stream {
 		resp, _, err := h.upstream.Do(r.Context(), upstream.Request{Endpoint: "/v1/messages", Body: body, Stream: true, QueryString: r.URL.RawQuery, ExtraHeaders: extraHeaders})
 		if err != nil {
@@ -718,6 +718,13 @@ func normalizeNativeMessagesBody(body []byte, newModel string, replaceModel bool
 // forward).
 const contextManagementBeta = "context-management-2025-06-27"
 
+// compactionBeta is the anthropic-beta token that activates server-side
+// compaction upstream. The proxy adds it automatically when the request's
+// context_management.edits contains a compact_* edit type, mirroring the
+// contextManagementBeta handling (the proxy does not blindly forward client
+// beta headers, and the upstream supports compaction behind this beta).
+const compactionBeta = "compact-2026-01-12"
+
 // extractComputerUseBetas returns the computer-use-* tokens found across the
 // given client anthropic-beta header values, in order and de-duplicated. Each
 // value is split on commas and trimmed, then matched against the anchored
@@ -779,12 +786,16 @@ func buildUpstreamBetaHeaders(betas []string) map[string]string {
 
 // collectUpstreamBetas assembles the anthropic-beta tokens the proxy attaches to
 // an upstream native request: the context-management beta (added automatically
-// when the body carries a context_management field) plus any computer-use
-// tokens forwarded from the client's anthropic-beta header.
-func collectUpstreamBetas(hasContextManagement bool, computerUseBetas []string) []string {
+// when the body carries a context_management field), the compaction beta (added
+// when context_management.edits contains a compact_* edit), plus any
+// computer-use tokens forwarded from the client's anthropic-beta header.
+func collectUpstreamBetas(hasContextManagement bool, hasCompactionEdit bool, computerUseBetas []string) []string {
 	var betas []string
 	if hasContextManagement {
 		betas = append(betas, contextManagementBeta)
+	}
+	if hasCompactionEdit {
+		betas = append(betas, compactionBeta)
 	}
 	betas = append(betas, computerUseBetas...)
 	return betas
@@ -846,6 +857,7 @@ func (h *Handler) handleCountTokens(w http.ResponseWriter, r *http.Request) {
 		QueryString: r.URL.RawQuery,
 		ExtraHeaders: buildUpstreamBetaHeaders(collectUpstreamBetas(
 			topLevelInfo.HasContextManagement,
+			topLevelInfo.HasCompactionEdit,
 			extractComputerUseBetas(r.Header.Values("anthropic-beta")),
 		)),
 	})
@@ -867,6 +879,7 @@ func (h *Handler) handleCountTokens(w http.ResponseWriter, r *http.Request) {
 type topLevelFieldInspection struct {
 	Keys                 []string
 	HasContextManagement bool
+	HasCompactionEdit    bool
 }
 
 func inspectTopLevelFields(body []byte) topLevelFieldInspection {
@@ -881,8 +894,36 @@ func inspectTopLevelFields(body []byte) topLevelFieldInspection {
 	}
 	slices.Sort(keys)
 
-	_, hasContextManagement := raw["context_management"]
-	return topLevelFieldInspection{Keys: keys, HasContextManagement: hasContextManagement}
+	cm, hasContextManagement := raw["context_management"]
+	return topLevelFieldInspection{
+		Keys:                 keys,
+		HasContextManagement: hasContextManagement,
+		HasCompactionEdit:    hasCompactionEdit(cm),
+	}
+}
+
+// hasCompactionEdit reports whether a context_management value carries a
+// compact_* edit type (e.g. compact_20260112), which requires the compaction
+// beta header upstream.
+func hasCompactionEdit(contextManagement interface{}) bool {
+	cm, ok := contextManagement.(map[string]interface{})
+	if !ok {
+		return false
+	}
+	edits, ok := cm["edits"].([]interface{})
+	if !ok {
+		return false
+	}
+	for _, e := range edits {
+		edit, ok := e.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if t, ok := edit["type"].(string); ok && strings.HasPrefix(t, "compact_") {
+			return true
+		}
+	}
+	return false
 }
 
 type cacheControlInspection struct {

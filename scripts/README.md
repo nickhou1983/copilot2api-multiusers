@@ -93,6 +93,28 @@ reject), `code_execution` / `code_execution_beta_header`, `search_result`
 blocks, `interleaved_thinking`, `token_efficient_tools`,
 `fine_grained_tool_streaming`, `extended_cache_ttl` (1h cache).
 
+Remaining official-feature coverage (group E — the rest of the Claude-platform
+feature-overview page; expects calibrated against the live upstream):
+
+**Supported by the Copilot upstream:** `strict_tool_use` (`strict: true` tool
+defs — the other half of structured outputs; schemas need
+`additionalProperties: false`), `tool_search` (the GA
+`tool_search_tool_regex_20251119` server tool + `defer_loading` tools — runs a
+real catalog search, no beta header needed), and `compaction`
+(`context_management.edits` type `compact_20260112`; the proxy auto-adds the
+`compact-2026-01-12` beta the upstream requires — a short probe conversation
+never triggers a summary, so the case asserts acceptance, not `applied_edits`).
+
+**Rejected by the upstream (reject-probes pinning current behavior):**
+`auto_prompt_cache` (top-level `cache_control` — `expect_divergence`-free 400
+"Extra inputs"), `inference_geo` (data residency), `mcp_connector`
+(`mcp_servers` + `mcp_toolset`), `programmatic_tool_calling`
+(`code_execution_20260120` + `allowed_callers`), `agent_skills`
+(`container.skills`), `advisor_tool` (`advisor_20260301`),
+`server_side_fallback` (`fallbacks`), and the standalone endpoints
+`batches_endpoint` (`POST /v1/messages/batches`) / `files_endpoint`
+(`GET /v1/files`), both 404 on direct and proxy alike.
+
 Effort-scale and model-conditional cases (the effort scale differs by model):
 
 `effort_xhigh` (the `xhigh` level — Opus 4.7/4.8-only; other models, incl. Sonnet
@@ -129,9 +151,10 @@ proxy) comparisons.
 
 The proxy does **not** blindly forward client `anthropic-beta` headers on the
 native route: it auto-injects the `context-management` beta when the body
-carries a `context_management` field, and forwards any `computer-use-*` tokens
-from the client header (so the computer use tool types are recognized upstream),
-but strips every other client beta value. So the header-only D features
+carries a `context_management` field (plus the `compact-2026-01-12` beta when
+its `edits` contain a `compact_*` type), and forwards any `computer-use-*`
+tokens from the client header (so the computer use tool types are recognized
+upstream), but strips every other client beta value. So the header-only D features
 (`interleaved_thinking` / `token_efficient_tools` / `fine_grained_tool_streaming`
 / `extended_cache_ttl`) reach the upstream as plain requests and succeed.
 `structured_outputs` works end-to-end (Copilot advertises it and native

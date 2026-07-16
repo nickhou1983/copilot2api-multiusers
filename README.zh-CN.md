@@ -14,7 +14,7 @@
 - **兼容 Gemini API**：`/v1beta/models`、`/v1beta/models/{model}:generateContent`、`/v1beta/models/{model}:streamGenerateContent`、`/v1beta/models/{model}:countTokens`
 - **兼容 AmpCode**：`/amp/v1/*` 路由用于对话，`/api/provider/*` 用于特定 provider 的调用，管理类请求反向代理到 `ampcode.com`
 - **流式支持**：OpenAI 与 Anthropic 格式均支持完整的 SSE 流式输出
-- **Anthropic 智能路由**：模型原生支持时使用 `/v1/messages`，否则通过 `/responses` 或 `/chat/completions` 转发。原生路径会透传高级字段，如 `context_management`（自动补加 `context-management-2025-06-27` beta 头）与 `search_result` 内容块，并转发客户端的 `computer-use-*` beta 头以让 Computer Use 工具在上游生效。
+- **Anthropic 智能路由**：模型原生支持时使用 `/v1/messages`，否则通过 `/responses` 或 `/chat/completions` 转发。原生路径会透传高级字段，如 `context_management`（自动补加 `context-management-2025-06-27` beta 头；当其 edits 请求服务端压缩时还会补加 `compact-2026-01-12` beta 头）与 `search_result` 内容块，并转发客户端的 `computer-use-*` beta 头以让 Computer Use 工具在上游生效。
 - **多账号支持**：将 API Key 与 GitHub 账号一对一映射，各账号使用独立的凭据存储（详见 [多 GitHub 账号](#多-github-账号)）
 - **Web 管理界面**：在 `/admin/` 管理账号并查看 Token 使用统计（多账号模式）
 - **自动认证**：GitHub Device Flow OAuth，自动刷新 Token

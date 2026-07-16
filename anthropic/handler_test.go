@@ -152,21 +152,46 @@ func TestBuildUpstreamBetaHeaders(t *testing.T) {
 
 func TestCollectUpstreamBetas(t *testing.T) {
 	// context_management only
-	if got := collectUpstreamBetas(true, nil); !slices.Equal(got, []string{contextManagementBeta}) {
+	if got := collectUpstreamBetas(true, false, nil); !slices.Equal(got, []string{contextManagementBeta}) {
 		t.Fatalf("context_management only = %v", got)
 	}
 	// computer-use only (context_management absent)
-	if got := collectUpstreamBetas(false, []string{"computer-use-2025-11-24"}); !slices.Equal(got, []string{"computer-use-2025-11-24"}) {
+	if got := collectUpstreamBetas(false, false, []string{"computer-use-2025-11-24"}); !slices.Equal(got, []string{"computer-use-2025-11-24"}) {
 		t.Fatalf("computer-use only = %v", got)
 	}
 	// both, order: context-management first then computer-use
-	got := collectUpstreamBetas(true, []string{"computer-use-2025-11-24"})
+	got := collectUpstreamBetas(true, false, []string{"computer-use-2025-11-24"})
 	if !slices.Equal(got, []string{contextManagementBeta, "computer-use-2025-11-24"}) {
 		t.Fatalf("both = %v", got)
 	}
+	// compaction edit adds the compaction beta after context-management
+	got = collectUpstreamBetas(true, true, nil)
+	if !slices.Equal(got, []string{contextManagementBeta, compactionBeta}) {
+		t.Fatalf("compaction = %v", got)
+	}
 	// none
-	if got := collectUpstreamBetas(false, nil); len(got) != 0 {
+	if got := collectUpstreamBetas(false, false, nil); len(got) != 0 {
 		t.Fatalf("none = %v, want empty", got)
+	}
+}
+
+func TestInspectTopLevelFields_CompactionEdit(t *testing.T) {
+	cases := []struct {
+		name string
+		body string
+		want bool
+	}{
+		{"compact edit", `{"context_management":{"edits":[{"type":"compact_20260112"}]}}`, true},
+		{"clear_tool_uses only", `{"context_management":{"edits":[{"type":"clear_tool_uses_20250919"}]}}`, false},
+		{"mixed edits", `{"context_management":{"edits":[{"type":"clear_tool_uses_20250919"},{"type":"compact_20260112"}]}}`, true},
+		{"no context_management", `{"model":"m"}`, false},
+		{"malformed edits", `{"context_management":{"edits":"nope"}}`, false},
+	}
+	for _, tc := range cases {
+		info := inspectTopLevelFields([]byte(tc.body))
+		if info.HasCompactionEdit != tc.want {
+			t.Errorf("%s: HasCompactionEdit = %v, want %v", tc.name, info.HasCompactionEdit, tc.want)
+		}
 	}
 }
 

@@ -554,6 +554,45 @@ def insp_refusal(r):
     return True, f"HTTP 200 stop_reason={sr} stop_details={'present' if sd else 'absent'}"
 
 
+def insp_strict_tool(r):
+    # Strict tool use (structured outputs' second half): tools carry
+    # "strict": true and the platform guarantees schema-valid tool inputs.
+    # Support means 200 + a tool_use block with parseable input.
+    if not r["ok"]:
+        return False, f"HTTP {r['status']} {_err_msg(r)}"
+    names = _tool_use_names(r["parsed"])
+    return ("get_weather" in names), f"HTTP 200 tool_use={names}"
+
+
+def insp_inference_geo(r):
+    # Data-residency probe: inference_geo is an Anthropic-first-party request
+    # parameter; support means 200 and usage.inference_geo echoed back.
+    if not r["ok"]:
+        return False, f"HTTP {r['status']} {_err_msg(r)}"
+    geo = ((r["parsed"] or {}).get("usage") or {}).get("inference_geo")
+    return bool(geo), f"HTTP 200 usage.inference_geo={geo!r}"
+
+
+def insp_tool_search(r):
+    # Tool search: support means 200 and ideally a server_tool_use block that
+    # searched the catalog (or a direct tool_use if the model skipped search).
+    if not r["ok"]:
+        return False, f"HTTP {r['status']} {_err_msg(r)}"
+    types = _content_types(r["parsed"])
+    return True, f"HTTP 200 content={types} stop={r['parsed'].get('stop_reason')}"
+
+
+def insp_compaction(r):
+    # Compaction acceptance probe: a short conversation never reaches the
+    # trigger threshold, so applied_edits stays empty. Support means the
+    # compact_20260112 edit type was *accepted* (200 + a context_management
+    # object in the response) rather than rejected with a 400 tag error.
+    if not r["ok"]:
+        return False, f"HTTP {r['status']} {_err_msg(r)}"
+    cm = (r["parsed"] or {}).get("context_management")
+    return cm is not None, f"HTTP 200 context_management={cm}"
+
+
 # Opus model IDs that support the xhigh / max effort levels (per Anthropic docs +
 # empirical upstream probe). The full effort scale (low/medium/high/xhigh/max) is
 # an Opus 4.7/4.8 feature; lower-tier models reject the two top levels. Used to
@@ -1051,6 +1090,135 @@ def build_tests(model: str, *, heavy: bool = False):
         name="model_discovery", kind="models", stream=False, beta=[], expect="support",
         body=None, inspect=insp_models))
 
+    # ----------------------------------------------------------------------- #
+    # Coverage for the remaining official Claude-platform features (docs
+    # feature-overview page). Most are Anthropic-first-party betas that the
+    # Copilot upstream does not implement, so they are reject-probes that pin
+    # down current behavior; expects below were calibrated against the live
+    # upstream (see the capability report).
+    # ----------------------------------------------------------------------- #
+
+    # Automatic prompt caching: a single top-level cache_control instead of
+    # block-level breakpoints; the system caches the last cacheable block.
+    tests.append(dict(
+        name="auto_prompt_cache", kind="messages", stream=False, beta=[], expect="support",
+        body=base(cache_control={"type": "ephemeral"},
+                  system=("You are a helpful capability-probe assistant. " * 200).strip(),
+                  messages=user("Say hi.")),
+        inspect=insp_cache))
+
+    # Strict tool use: the other half of structured outputs (JSON outputs are
+    # covered by the structured_outputs case). "strict": true on a tool def
+    # guarantees schema-valid tool inputs via constrained decoding. Strict
+    # schemas require "additionalProperties": false.
+    strict_weather = dict(weather_tool, strict=True)
+    strict_weather["input_schema"] = dict(weather_tool["input_schema"], additionalProperties=False)
+    tests.append(dict(
+        name="strict_tool_use", kind="messages", stream=False, beta=[], expect="support",
+        body=base(tools=[strict_weather],
+                  tool_choice={"type": "tool", "name": "get_weather"},
+                  messages=user("What's the weather in Paris? Use the tool.")),
+        inspect=insp_strict_tool))
+
+    # Data residency: inference_geo routes inference to a geography ("us"/
+    # "global") and is echoed back in usage.inference_geo.
+    tests.append(dict(
+        name="inference_geo", kind="messages", stream=False, beta=[], expect="reject",
+        body=base(inference_geo="us", messages=user("Reply with exactly: pong")),
+        inspect=insp_inference_geo))
+
+    # MCP connector: mcp_servers connects remote MCP servers directly from the
+    # Messages API (beta mcp-client-2025-11-20).
+    tests.append(dict(
+        name="mcp_connector", kind="messages", stream=False,
+        beta=["mcp-client-2025-11-20"], expect="reject",
+        body=base(mcp_servers=[{"type": "url",
+                                "url": "https://example-server.modelcontextprotocol.io/sse",
+                                "name": "example-mcp"}],
+                  tools=[{"type": "mcp_toolset", "mcp_server_name": "example-mcp"}],
+                  messages=user("What tools do you have available?")),
+        inspect=insp_reject))
+
+    # Tool search: server-side catalog search that loads deferred tools
+    # on demand (GA on the Anthropic API; tool_search_tool_regex_20251119).
+    # The Copilot upstream supports it without a beta header (verified live:
+    # server_tool_use + tool_search_tool_result blocks, then the found tool
+    # is invoked).
+    tests.append(dict(
+        name="tool_search", kind="messages", stream=False, beta=[], expect="support",
+        body=base(tools=[{"type": "tool_search_tool_regex_20251119",
+                          "name": "tool_search_tool_regex"},
+                         dict(weather_tool, defer_loading=True),
+                         dict(time_tool, defer_loading=True)],
+                  messages=user("What's the weather in Paris? Find and use a suitable tool.")),
+        inspect=insp_tool_search))
+
+    # Programmatic tool calling: allowed_callers lets code in the code
+    # execution container invoke client tools (needs code_execution_20260120).
+    tests.append(dict(
+        name="programmatic_tool_calling", kind="messages", stream=False, beta=[], expect="reject",
+        body=base(tools=[{"type": "code_execution_20260120", "name": "code_execution"},
+                         dict(weather_tool, allowed_callers=["code_execution_20260120"])],
+                  messages=user("Check the weather in Paris and London programmatically.")),
+        inspect=insp_reject))
+
+    # Agent Skills: container.skills loads pre-built skills (pptx/xlsx/docx/pdf)
+    # into the code-execution container (beta skills-2025-10-02).
+    tests.append(dict(
+        name="agent_skills", kind="messages", stream=False,
+        beta=["skills-2025-10-02", "code-execution-2025-08-25"], expect="reject",
+        body=base(container={"skills": [{"type": "anthropic", "skill_id": "pptx",
+                                         "version": "latest"}]},
+                  tools=[{"type": "code_execution_20250825", "name": "code_execution"}],
+                  messages=user("Create a one-slide presentation that says hello.")),
+        inspect=insp_reject))
+
+    # Advisor tool: a higher-tier advisor model consulted mid-generation
+    # (beta advisor-tool-2026-03-01).
+    tests.append(dict(
+        name="advisor_tool", kind="messages", stream=False,
+        beta=["advisor-tool-2026-03-01"], expect="reject",
+        body=base(tools=[{"type": "advisor_20260301", "name": "advisor",
+                          "model": "claude-opus-4-8"}],
+                  messages=user("Build a concurrent worker pool in Go with graceful shutdown.")),
+        inspect=insp_reject))
+
+    # Compaction: server-side summarization via context_management.edits
+    # compact_20260112. The upstream supports it behind the compact-2026-01-12
+    # beta; the proxy detects compact_* edits and auto-adds that beta header
+    # (clients' own beta headers are not forwarded). The clear_tool_uses
+    # strategy is covered separately by the context_management case.
+    tests.append(dict(
+        name="compaction", kind="messages", stream=False,
+        beta=["compact-2026-01-12"], expect="support",
+        body=base(context_management={"edits": [{"type": "compact_20260112"}]},
+                  messages=user("Reply with exactly: pong")),
+        inspect=insp_compaction))
+
+    # Server-side fallback: fallbacks names retry models for refused requests
+    # (beta server-side-fallback-2026-06-01).
+    tests.append(dict(
+        name="server_side_fallback", kind="messages", stream=False,
+        beta=["server-side-fallback-2026-06-01"], expect="reject",
+        body=base(fallbacks=[{"model": "claude-opus-4-8"}],
+                  messages=user("Reply with exactly: pong")),
+        inspect=insp_reject))
+
+    # Message Batches API: a separate endpoint (/v1/messages/batches). The
+    # proxy has no route for it and the upstream does not expose it.
+    tests.append(dict(
+        name="batches_endpoint", kind="batches", stream=False, beta=[], expect="reject",
+        body={"requests": [{"custom_id": "cap-probe-1",
+                            "params": base(max_tokens=16,
+                                           messages=user("Reply with exactly: pong"))}]},
+        inspect=insp_reject))
+
+    # Files API: a separate endpoint (/v1/files, beta files-api-2025-04-14).
+    tests.append(dict(
+        name="files_endpoint", kind="files", stream=False,
+        beta=["files-api-2025-04-14"], expect="reject",
+        body=None, inspect=insp_reject))
+
     return tests
 
 
@@ -1062,6 +1230,10 @@ def endpoint_for(kind: str, target: str) -> str:
         return "/v1/models" if target == "proxy" else "/models"
     if kind == "count_tokens":
         return "/v1/messages/count_tokens"
+    if kind == "batches":
+        return "/v1/messages/batches"
+    if kind == "files":
+        return "/v1/files"
     return "/v1/messages"
 
 
@@ -1099,7 +1271,7 @@ def run_target(target, tests, *, base_url, headers_fn, timeout, only):
         if only and t["name"] not in only:
             continue
         kind = t["kind"]
-        method = "GET" if kind == "models" else "POST"
+        method = "GET" if kind in ("models", "files") else "POST"
         url = base_url + endpoint_for(kind, target)
         headers = headers_fn(t["beta"])
         bodies = t.get("variants") or [t.get("body")]
