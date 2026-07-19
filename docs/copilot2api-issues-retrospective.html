@@ -1,0 +1,1368 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Copilot2API 测试与咨询问题复盘 — 问题与解决方案 · TD-2620</title>
+
+<!-- ============================================================
+     FONTS — Archivo(展示)+ IBM Plex Mono(数据/表头)+ Noto Sans SC(中文)
+     ============================================================ -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet">
+
+<style>
+/* ============================================================
+   TECHNICAL DOSSIER · TD-2607 — SLIDE EDITION
+   1970s 航天工程手册风格:暖纸、国际橙、绘图网格、
+   mono 数据、盖章判定。固定 1920×1080 舞台,整体缩放。
+   ============================================================ */
+
+/* ===========================================
+   CSS CUSTOM PROPERTIES (THEME)
+   改这里即可整体换肤
+   =========================================== */
+:root {
+  --paper:        #f2efe4;
+  --paper-raise:  #f7f5ec;
+  --paper-sink:   #eae6d7;
+  --ink:          #1a1913;
+  --ink-soft:     #4c4a3f;
+  --ink-faint:    #8b8878;
+  --rule:         #1a1913;
+  --hairline:     #c9c5b2;
+  --orange:       #e03e00;
+  --orange-ink:   #b83300;
+  --pass:         #1d6e38;
+  --fail:         #b3261e;
+  --warn:         #8f6400;
+  --anthropic:    #2b52b8;
+  --bedrock:      #0e7f6b;
+  --vertex:       #b57a00;
+  --tint-pass:    rgba(29,110,56,.09);
+  --tint-fail:    rgba(179,38,30,.08);
+  --tint-warn:    rgba(143,100,0,.10);
+  --tint-orange:  rgba(224,62,0,.08);
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --disp: "Archivo", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --stage-bg: #14130e;
+  --slide-bg: var(--paper);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+/* ===========================================
+   FIXED 16:9 STAGE: MANDATORY BASE STYLES
+   (viewport-base.css 全量内嵌)
+   =========================================== */
+html,
+body {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+    background: var(--stage-bg, #000);
+}
+
+.deck-viewport {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+    background: var(--stage-bg, #000);
+}
+
+.deck-stage {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 1920px;
+    height: 1080px;
+    overflow: hidden;
+    transform-origin: 0 0;
+    background: var(--slide-bg, #fff);
+}
+
+.slide {
+    position: absolute;
+    inset: 0;
+    width: 1920px;
+    height: 1080px;
+    overflow: hidden;
+    display: block;
+    visibility: hidden;
+    opacity: 0;
+    pointer-events: none;
+    background: var(--slide-bg, #fff);
+}
+
+.slide.active,
+.slide.visible {
+    visibility: visible;
+    opacity: 1;
+    pointer-events: auto;
+    z-index: 1;
+}
+
+img,
+video,
+canvas,
+svg {
+    max-width: 100%;
+    max-height: 100%;
+}
+
+.deck-controls {
+    position: fixed;
+    left: 50%;
+    bottom: 22px;
+    transform: translateX(-50%);
+    z-index: 1000;
+}
+
+@media print {
+    html,
+    body {
+        width: 1920px;
+        height: auto;
+        overflow: visible;
+        background: #fff;
+    }
+
+    .deck-viewport {
+        position: static;
+        overflow: visible;
+        background: #fff;
+    }
+
+    .deck-stage {
+        position: static;
+        width: auto;
+        height: auto;
+        transform: none !important;
+        background: none;
+    }
+
+    .slide {
+        position: relative;
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        pointer-events: auto !important;
+        width: 1920px;
+        height: 1080px;
+        break-after: page;
+        page-break-after: always;
+    }
+
+    .slide:last-child {
+        break-after: auto;
+        page-break-after: auto;
+    }
+
+    .deck-controls {
+        display: none !important;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.2s !important;
+    }
+}
+
+/* ===========================================
+   SLIDE SURFACE — 绘图网格 + 纸张颗粒
+   =========================================== */
+.slide {
+  font-family: var(--disp);
+  color: var(--ink);
+  transition: opacity .45s ease;
+}
+.slide::before {
+  content: "";
+  position: absolute; inset: 0;
+  pointer-events: none;
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='linear' slope='0.045'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E"),
+    linear-gradient(rgba(26,25,19,.032) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(26,25,19,.032) 1px, transparent 1px);
+  background-size: 160px 160px, 40px 40px, 40px 40px;
+  z-index: 0;
+}
+.slide > * { position: relative; z-index: 1; }
+
+::selection { background: var(--orange); color: var(--paper); }
+
+code {
+  font-family: var(--mono);
+  font-size: .92em;
+  background: var(--tint-orange);
+  padding: 1px 7px;
+}
+
+/* ===========================================
+   SLIDE CHROME — 每页顶部档案栏 / 底部页脚
+   =========================================== */
+.s-top {
+  position: absolute; top: 44px; left: 88px; right: 88px;
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-family: var(--mono);
+  font-size: 17px; letter-spacing: .14em; text-transform: uppercase;
+  padding-bottom: 14px;
+  border-bottom: 4px solid var(--rule);
+}
+.s-top .doc-no { color: var(--orange); font-weight: 600; }
+.s-top .doc-sec { color: var(--ink-faint); }
+.s-top .doc-pg { color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+
+.s-foot {
+  position: absolute; bottom: 40px; left: 88px; right: 88px;
+  display: flex; justify-content: space-between;
+  font-family: var(--mono);
+  font-size: 14px; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--ink-faint);
+  border-top: 1px solid var(--hairline);
+  padding-top: 12px;
+}
+
+.s-body { position: absolute; top: 130px; left: 88px; right: 88px; bottom: 96px; }
+
+/* ===========================================
+   SECTION HEADER — 大号 mono 章节号
+   =========================================== */
+.sec-head {
+  display: grid; grid-template-columns: auto 1fr; gap: 26px;
+  align-items: start;
+  padding-top: 22px;
+  margin-bottom: 30px;
+}
+.sec-head .sec-no {
+  font-family: var(--mono); font-weight: 600;
+  font-size: 64px; line-height: 1;
+  color: var(--orange); letter-spacing: -0.02em;
+}
+.sec-head .sec-label {
+  font-family: var(--mono); font-size: 15px; font-weight: 600;
+  letter-spacing: .2em; text-transform: uppercase; color: var(--ink-faint);
+  margin-bottom: 6px;
+}
+.sec-head h2 {
+  font-size: 42px; font-weight: 800; font-stretch: 108%;
+  letter-spacing: -0.01em; line-height: 1.2;
+}
+.sub-head {
+  font-size: 26px; font-weight: 700;
+  display: flex; align-items: baseline; gap: 16px;
+  margin-bottom: 20px;
+}
+.sub-head .h3-no {
+  font-family: var(--mono); font-weight: 600; font-size: 19px;
+  color: var(--orange); letter-spacing: .06em;
+}
+.sec-lede { font-size: 22px; line-height: 1.65; color: var(--ink-soft); margin-bottom: 26px; max-width: 76em; }
+
+/* ===========================================
+   REVEAL — 进场动画(由 .visible 触发,交错延迟)
+   =========================================== */
+.reveal {
+  opacity: 0; transform: translateY(28px);
+  transition: opacity .6s var(--ease-out-expo), transform .6s var(--ease-out-expo);
+}
+.slide.visible .reveal { opacity: 1; transform: translateY(0); }
+.reveal:nth-child(1) { transition-delay: .05s; }
+.reveal:nth-child(2) { transition-delay: .15s; }
+.reveal:nth-child(3) { transition-delay: .25s; }
+.reveal:nth-child(4) { transition-delay: .35s; }
+.reveal:nth-child(5) { transition-delay: .45s; }
+.reveal:nth-child(6) { transition-delay: .55s; }
+
+/* ===========================================
+   TITLE SLIDE — 封面
+   =========================================== */
+.crop { position: absolute; width: 34px; height: 34px; border-color: var(--ink); border-style: solid; border-width: 0; opacity: .55; z-index: 2; }
+.crop.tl { top: 20px; left: 20px; border-top-width: 2px; border-left-width: 2px; }
+.crop.tr { top: 20px; right: 20px; border-top-width: 2px; border-right-width: 2px; }
+.crop.bl { bottom: 20px; left: 20px; border-bottom-width: 2px; border-left-width: 2px; }
+.crop.br { bottom: 20px; right: 20px; border-bottom-width: 2px; border-right-width: 2px; }
+
+.title-body { position: absolute; left: 88px; top: 236px; width: 1280px; }
+.kicker {
+  font-family: var(--mono); font-size: 21px; font-weight: 600;
+  letter-spacing: .22em; text-transform: uppercase; color: var(--orange);
+  display: flex; align-items: center; gap: 20px;
+  margin-bottom: 38px;
+}
+.kicker::after { content: ""; flex: 1; height: 1px; background: var(--hairline); }
+.title-body h1 {
+  font-size: 100px; font-weight: 800; font-stretch: 112%;
+  line-height: 1.12; letter-spacing: -0.015em;
+}
+.title-body h1 .amp { color: var(--orange); }
+.title-sub {
+  margin-top: 40px; font-size: 26px; line-height: 1.65;
+  color: var(--ink-soft); max-width: 42em;
+}
+.stamp {
+  position: absolute; top: 296px; right: 100px;
+  transform: rotate(7deg);
+  border: 5px solid var(--pass); color: var(--pass);
+  font-family: var(--mono); font-weight: 600;
+  font-size: 30px; letter-spacing: .18em; text-transform: uppercase;
+  padding: 18px 30px; opacity: 0;
+}
+.slide.visible .stamp { animation: stamp .5s .9s cubic-bezier(.2,2.4,.4,1) both; }
+.stamp small { display: block; font-size: 15px; letter-spacing: .12em; margin-top: 6px; }
+@keyframes stamp {
+  from { opacity: 0; transform: rotate(7deg) scale(1.6); }
+  to   { opacity: .85; transform: rotate(7deg) scale(1); }
+}
+.title-block {
+  position: absolute; left: 88px; right: 88px; bottom: 92px;
+  border-top: 5px solid var(--rule);
+  border-bottom: 1.5px solid var(--rule);
+  display: grid; grid-template-columns: repeat(4, 1fr);
+}
+.title-block .tb {
+  padding: 18px 24px 20px 0;
+  border-right: 1px solid var(--hairline); margin-right: 24px;
+}
+.title-block .tb:last-child { border-right: none; margin-right: 0; }
+.tb .tb-k {
+  font-family: var(--mono); font-size: 14px; font-weight: 600;
+  letter-spacing: .16em; text-transform: uppercase; color: var(--ink-faint);
+}
+.tb .tb-v { font-size: 22px; font-weight: 700; margin-top: 8px; }
+.tb .tb-v code { font-size: 17px; font-weight: 500; }
+
+/* ===========================================
+   KPI 仪表条
+   =========================================== */
+.kpi-strip {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  border: 2px solid var(--rule);
+  background: var(--paper-raise);
+  box-shadow: 8px 8px 0 rgba(26,25,19,.08);
+}
+.kpi {
+  padding: 30px 34px 28px;
+  border-right: 1px solid var(--hairline);
+  border-bottom: 1px solid var(--hairline);
+  position: relative;
+}
+.kpi:nth-child(3n) { border-right: none; }
+.kpi:nth-child(n+4) { border-bottom: none; }
+.kpi .k-idx {
+  position: absolute; top: 18px; right: 22px;
+  font-family: var(--mono); font-size: 14px; color: var(--ink-faint);
+  letter-spacing: .1em;
+}
+.kpi .k-label {
+  font-family: var(--mono); font-size: 16px; font-weight: 600;
+  letter-spacing: .14em; text-transform: uppercase; color: var(--ink-soft);
+}
+.kpi .k-value {
+  font-family: var(--mono); font-weight: 600;
+  font-size: 72px; line-height: 1.1; margin-top: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.kpi .k-value .unit { font-size: 24px; font-weight: 500; color: var(--orange); margin-left: 6px; }
+.kpi .k-note { font-size: 18px; color: var(--ink-faint); margin-top: 8px; line-height: 1.5; }
+
+/* ===========================================
+   结论编号列表
+   =========================================== */
+ol.conclusions { list-style: none; counter-reset: c; }
+ol.conclusions li {
+  counter-increment: c;
+  position: relative;
+  padding: 24px 28px 24px 96px;
+  font-size: 23px; line-height: 1.62;
+  border-bottom: 1px solid var(--hairline);
+  background: var(--paper-raise);
+}
+ol.conclusions li:first-child { border-top: 2px solid var(--rule); }
+ol.conclusions li:last-child { border-bottom: 2px solid var(--rule); }
+ol.conclusions li::before {
+  content: counter(c, decimal-leading-zero);
+  position: absolute; left: 26px; top: 26px;
+  font-family: var(--mono); font-weight: 600; font-size: 30px;
+  color: var(--orange);
+}
+ol.conclusions strong { font-weight: 700; }
+
+/* ===========================================
+   数据表格
+   =========================================== */
+.panel {
+  border: 2px solid var(--rule);
+  background: var(--paper-raise);
+  box-shadow: 8px 8px 0 rgba(26,25,19,.08);
+}
+table { width: 100%; border-collapse: collapse; }
+th {
+  font-family: var(--mono); font-size: 15px; font-weight: 600;
+  letter-spacing: .14em; text-transform: uppercase;
+  text-align: left; color: var(--paper);
+  background: var(--ink);
+  padding: 14px 22px;
+}
+td {
+  padding: 16px 22px;
+  font-size: 21px; line-height: 1.55;
+  border-bottom: 1px solid var(--hairline);
+  vertical-align: top;
+}
+tr:last-child td { border-bottom: none; }
+td.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+/* 判定徽章 */
+.badge {
+  display: inline-block;
+  font-family: var(--mono); font-size: 16px; font-weight: 600;
+  letter-spacing: .04em;
+  padding: 3px 12px;
+  border: 1.5px solid currentColor;
+  white-space: nowrap;
+  margin-right: 8px;
+}
+.badge.ok   { color: var(--pass); background: var(--tint-pass); }
+.badge.no   { color: var(--fail); background: var(--tint-fail); }
+.badge.warn { color: var(--warn); background: var(--tint-warn); }
+.badge.diff { color: var(--orange-ink); background: var(--tint-orange); }
+.err-quote {
+  display: block; margin-top: 6px;
+  font-family: var(--mono); font-size: 16px; font-style: italic;
+  color: var(--ink-faint);
+}
+
+/* 托管落点标识 */
+.host {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-family: var(--mono); font-size: 18px;
+  margin-right: 16px; white-space: nowrap;
+}
+.dot { width: 13px; height: 13px; border-radius: 50%; display: inline-block; }
+.dot.anthropic { background: var(--anthropic); }
+.dot.bedrock   { background: var(--bedrock); }
+.dot.vertex    { background: var(--vertex); }
+
+/* ===========================================
+   能力 chips
+   =========================================== */
+.chips { display: flex; flex-wrap: wrap; gap: 14px; }
+.chip {
+  font-family: var(--mono); font-size: 19px;
+  padding: 9px 18px;
+  border: 1.5px solid var(--pass);
+  color: var(--pass); background: var(--tint-pass);
+  white-space: nowrap;
+}
+
+/* ===========================================
+   备注列表
+   =========================================== */
+ul.notes { list-style: none; }
+ul.notes li {
+  position: relative;
+  padding: 14px 0 14px 40px;
+  font-size: 21px; line-height: 1.6;
+  color: var(--ink-soft);
+  border-bottom: 1px dashed var(--hairline);
+}
+ul.notes li:last-child { border-bottom: none; }
+ul.notes li::before {
+  content: "▸";
+  position: absolute; left: 8px; top: 13px;
+  color: var(--orange); font-size: 20px;
+}
+ul.notes strong { color: var(--ink); }
+
+/* 备注卡片(2×2) */
+.note-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.note-card {
+  border: 1.5px solid var(--rule);
+  background: var(--paper-raise);
+  padding: 24px 28px;
+  font-size: 20px; line-height: 1.6; color: var(--ink-soft);
+}
+.note-card .nc-k {
+  font-family: var(--mono); font-size: 15px; font-weight: 600;
+  letter-spacing: .16em; text-transform: uppercase; color: var(--orange);
+  margin-bottom: 12px;
+  display: flex; align-items: center; gap: 12px;
+}
+.note-card .nc-k::after { content: ""; flex: 1; height: 1px; background: var(--hairline); }
+.note-card strong { color: var(--ink); }
+
+/* ===========================================
+   FIG.07 条形图
+   =========================================== */
+.mini-chart { padding: 40px 44px; }
+.mini-chart .row {
+  display: grid; grid-template-columns: 380px 1fr; gap: 26px;
+  align-items: center; margin-bottom: 34px;
+}
+.mini-chart .cat {
+  font-family: var(--mono); font-size: 20px; text-align: right; color: var(--ink-soft);
+}
+.mini-chart .track { position: relative; height: 52px; background: var(--paper-sink); border: 1px solid var(--hairline); }
+.mini-chart .bar {
+  position: absolute; inset: 0 auto 0 0;
+  background: var(--orange); width: 0;
+  transition: width 1s .5s var(--ease-out-expo);
+}
+.mini-chart .bar.hatch {
+  background: repeating-linear-gradient(45deg, var(--ink) 0 7px, transparent 7px 14px);
+}
+.slide.visible .mini-chart .bar[data-w] { }
+.mini-chart .bar-label {
+  position: absolute; top: 50%; transform: translate(14px, -50%);
+  font-family: var(--mono); font-weight: 600; font-size: 26px;
+}
+.mini-chart .axis-note {
+  font-size: 19px; color: var(--ink-faint);
+  padding-left: 406px; margin-top: 4px;
+}
+.mult-callout {
+  font-family: var(--mono); font-weight: 600; color: var(--orange); font-size: 22px;
+}
+
+/* ===========================================
+   代理功能面卡片
+   =========================================== */
+.feat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+.feat {
+  border: 1.5px solid var(--rule);
+  background: var(--paper-raise);
+  padding: 26px 28px;
+}
+.feat .f-no {
+  font-family: var(--mono); font-size: 15px; font-weight: 600;
+  color: var(--orange); letter-spacing: .12em; margin-bottom: 12px;
+}
+.feat .f-t { font-size: 23px; font-weight: 700; margin-bottom: 10px; }
+.feat .f-d { font-size: 19px; line-height: 1.6; color: var(--ink-soft); }
+
+/* ===========================================
+   尾页
+   =========================================== */
+.colophon-label {
+  font-family: var(--mono); font-size: 16px; font-weight: 600;
+  letter-spacing: .2em; text-transform: uppercase; color: var(--orange);
+  margin-bottom: 22px;
+}
+ul.sources { list-style: none; }
+ul.sources li {
+  padding: 14px 0 14px 36px; position: relative;
+  font-size: 20px; line-height: 1.6; color: var(--ink-soft);
+  border-bottom: 1px dashed var(--hairline);
+}
+ul.sources li::before { content: "▸"; position: absolute; left: 4px; color: var(--orange); }
+.method-note { margin-top: 30px; font-size: 19px; line-height: 1.65; color: var(--ink-faint); max-width: 78em; }
+.end-mark {
+  margin-top: 44px;
+  font-family: var(--mono); font-size: 18px; letter-spacing: .2em;
+  text-transform: uppercase; color: var(--ink);
+  display: flex; align-items: center; gap: 20px;
+}
+.end-mark::before, .end-mark::after { content: ""; flex: 1; height: 3px; background: var(--rule); }
+
+/* ===========================================
+   DECK CONTROLS — 页码指示(舞台之外)
+   =========================================== */
+.deck-controls {
+  font-family: var(--mono); font-size: 13px; letter-spacing: .18em;
+  color: rgba(242,239,228,.55);
+  user-select: none;
+  display: flex; gap: 18px; align-items: center;
+}
+.deck-controls button {
+  background: none; border: 1px solid rgba(242,239,228,.35);
+  color: rgba(242,239,228,.7); font-family: var(--mono); font-size: 13px;
+  width: 34px; height: 30px; cursor: pointer;
+}
+.deck-controls button:hover { border-color: var(--orange); color: var(--orange); }
+
+/* ===========================================
+   INLINE EDITING — 左上角热区 + E 键
+   =========================================== */
+.edit-hotzone {
+  position: fixed; top: 0; left: 0;
+  width: 80px; height: 80px;
+  z-index: 10000; cursor: pointer;
+}
+.edit-toggle {
+  position: fixed; top: 18px; left: 18px;
+  z-index: 10001;
+  width: 46px; height: 46px;
+  font-size: 20px;
+  background: var(--paper); border: 2px solid var(--ink);
+  cursor: pointer;
+  opacity: 0; pointer-events: none;
+  transition: opacity .3s ease;
+}
+.edit-toggle.show, .edit-toggle.active { opacity: 1; pointer-events: auto; }
+.edit-toggle.active { border-color: var(--orange); background: var(--tint-orange); }
+body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); outline-offset: 3px; }
+</style>
+</head>
+<body>
+
+<div class="deck-viewport">
+<main class="deck-stage" id="deckStage">
+
+<!-- ==================== SLIDE 01 · 封面 ==================== -->
+<section class="slide active" aria-label="封面">
+  <div class="crop tl"></div><div class="crop tr"></div><div class="crop bl"></div><div class="crop br"></div>
+  <div class="s-top">
+    <span class="doc-no">Technical Dossier · TD-2620</span>
+    <span class="doc-sec">Copilot2API — Issues Retrospective</span>
+  </div>
+  <div class="title-body">
+    <p class="kicker reveal">问题复盘 · Issues &amp; Resolutions</p>
+    <h1 class="reveal">测试与咨询问题<br><span class="amp">×</span> 解决方案复盘</h1>
+    <p class="title-sub reveal">汇总 2026-06-10 ~ 07-19 期间在 copilot2api 项目中的全部测试与咨询：上游能力缺口 · 413 请求体超限 · Thinking Signature · Structured Outputs(Vertex) · Token 与认证 · SSE 流式稳定性 · 缓存与多账户。每个问题按「现象 → 分析 → 解决方案/结论」组织。</p>
+  </div>
+  <div class="stamp">Compiled<small>2026-07-19 · 会话复盘</small></div>
+  <div class="title-block reveal">
+    <div class="tb"><div class="tb-k">Report Date / 报告日期</div><div class="tb-v">2026-07-19</div></div>
+    <div class="tb"><div class="tb-k">Scope / 范围</div><div class="tb-v">60+ 会话 · 40 天</div></div>
+    <div class="tb"><div class="tb-k">Method / 方法</div><div class="tb-v">会话记录 + git 提交复盘</div></div>
+    <div class="tb"><div class="tb-k">Companion / 姊妹文档</div><div class="tb-v"><code>copilot-capability-report.html</code></div></div>
+  </div>
+</section>
+
+<!-- ==================== SLIDE 02 · KPI ==================== -->
+<section class="slide" aria-label="关键指标">
+  <div class="s-top">
+    <span class="doc-no">TD-2620</span>
+    <span class="doc-sec">Key Figures — 关键指标</span>
+    <span class="doc-pg">02 / 13</span>
+  </div>
+  <div class="s-body">
+    <div class="sec-head reveal">
+      <div class="sec-no">FIG</div>
+      <div>
+        <div class="sec-label">Instrument Panel</div>
+        <h2>复盘全景：六大问题域</h2>
+      </div>
+    </div>
+    <div class="kpi-strip reveal" role="list" aria-label="关键指标">
+      <div class="kpi" role="listitem">
+        <span class="k-idx">FIG.01</span>
+        <div class="k-label">核心问题域</div>
+        <div class="k-value">6</div>
+        <div class="k-note">上游缺口 / 413 / Thinking Signature / Structured Outputs / 认证 / SSE 流式</div>
+      </div>
+      <div class="kpi" role="listitem">
+        <span class="k-idx">FIG.02</span>
+        <div class="k-label">复盘会话</div>
+        <div class="k-value">60<span class="unit">+</span></div>
+        <div class="k-note">2026-06-10 ~ 07-19,CLI + VS Code Chat</div>
+      </div>
+      <div class="kpi" role="listitem">
+        <span class="k-idx">FIG.03</span>
+        <div class="k-label">能力矩阵用例</div>
+        <div class="k-value">95</div>
+        <div class="k-note">三层对照:Opus 4.8 × 47 + Sonnet 4.6 × 48(TD-2607)</div>
+      </div>
+      <div class="kpi" role="listitem">
+        <span class="k-idx">FIG.04</span>
+        <div class="k-label">修复/功能落地</div>
+        <div class="k-value">10<span class="unit">+</span></div>
+        <div class="k-note">beta 头转发 · 1M 解析修复 · ModeDirect · 账户池 …</div>
+      </div>
+      <div class="kpi" role="listitem">
+        <span class="k-idx">FIG.05</span>
+        <div class="k-label">问题闭环</div>
+        <div class="k-value">5/6</div>
+        <div class="k-note">唯一悬置:SO 落 Vertex 为上游组织策略,只能重试</div>
+      </div>
+      <div class="kpi" role="listitem">
+        <span class="k-idx">FIG.06</span>
+        <div class="k-label">专用探测脚本</div>
+        <div class="k-value">4<span class="unit">套</span></div>
+        <div class="k-note">capability / structured_outputs / TTFT / 2M payload</div>
+      </div>
+    </div>
+  </div>
+  <div class="s-foot"><span>Issues Retrospective</span><span>2026-07-19</span></div>
+</section>
+
+<!-- ==================== SLIDE 03 · Q1 现象 ==================== -->
+<section class="slide" aria-label="Q1 上游硬性不支持">
+  <div class="s-top">
+    <span class="doc-no">TD-2620</span>
+    <span class="doc-sec">Issue 01 — Upstream Gaps</span>
+    <span class="doc-pg">03 / 13</span>
+  </div>
+  <div class="s-body">
+    <div class="sec-head reveal">
+      <div class="sec-no">Q1</div>
+      <div>
+        <div class="sec-label">Issue 01 — 上游模型硬性不支持的功能</div>
+        <h2>现象与判定：不是代理丢功能，是上游不放行</h2>
+      </div>
+    </div>
+    <p class="sec-lede reveal">早期怀疑「代理把功能弄丢了」。用<strong>三层对照法</strong>(① Anthropic 官方文档 → ② 直连上游 → ③ 经代理)复测后判定:以下能力在上游即被拒,换任何 beta 头 / 工具版本都打不通:</p>
+    <div class="panel reveal">
+      <table>
+        <thead><tr><th style="width:38%">能力</th><th style="width:15%">实测</th><th>上游报错 / 结论</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><code>web_search</code>(任何版本 / beta 组合)</td>
+            <td><span class="badge no">✕ 400</span></td>
+            <td><span class="err-quote" style="margin-top:0;">The use of the web search tool is not supported.</span></td>
+          </tr>
+          <tr>
+            <td><code>web_fetch</code>(工具与 beta 头双白名单均堵)</td>
+            <td><span class="badge no">✕ 400</span></td>
+            <td><span class="err-quote" style="margin-top:0;">rejected tool(s): web_fetch / unsupported beta header(s)</span></td>
+          </tr>
+          <tr>
+            <td>外链图片 <code>image.source.type=url</code></td>
+            <td><span class="badge no">✕ 400</span></td>
+            <td>仅接受 base64 —— 客户端侧转 base64 可规避</td>
+          </tr>
+          <tr>
+            <td>300K 扩展输出(<code>output-300k</code> beta)</td>
+            <td><span class="badge no">✕ 400</span></td>
+            <td>输出 128K 硬上限</td>
+          </tr>
+          <tr>
+            <td>fast mode 真实加速</td>
+            <td><span class="badge warn">△ 200 但无效</span></td>
+            <td>字段 / beta 被容忍,不实现加速</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <ul class="notes" style="margin-top: 24px;">
+      <li><strong>处置:</strong>上游限制,无法从代理侧绕过。图片走 base64;web 检索由客户端自带工具替代(本项目即用本地 web_fetch/web_search 工具完成检索类任务)。</li>
+    </ul>
+  </div>
+  <div class="s-foot"><span>Issue 01 · Upstream Gaps (1 of 2)</span><span>2026-07-19</span></div>
+</section>
+
+<!-- ==================== SLIDE 04 · Q1 解法 ==================== -->
+<section class="slide" aria-label="Q1 解法 beta 头转发">
+  <div class="s-top">
+    <span class="doc-no">TD-2620</span>
+    <span class="doc-sec">Issue 01 — Upstream Gaps</span>
+    <span class="doc-pg">04 / 13</span>
+  </div>
+  <div class="s-body">
+    <div class="sec-head reveal">
+      <div class="sec-no">Q1</div>
+      <div>
+        <div class="sec-label">Issue 01 — 解决方案</div>
+        <h2>可修的都修了：beta 头白名单与转发</h2>
+      </div>
+    </div>
+    <div class="note-grid" style="grid-template-columns: 1fr;">
+      <div class="note-card reveal">
+        <div class="nc-k">Computer Use — 曾经的「第 3 处差异」,已修复</div>
+        直连可用、经代理 400 —— 根因是代理未转发 <code>computer-use-*</code> beta 头。2026-07-07 落地 <code>feat: forward computer-use beta header</code>(<code>738b8af</code>);07-12 四用例复验通过:新版 <code>computer_20251124</code>(Opus 4.8 / Sonnet 4.6)与旧版 <code>computer_20250124</code> 均返回 <code>tool_use</code>,完整 agent 循环可用。<strong>负向对照(去掉 beta 头 → 400)证明 header 转发正是关键路径。</strong>
+      </div>
+      <div class="note-card reveal">
+        <div class="nc-k">Beta Allowlist — 白名单策略(anthropic/handler.go)</div>
+        放行 <code>computer-use-*</code>(覆盖 <code>/v1/messages</code> 与 <code>/count_tokens</code>);body 含 <code>context_management</code> 时自动注入 <code>context-management</code> beta;原生路由转发 <code>interleaved-thinking</code>(<code>256dd42</code>);自动追加 compaction beta(<code>7983f2f</code>);其余客户端 beta 头一律剥离 —— 因为上游 allowlist 会对未知 beta 直接 400,剥离反而让请求成功。
+      </div>
+      <div class="note-card reveal">
+        <div class="nc-k">方法论沉淀 — 三层对照测试体系</div>
+        95 项能力矩阵中,直连与经代理<strong>仅 2 处有意分叉</strong>(剥离非标准 <code>cache_control.scope</code>、剥离非白名单 beta 头),其余逐项等价。结论:原生 <code>/v1/messages</code> 透传与直连等价,可放心作为 Claude 客户端的接入面。
+      </div>
+    </div>
+  </div>
+  <div class="s-foot"><span>Issue 01 · Upstream Gaps (2 of 2)</span><span>2026-07-19</span></div>
+</section>
+
+<!-- ==================== SLIDE 05 · Q2 413 ==================== -->
+<section class="slide" aria-label="Q2 413 请求体超限">
+  <div class="s-top">
+    <span class="doc-no">TD-2620</span>
+    <span class="doc-sec">Issue 02 — HTTP 413</span>
+    <span class="doc-pg">05 / 13</span>
+  </div>
+  <div class="s-body">
+    <div class="sec-head reveal">
+      <div class="sec-no">Q2</div>
+      <div>
+        <div class="sec-label">Issue 02 — 大图片 / 长历史触发 413</div>
+        <h2>413 Request Entity Too Large：根因是 Business 端点网关层</h2>
+      </div>
+    </div>
+    <p class="sec-lede reveal">现象:带图片或长历史会话的请求经 <code>/chat/completions</code> 报 413。<strong>报错链路:Claude 本身有单图/单请求图片上限;代理侧不压缩图片,历史图片逐轮重复携带 → 请求体越滚越大 → 撞上 Business 端点网关 ~1MB body 限制 → 413。</strong> 逐级加码直连上游实测(claude-opus-4.8):</p>
+    <div class="panel reveal">
+      <table>
+        <thead><tr><th style="width:22%">Payload</th><th style="width:16%">individual 端点</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>1 MB</td><td><span class="badge ok">✓ 200</span></td><td>正常返回</td></tr>
+          <tr><td>2 MB</td><td><span class="badge ok">✓ 200</span></td><td>正常返回</td></tr>
+          <tr>
+            <td>3 MB</td>
+            <td><span class="badge no">✕ 400</span></td>
+            <td><span class="err-quote" style="margin-top:0;">prompt is too long: 1,209,916 tokens &gt; 1,000,000 maximum</span></td>
+          </tr>
+          <tr>
+            <td>同请求 → Business 端点</td>
+            <td><span class="badge no">✕ 413</span></td>
+            <td><code>api.business.githubcopilot.com</code> 网关层 body size 限制(约 1MB),请求根本没到模型服务</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <ul class="notes" style="margin-top: 16px;">
+      <li><strong>Claude 图片硬限制:</strong>单图 ≤ <strong>5MB</strong>、≤ <strong>8000×8000px</strong>;单请求 ≤ <strong>20 张</strong>,超过则每张降到 ≤ 2000×2000px;超限上游直接 400/413(建议长边 ≤1568px)。超大图 / 超多图本身即报错,与请求体大小是两条独立失败原因。</li>
+      <li><strong>413 根因链:</strong>代理原样透传、<strong>不做图片压缩</strong>,多轮对话把历史图片全部重复携带 → body 随轮次线性膨胀 → 撞 Business 网关约 1MB body 限 → <strong>413</strong>(individual 端点无此网关限,改撞 <strong>400 token 上限</strong>)。SDK Session 通道对大小更宽松。</li>
+      <li><strong>带图另一坑:</strong>缺 <code>Copilot-Vision-Request: true</code> 头 → <span style="font-family:var(--mono);font-size:16px;">"vision is not enabled…"</span>,已补齐。VS Code 会把 27MB 原图压到 ~768px(~150KB)再发 —— 客户端「能发大图」实为先压缩,本代理未做同等压缩故更易超限。</li>
+    </ul>
+  </div>
+  <div class="s-foot"><span>Issue 02 · HTTP 413 (1 of 2)</span><span>2026-07-19</span></div>
+</section>
+
+<!-- ==================== SLIDE 06 · Q2 延伸 超长上下文 ==================== -->
+<section class="slide" aria-label="Q2 延伸 超长上下文">
+  <div class="s-top">
+    <span class="doc-no">TD-2620</span>
+    <span class="doc-sec">Issue 02 — HTTP 413</span>
+    <span class="doc-pg">06 / 13</span>
+  </div>
+  <div class="s-body">
+    <div class="sec-head reveal">
+      <div class="sec-no">Q2</div>
+      <div>
+        <div class="sec-label">Issue 02 — 延伸:超长上下文行为</div>
+        <h2>网关不裁剪：上下文限制由上游强制执行</h2>
+      </div>
+    </div>
+    <p class="sec-lede reveal">代码分析结论:copilot2api <strong>不做任何裁剪 / 分块 / 压缩</strong>,请求原样透传,「能不能过」完全取决于上游模型窗口。实测(2026-06-23,经网关 <code>/v1/messages</code>):</p>
+    <div class="panel reveal">
+      <table>
+        <thead><tr><th style="width:44%">用例</th><th style="width:14%">结果</th><th>响应</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>Opus 4.8 · 2M tokens(7.1MB 请求体)非流式</td>
+            <td><span class="badge no">✕ 502</span></td>
+            <td><span class="err-quote" style="margin-top:0;">The context window is full and the request cannot be processed.</span></td>
+          </tr>
+          <tr><td>Haiku 4.5 · 300K tokens</td><td><span class="badge no">✕ 502</span></td><td>超出该模型窗口,同类报错</td></tr>
+          <tr><td>Haiku 4.5 · 100K tokens</td><td><span class="badge ok">✓ 200</span></td><td>8.5s 正常返回,<code>stop_reason: end_turn</code></td></tr>
+          <tr><td>Opus 4.8 · 2M · <strong>流式 + Thinking(high)</strong></td><td><span class="badge warn">△ 200</span></td><td>SDK Session 通道下 HTTP 层通过(与非流式 502 对照,通道行为不同)</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <ul class="notes" style="margin-top: 22px;">
+      <li><strong>1M 上下文修复:</strong><code>anthropic-beta: context-1m</code> 触发的 <code>-1m</code> 模型名解析 bug 已修复 —— 仅在必要且 <code>-1m</code> 变体真实存在时才切换(<code>b230a88</code>,PR #1 已合并)。</li>
+      <li><strong>配套:</strong><code>POST /v1/messages/count_tokens</code> 已代理到上游计数器(此前 404),客户端可先算 token 再发请求,主动避开 413 / 窗口超限。</li>
+    </ul>
+  </div>
+  <div class="s-foot"><span>Issue 02 · HTTP 413 (2 of 2)</span><span>2026-07-19</span></div>
+</section>
+
+<!-- ==================== SLIDE 07 · Q3 Thinking Signature ==================== -->
+<section class="slide" aria-label="Q3 Thinking Signature">
+  <div class="s-top">
+    <span class="doc-no">TD-2620</span>
+    <span class="doc-sec">Issue 03 — Thinking Signature</span>
+    <span class="doc-pg">07 / 13</span>
+  </div>
+  <div class="s-body">
+    <div class="sec-head reveal">
+      <div class="sec-no">Q3</div>
+      <div>
+        <div class="sec-label">Issue 03 — 经 /chat/completions 转换后的思考签名问题</div>
+        <h2>Thinking Signature：只有原生透传路由能保住它</h2>
+      </div>
+    </div>
+    <div class="note-grid">
+      <div class="note-card reveal">
+        <div class="nc-k">是什么</div>
+        Extended Thinking 开启后,每个 <code>thinking</code> 内容块附带一个不透明的 <code>signature</code> 字段 —— 加密验证凭据,证明该思考块确实由 Claude 生成。<strong>多轮对话 / 工具调用回传时必须原样带回</strong>,被改动或丢失即校验失败。
+      </div>
+      <div class="note-card reveal">
+        <div class="nc-k">流式下的形态</div>
+        <span style="font-family:var(--mono);font-size:17px;">content_block_start(thinking) → thinking_delta × N → <strong>signature_delta</strong> → content_block_stop → text / tool_use</span><br>签名在 thinking 块收尾时以 <code>signature_delta</code> 事件补发 —— 代理必须完整转发这一事件序列。
+      </div>
+      <div class="note-card reveal">
+        <div class="nc-k">问题:转换路径丢签名</div>
+        经 <code>/chat/completions</code>(OpenAI 格式)转换时,thinking 块被折叠为 reasoning / 普通文本,<code>signature</code> 字段在两种协议间<strong>没有对应位置</strong>,无法往返保真 —— 客户端下一轮把思考内容回传时缺签名,触发上游校验失败。
+      </div>
+      <div class="note-card reveal">
+        <div class="nc-k">解决方案</div>
+        需要思考签名的客户端(Claude Code 等)一律走<strong>原生 <code>/v1/messages</code> 透传路由</strong>:该路由逐字节透传、与直连等价,签名与 <code>signature_delta</code> 完整保留。<code>/chat/completions</code> 仅供无签名回传需求的 OpenAI 兼容客户端使用。
+      </div>
+    </div>
+  </div>
+  <div class="s-foot"><span>Issue 03 · Thinking Signature</span><span>2026-07-19</span></div>
+</section>
+
+<!-- ==================== SLIDE 08 · Q4 Structured Outputs ==================== -->
+<section class="slide" aria-label="Q4 Structured Outputs">
+  <div class="s-top">
+    <span class="doc-no">TD-2620</span>
+    <span class="doc-sec">Issue 04 — Structured Outputs</span>
+    <span class="doc-pg">08 / 13</span>
+  </div>
+  <div class="s-body">
+    <div class="sec-head reveal">
+      <div class="sec-no">Q4</div>
+      <div>
+        <div class="sec-label">Issue 04 — Google Vertex 落点不支持 Structured Outputs</div>
+        <h2>可用性完全取决于路由落点，Vertex 是策略缺口</h2>
+      </div>
+    </div>
+    <p class="sec-lede reveal">两种机制:A = JSON outputs(<code>output_config.format</code>) · B = strict tool use(<code>strict: true</code> + 强制 tool_choice)。用 <code>scripts/structured_outputs_platform_test.py</code> 按三平台字段风格构造请求实测:</p>
+    <div class="panel reveal">
+      <table>
+        <thead><tr><th>落点</th><th>机制 A</th><th>机制 B</th><th style="width:42%">备注</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><span class="host"><span class="dot anthropic"></span>Anthropic 第一方</span></td>
+            <td><span class="badge ok">✓ 通过</span></td>
+            <td><span class="badge ok">✓ 通过</span></td>
+            <td>fable-5 / sonnet-5 / opus-4.8 稳定落此</td>
+          </tr>
+          <tr>
+            <td><span class="host"><span class="dot bedrock"></span>AWS Bedrock</span></td>
+            <td><span class="badge ok">✓ 通过</span></td>
+            <td><span class="badge ok">✓ 通过</span></td>
+            <td>10/10 双重指纹验证(<code>msg_bdrk_</code> + <code>toolu_bdrk_</code>)</td>
+          </tr>
+          <tr>
+            <td><span class="host"><span class="dot vertex"></span>Google Vertex</span></td>
+            <td><span class="badge no">✕ 400</span></td>
+            <td><span class="badge no">✕ 400</span></td>
+            <td>GitHub 的 GCP 组织策略 <code>vertexai.allowedPartnerModelFeatures</code> 未放行 —— <strong>Copilot 侧配置缺口,非 Vertex 平台能力问题</strong>(返回 Google 原生 <code>FAILED_PRECONDITION</code>)</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <ul class="notes" style="margin-top: 22px;">
+      <li><strong>路由动态漂移</strong>:sonnet-4.6 / sonnet-4.5 / haiku-4.5 / opus-4.7 / opus-4.5 会漂到 Vertex → <strong>间歇性失败</strong>。生产建议:对该特定 400 做客户端重试,无法通过改写请求规避。</li>
+      <li><strong>代理侧配套缺口</strong>:Anthropic→Responses / Chat Completions 转换会静默丢 <code>output_config.format</code> 与工具 <code>strict</code>;上游 <code>/chat/completions</code> 也静默忽略 <code>response_format.json_schema</code> —— <strong>structured outputs 只在原生 <code>/v1/messages</code> 路由端到端生效</strong>。</li>
+    </ul>
+  </div>
+  <div class="s-foot"><span>Issue 04 · Structured Outputs</span><span>2026-07-19</span></div>
+</section>
+
+<!-- ==================== SLIDE 09 · Q5 Token 与认证 ==================== -->
+<section class="slide" aria-label="Q5 Token 与认证">
+  <div class="s-top">
+    <span class="doc-no">TD-2620</span>
+    <span class="doc-sec">Issue 05 — Auth &amp; Token</span>
+    <span class="doc-pg">09 / 13</span>
+  </div>
+  <div class="s-body">
+    <div class="sec-head reveal">
+      <div class="sec-no">Q5</div>
+      <div>
+        <div class="sec-label">Issue 05 — Token 刷新与免交换认证</div>
+        <h2>从「两种 Token」到 ModeDirect 直连认证</h2>
+      </div>
+    </div>
+    <div class="panel reveal" style="margin-bottom: 24px;">
+      <table>
+        <thead><tr><th style="width:22%">Token</th><th style="width:20%">生命周期</th><th>来源与刷新</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><code>github_token</code></td>
+            <td>长期,不过期</td>
+            <td>一次性 Device Flow 获取(CLIENT_ID <code>Ov23li8tweQw6odWQebz</code>,scope <code>read:user</code>),存 <code>credentials.json</code></td>
+          </tr>
+          <tr>
+            <td><code>copilot_token</code></td>
+            <td>短期,约 30 分钟</td>
+            <td>用 github_token 向 GitHub 交换;<strong>无定时器,惰性刷新</strong> —— <code>IsTokenUsable()</code> 距过期 &lt; 5 分钟即视为不可用,下次请求时自动重新交换(<code>auth/token.go</code> / <code>auth/client.go</code>)</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note-grid">
+      <div class="note-card reveal">
+        <div class="nc-k">改进:ModeDirect(免交换,参考 OpenCode 方案)</div>
+        分析 <code>github-copilot-auth-implementation.md</code> 确认 OpenCode <strong>不做二次交换</strong>,直接以 GitHub OAuth token 为 Copilot Bearer。据此实现双模式:<code>ModeExchange</code>(默认,传统交换)+ <code>ModeDirect</code>(直连,含 enterprise 支持,<code>ProfileOpenCode</code> 请求头三步叠加)。
+      </div>
+      <div class="note-card reveal">
+        <div class="nc-k">状态与验证</div>
+        commit <code>434c9e2</code> <span style="font-family:var(--mono);font-size:16px;">feat: add direct-token auth mode with enterprise support</span>,build / 全量测试 / vet / admin-UI 冒烟 / Device Flow 端到端实测全部通过。当前在 <code>origin/test/authentication</code> 分支,<strong>尚未合入 main</strong>。
+      </div>
+    </div>
+  </div>
+  <div class="s-foot"><span>Issue 05 · Auth &amp; Token</span><span>2026-07-19</span></div>
+</section>
+
+<!-- ==================== SLIDE 10 · Q6 SSE 流式 ==================== -->
+<section class="slide" aria-label="Q6 SSE 流式稳定性">
+  <div class="s-top">
+    <span class="doc-no">TD-2620</span>
+    <span class="doc-sec">Issue 06 — SSE Stability</span>
+    <span class="doc-pg">10 / 13</span>
+  </div>
+  <div class="s-body">
+    <div class="sec-head reveal">
+      <div class="sec-no">Q6</div>
+      <div>
+        <div class="sec-label">Issue 06 — SSE 流式断连「三兄弟」(2026-07-17)</div>
+        <h2>同一根因，三种死法：thinking 静默期撞超时</h2>
+      </div>
+    </div>
+    <p class="sec-lede reveal">典型现象:发出 <code>message_start</code> + <code>content_block_start</code>(thinking 块)后<strong>静默 ~180s</strong>,然后断流。三种报错对照:</p>
+    <div class="panel reveal">
+      <table>
+        <thead><tr><th style="width:36%">错误</th><th style="width:26%">含义</th><th>发起方</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><code>stream read error: context canceled</code></td>
+            <td>下游客户端不等了(取消/断开)</td>
+            <td><span class="badge warn">客户端</span> 代理已归类为 Warn 级正常运维事件</td>
+          </tr>
+          <tr>
+            <td><code>RST_STREAM; INTERNAL_ERROR; received from peer</code></td>
+            <td>上游显式重置 HTTP/2 流(带错误码)</td>
+            <td><span class="badge no">上游</span> 网关/LB 空闲超时的一种表现</td>
+          </tr>
+          <tr>
+            <td><code>stream read error: unexpected EOF</code></td>
+            <td>连接被「默默」关掉,流没收尾(无 <code>[DONE]</code>/终止块)</td>
+            <td><span class="badge no">上游或中间层</span> 直接 FIN 断连 —— 同一根因的另一种死法</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <ul class="notes" style="margin-top: 22px;">
+      <li><strong>根因:</strong>Opus 4.8 长思考期间上游不产出任何字节,撞中间层(网关 / LB)空闲超时。有的中间层发 RST_STREAM,有的直接断 TCP → unexpected EOF。</li>
+      <li><strong>代理侧排查结论:</strong>逐项检查并发模型(每请求一 goroutine)/ 锁(流式循环不持锁)/ CPU / 内存 —— <strong>copilot2api 自身性能瓶颈导致 EOF 的可能性极低</strong>;若是进程僵死会全量报错,与零星单请求现象不符。</li>
+      <li><strong>配套咨询:</strong>SSE vs WebSocket 差异、HTTP/2 PING 保活机制(应对静默期的正确姿势)。</li>
+    </ul>
+  </div>
+  <div class="s-foot"><span>Issue 06 · SSE Stability</span><span>2026-07-19</span></div>
+</section>
+
+<!-- ==================== SLIDE 11 · 缓存与多账户 ==================== -->
+<section class="slide" aria-label="缓存与多账户">
+  <div class="s-top">
+    <span class="doc-no">TD-2620</span>
+    <span class="doc-sec">Extended — Cache &amp; Multi-Account</span>
+    <span class="doc-pg">11 / 13</span>
+  </div>
+  <div class="s-body">
+    <div class="sec-head reveal">
+      <div class="sec-no">＋</div>
+      <div>
+        <div class="sec-label">Extended Topics — 缓存命中与多账户</div>
+        <h2>缓存：前缀匹配是一切；代理只读不算</h2>
+      </div>
+    </div>
+    <div class="note-grid">
+      <div class="note-card reveal">
+        <div class="nc-k">命中原理(Claude vs OpenAI)</div>
+        两家同为<strong>前缀匹配</strong>:从第一个 token 起逐字节比对,遇到第一处不同即中断。区别仅在断点由谁划 —— Claude 显式 <code>cache_control</code> 断点,OpenAI / Copilot 上游自动前缀缓存。代理<strong>从不自行判断命中</strong>,只读上游 usage 里的 <code>cached_tokens</code> 并转译给客户端。
+      </div>
+      <div class="note-card reveal">
+        <div class="nc-k">实战:一个指纹毁掉全部缓存</div>
+        Claude Code 默认在 system prompt <strong>最开头</strong>插入 attribution 块(含每次可变的 prompt fingerprint)→ 前缀从第一个 token 就不同 → <code>cached_tokens</code> 恒为 0。<strong>解法:关掉该设置,让 system 开头恢复稳定,命中率立刻回升。</strong>
+      </div>
+      <div class="note-card reveal">
+        <div class="nc-k">cache_control.scope 分叉</div>
+        非 Anthropic 标准字段:直连上游 400,经代理<strong>有意剥离后 200</strong> —— 95 项矩阵中两处有意分叉之一,是既定兼容行为而非缺陷。缓存按<strong>账号隔离</strong>,多账户之间互不污染。
+      </div>
+      <div class="note-card reveal">
+        <div class="nc-k">多账户工程化</div>
+        Account Pool:轮询(round-robin)+ 故障转移(<code>e2b62eb</code>);账户 API Key 自动生成与强制校验;Admin UI 新增上游模型页(<code>610d18e</code>)与 Stats 页缓存命中率列(<code>47152bc</code>),命中率从此可观测。
+      </div>
+    </div>
+  </div>
+  <div class="s-foot"><span>Extended · Cache &amp; Multi-Account</span><span>2026-07-19</span></div>
+</section>
+
+<!-- ==================== SLIDE 12 · 工程产出索引 ==================== -->
+<section class="slide" aria-label="工程产出索引">
+  <div class="s-top">
+    <span class="doc-no">TD-2620</span>
+    <span class="doc-sec">Deliverables Index</span>
+    <span class="doc-pg">12 / 13</span>
+  </div>
+  <div class="s-body">
+    <div class="sec-head reveal">
+      <div class="sec-no">※</div>
+      <div>
+        <div class="sec-label">Deliverables — 由问题驱动的工程产出</div>
+        <h2>产出索引：commits · 分支 · 脚本 · 文档</h2>
+      </div>
+    </div>
+    <div class="panel reveal">
+      <table style="font-size: 19px;">
+        <thead><tr><th style="width:16%">类别</th><th>产出</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>修复 / 功能</td>
+            <td><code>738b8af</code> computer-use beta 头转发 · <code>256dd42</code> interleaved-thinking 转发 · <code>7983f2f</code> compaction beta 自动注入 · <code>b230a88</code> 1M 模型名解析修复(PR #1)· <code>eb1237a</code> search_result 内容块 · <code>a8718f4</code> API version → 2026-06-01 · count_tokens 代理</td>
+          </tr>
+          <tr>
+            <td>认证 / 账户</td>
+            <td><code>434c9e2</code> ModeDirect 直连认证(<code>test/authentication</code>,待合并)· <code>e2b62eb</code> Account Pool 轮询+故障转移(<code>feat/account-pool</code>)· <code>055de20</code> API Key 自动生成 · 多账户 + 用量统计</td>
+          </tr>
+          <tr>
+            <td>Admin UI</td>
+            <td><code>610d18e</code> 上游模型页 · <code>47152bc</code> Stats 缓存命中率列</td>
+          </tr>
+          <tr>
+            <td>测试工具</td>
+            <td><code>scripts/capability_test.py</code>(95 项三层矩阵)· <code>scripts/structured_outputs_platform_test.py</code>(三平台字段风格)· TTFT 直连 vs 经代理基准 · 2M payload 生成器 · cache/thinking/image_url 探针</td>
+          </tr>
+          <tr>
+            <td>文档 / 发布</td>
+            <td>TD-2607 能力矩阵报告(17 页 16:9 slides,GitHub Pages)· Opus 4.8 / Sonnet 4.6 三层报告 · <code>copilot-models-capability-summary.md</code>(2026-07-13 全量复验)· 中文 CHANGELOG</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="s-foot"><span>Deliverables Index</span><span>2026-07-19</span></div>
+</section>
+
+<!-- ==================== SLIDE 13 · 结论与状态 ==================== -->
+<section class="slide" aria-label="结论与状态">
+  <div class="crop tl"></div><div class="crop tr"></div><div class="crop bl"></div><div class="crop br"></div>
+  <div class="s-top">
+    <span class="doc-no">TD-2620</span>
+    <span class="doc-sec">Verdict — 结论与状态</span>
+    <span class="doc-pg">13 / 13</span>
+  </div>
+  <div class="s-body">
+    <div class="sec-head reveal" style="margin-bottom: 22px;">
+      <div class="sec-no">✓</div>
+      <div>
+        <div class="sec-label">Verdict</div>
+        <h2>六大问题最终状态</h2>
+      </div>
+    </div>
+    <div class="panel reveal">
+      <table style="font-size: 19px;">
+        <thead><tr><th style="width:30%">问题</th><th style="width:16%">状态</th><th>处置</th></tr></thead>
+        <tbody>
+          <tr><td>Q1 上游硬性不支持(web_search / web_fetch / 外链图 / 300K 输出)</td><td><span class="badge warn">△ 上游限制</span></td><td>base64 图 / 客户端工具替代;computer use 经 beta 头转发已打通</td></tr>
+          <tr><td>Q2 413 请求体超限</td><td><span class="badge ok">✓ 已定位</span></td><td>Business 端点网关层 body limit;individual 端点为 400 token 上限;SDK 通道更宽松</td></tr>
+          <tr><td>Q3 Thinking Signature 转换丢失</td><td><span class="badge ok">✓ 已规避</span></td><td>需签名的客户端走原生 <code>/v1/messages</code> 透传(与直连等价)</td></tr>
+          <tr><td>Q4 Vertex 不支持 Structured Outputs</td><td><span class="badge no">✕ 上游策略</span></td><td>GCP 组织策略缺口,漂到 Vertex 间歇失败;客户端对该 400 重试</td></tr>
+          <tr><td>Q5 Token 刷新 / 免交换认证</td><td><span class="badge ok">✓ 已实现</span></td><td>惰性刷新已厘清;ModeDirect 完成实测,待合入 main</td></tr>
+          <tr><td>Q6 SSE 断流(EOF / RST_STREAM)</td><td><span class="badge ok">✓ 已定位</span></td><td>上游/中间层空闲超时 × thinking 静默期;代理自身无瓶颈</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="colophon-label reveal" style="margin-top: 16px;">Sources / 数据来源</div>
+    <ul class="sources reveal">
+      <li>会话记录 60+ 场(2026-06-10 ~ 07-19,Copilot CLI + VS Code Chat)· git 提交历史(main / test/authentication / feat/account-pool / fix-context-1m-resolution)</li>
+      <li>TD-2607 <code>docs/copilot-capability-report.html</code> 能力矩阵报告 · <code>scripts/</code> 下三层实测报告与探测脚本输出</li>
+    </ul>
+    <div class="end-mark reveal">End of Dossier · TD-2620 · 2026-07-19</div>
+  </div>
+</section>
+
+
+</main>
+</div>
+
+<!-- 页码指示 + 导航按钮(舞台之外的 UI) -->
+<div class="deck-controls" aria-hidden="true">
+  <button id="navPrev" title="上一页 (←)">‹</button>
+  <span id="pageIndicator">01 / 13</span>
+  <button id="navNext" title="下一页 (→)">›</button>
+</div>
+
+<!-- 内联编辑热区与开关 -->
+<div class="edit-hotzone"></div>
+<button class="edit-toggle" id="editToggle" title="编辑模式 (E)">✎</button>
+
+<script>
+/* ===========================================
+   SLIDE PRESENTATION CONTROLLER
+   键盘 / 滚轮 / 触摸导航 + 整体缩放
+   =========================================== */
+class SlidePresentation {
+  constructor() {
+    this.slides = document.querySelectorAll('.slide');
+    this.currentSlide = 0;
+    this.stage = document.getElementById('deckStage');
+    this.indicator = document.getElementById('pageIndicator');
+    this.wheelLock = false;
+    this.setupStageScale();
+    this.setupKeyboardNav();
+    this.setupWheelNav();
+    this.setupTouchNav();
+    this.setupButtons();
+    this.showSlide(0);
+  }
+
+  /* 固定 1920×1080 舞台整体缩放,居中留黑边 */
+  setupStageScale() {
+    const scale = () => {
+      const factor = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+      const x = (window.innerWidth - 1920 * factor) / 2;
+      const y = (window.innerHeight - 1080 * factor) / 2;
+      this.stage.style.transform = `translate(${x}px, ${y}px) scale(${factor})`;
+    };
+    scale();
+    window.addEventListener('resize', scale);
+  }
+
+  setupKeyboardNav() {
+    document.addEventListener('keydown', (e) => {
+      if (e.target.getAttribute && e.target.getAttribute('contenteditable')) return;
+      switch (e.key) {
+        case 'ArrowRight': case 'ArrowDown': case ' ': case 'PageDown':
+          e.preventDefault(); this.next(); break;
+        case 'ArrowLeft': case 'ArrowUp': case 'PageUp':
+          e.preventDefault(); this.prev(); break;
+        case 'Home': e.preventDefault(); this.showSlide(0); break;
+        case 'End':  e.preventDefault(); this.showSlide(this.slides.length - 1); break;
+      }
+    });
+  }
+
+  setupWheelNav() {
+    window.addEventListener('wheel', (e) => {
+      if (document.body.classList.contains('editing')) return;
+      if (this.wheelLock) return;
+      if (Math.abs(e.deltaY) < 24) return;
+      this.wheelLock = true;
+      setTimeout(() => { this.wheelLock = false; }, 650);
+      e.deltaY > 0 ? this.next() : this.prev();
+    }, { passive: true });
+  }
+
+  setupTouchNav() {
+    let startX = 0, startY = 0;
+    window.addEventListener('touchstart', (e) => {
+      startX = e.touches[0].clientX; startY = e.touches[0].clientY;
+    }, { passive: true });
+    window.addEventListener('touchend', (e) => {
+      const dx = e.changedTouches[0].clientX - startX;
+      const dy = e.changedTouches[0].clientY - startY;
+      if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy)) return;
+      dx < 0 ? this.next() : this.prev();
+    }, { passive: true });
+  }
+
+  setupButtons() {
+    document.getElementById('navPrev').addEventListener('click', () => this.prev());
+    document.getElementById('navNext').addEventListener('click', () => this.next());
+  }
+
+  next() { this.showSlide(this.currentSlide + 1); }
+  prev() { this.showSlide(this.currentSlide - 1); }
+
+  showSlide(index) {
+    this.currentSlide = Math.max(0, Math.min(index, this.slides.length - 1));
+    this.slides.forEach((slide, i) => {
+      slide.classList.toggle('active', i === this.currentSlide);
+      slide.classList.toggle('visible', i === this.currentSlide);
+    });
+    const pad = (n) => String(n).padStart(2, '0');
+    this.indicator.textContent = `${pad(this.currentSlide + 1)} / ${pad(this.slides.length)}`;
+    this.animateBars(this.slides[this.currentSlide]);
+  }
+
+  /* FIG.07 条形图:进入该页时按 data-w 展开 */
+  animateBars(slide) {
+    slide.querySelectorAll('.mini-chart .bar[data-w]').forEach((bar) => {
+      bar.style.width = '0';
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => { bar.style.width = bar.dataset.w; });
+      });
+    });
+  }
+}
+
+const deck = new SlidePresentation();
+
+/* ===========================================
+   INLINE EDITOR — 悬停热区 / E 键切换,Ctrl+S 保存
+   =========================================== */
+class InlineEditor {
+  constructor() {
+    this.isActive = false;
+    this.toggle = document.getElementById('editToggle');
+    this.storageKey = 'td2607-slide-edits';
+    this.editableSelector = 'h1, h2, h3, p, li, td, th, .chip, .k-label, .k-value, .k-note, .f-t, .f-d, .tb-v, .cat, .axis-note';
+    this.restore();
+    this.bind();
+  }
+
+  bind() {
+    const hotzone = document.querySelector('.edit-hotzone');
+    let hideTimeout = null;
+    // 热区悬停显示按钮,400ms 宽限期
+    hotzone.addEventListener('mouseenter', () => {
+      clearTimeout(hideTimeout);
+      this.toggle.classList.add('show');
+    });
+    hotzone.addEventListener('mouseleave', () => {
+      hideTimeout = setTimeout(() => {
+        if (!this.isActive) this.toggle.classList.remove('show');
+      }, 400);
+    });
+    this.toggle.addEventListener('mouseenter', () => clearTimeout(hideTimeout));
+    this.toggle.addEventListener('mouseleave', () => {
+      hideTimeout = setTimeout(() => {
+        if (!this.isActive) this.toggle.classList.remove('show');
+      }, 400);
+    });
+    this.toggle.addEventListener('click', () => this.toggleEditMode());
+    hotzone.addEventListener('click', () => this.toggleEditMode());
+    document.addEventListener('keydown', (e) => {
+      if ((e.key === 'e' || e.key === 'E') && !(e.target.getAttribute && e.target.getAttribute('contenteditable'))) {
+        this.toggleEditMode();
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === 's' && this.isActive) {
+        e.preventDefault(); this.save();
+      }
+    });
+  }
+
+  toggleEditMode() {
+    this.isActive = !this.isActive;
+    document.body.classList.toggle('editing', this.isActive);
+    this.toggle.classList.toggle('active', this.isActive);
+    if (this.isActive) this.toggle.classList.add('show');
+    document.querySelectorAll(this.editableSelector).forEach((el) => {
+      if (this.isActive) el.setAttribute('contenteditable', 'true');
+      else el.removeAttribute('contenteditable');
+    });
+    if (!this.isActive) this.save();
+  }
+
+  /* 以「页索引 + 页内可编辑序号」作为键,存 localStorage */
+  save() {
+    const data = {};
+    document.querySelectorAll('.slide').forEach((slide, si) => {
+      slide.querySelectorAll(this.editableSelector).forEach((el, ei) => {
+        data[`${si}:${ei}`] = el.innerHTML;
+      });
+    });
+    try { localStorage.setItem(this.storageKey, JSON.stringify(data)); } catch (e) {}
+  }
+
+  restore() {
+    let data = null;
+    try { data = JSON.parse(localStorage.getItem(this.storageKey) || 'null'); } catch (e) {}
+    if (!data) return;
+    document.querySelectorAll('.slide').forEach((slide, si) => {
+      slide.querySelectorAll(this.editableSelector).forEach((el, ei) => {
+        const k = `${si}:${ei}`;
+        if (data[k] !== undefined && data[k] !== el.innerHTML) el.innerHTML = data[k];
+      });
+    });
+  }
+}
+
+const editor = new InlineEditor();
+</script>
+</body>
+</html>

@@ -36,6 +36,7 @@
 
 ### Docs
 
+- Add `docs/copilot2api-issues-retrospective.html` — a 13-slide 16:9 HTML retrospective (same TD dossier style and navigation as the capability report) summarizing all issues tested and consulted between 2026-06-10 and 2026-07-19, organized as symptom → analysis → resolution: upstream capability gaps and the beta-header allowlist, HTTP 413 root cause on the Business endpoint, oversized-context behavior, thinking-signature loss on the `/chat/completions` conversion path, structured-outputs failures on the Vertex backend, token refresh and direct-token auth, SSE stream drops, and prompt-cache hit mechanics.
 - Redesign `docs/copilot-capability-report.html` from a scrolling report page into a 17-slide 16:9 HTML presentation (keyboard/wheel/touch navigation, print-to-PDF support, inline text editing); all report content is preserved.
 - Document the `/v1/messages/count_tokens` endpoint and native-passthrough fields (`context_management`, `search_result`) in both `README.md` and `README.zh-CN.md` (Features list and API Endpoints table).
 - Document multi-account, admin UI, and token-usage stats in the README, and add Simplified Chinese translations (`README.zh-CN.md`, `CHANGELOG.zh-CN.md`) with language switch links.
