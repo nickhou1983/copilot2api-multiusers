@@ -797,7 +797,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
         <h2>413 Request Entity Too Large：根因是 Business 端点网关层</h2>
       </div>
     </div>
-    <p class="sec-lede reveal">现象:带图片或长历史会话的请求经 <code>/chat/completions</code> 报 413。逐级加码直连上游实测(claude-opus-4.8):</p>
+    <p class="sec-lede reveal">现象:带图片或长历史会话的请求经 <code>/chat/completions</code> 报 413。<strong>报错链路:Claude 本身有单图/单请求图片上限;代理侧不压缩图片,历史图片逐轮重复携带 → 请求体越滚越大 → 撞上 Business 端点网关 ~1MB body 限制 → 413。</strong> 逐级加码直连上游实测(claude-opus-4.8):</p>
     <div class="panel reveal">
       <table>
         <thead><tr><th style="width:22%">Payload</th><th style="width:16%">individual 端点</th><th>说明</th></tr></thead>
@@ -817,10 +817,10 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
         </tbody>
       </table>
     </div>
-    <ul class="notes" style="margin-top: 22px;">
-      <li><strong>结论:</strong>413 = Business 端点<strong>网关层</strong>拒绝;individual 端点(<code>api.githubcopilot.com</code>)超限报的是 <strong>400 token 上限</strong>而非 413。SDK Session(JSON-RPC)通道对消息大小更宽松,可绕过 HTTP body 限制。</li>
-      <li><strong>排查插曲:</strong>一度怀疑模型名 —— <code>claude-opus-4-8</code>(横线)被 <code>NormalizeAnthropicModel</code> 错误归一为 <code>claude-opus-4</code>,上游不识别;改用 <code>claude-opus-4.8</code> 后 862KB / 2MB 均 200。</li>
-      <li><strong>带图请求另一坑:</strong>缺 <code>Copilot-Vision-Request: true</code> 头 → 上游报 <span style="font-family:var(--mono);font-size:17px;">"vision is not enabled for this user or integration"</span>,已在统一头组装中补齐。附带发现:VS Code 客户端会把 27MB 原图压到 ~768px(约 150KB)再发送 —— 客户端「能发大图」其实是先压缩。</li>
+    <ul class="notes" style="margin-top: 16px;">
+      <li><strong>Claude 图片硬限制:</strong>单图 ≤ <strong>5MB</strong>、≤ <strong>8000×8000px</strong>;单请求 ≤ <strong>20 张</strong>,超过则每张降到 ≤ 2000×2000px;超限上游直接 400/413(建议长边 ≤1568px)。超大图 / 超多图本身即报错,与请求体大小是两条独立失败原因。</li>
+      <li><strong>413 根因链:</strong>代理原样透传、<strong>不做图片压缩</strong>,多轮对话把历史图片全部重复携带 → body 随轮次线性膨胀 → 撞 Business 网关约 1MB body 限 → <strong>413</strong>(individual 端点无此网关限,改撞 <strong>400 token 上限</strong>)。SDK Session 通道对大小更宽松。</li>
+      <li><strong>带图另一坑:</strong>缺 <code>Copilot-Vision-Request: true</code> 头 → <span style="font-family:var(--mono);font-size:16px;">"vision is not enabled…"</span>,已补齐。VS Code 会把 27MB 原图压到 ~768px(~150KB)再发 —— 客户端「能发大图」实为先压缩,本代理未做同等压缩故更易超限。</li>
     </ul>
   </div>
   <div class="s-foot"><span>Issue 02 · HTTP 413 (1 of 2)</span><span>2026-07-19</span></div>
