@@ -797,10 +797,10 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
         <h2>413 Request Entity Too Large：根因是 Business 端点网关层</h2>
       </div>
     </div>
-    <p class="sec-lede reveal">现象:带图片或长历史会话的请求经 <code>/chat/completions</code> 报 413。<strong>报错链路:Claude 本身有单图/单请求图片上限;代理侧不压缩图片,历史图片逐轮重复携带 → 请求体越滚越大 → 撞上 Business 端点网关 ~1MB body 限制 → 413。</strong> 逐级加码直连上游实测(claude-opus-4.8):</p>
+    <p class="sec-lede reveal">现象:带图片或长历史会话的请求经 <code>/chat/completions</code> 报 413。<strong>报错链路:Claude 本身有单图/单请求图片上限;代理侧不压缩图片,历史图片逐轮重复携带 → 请求体越滚越大 → 撞上 Business 端点网关的 body 大小上限 → 413。</strong> 逐级加码直连 individual 端点实测(claude-opus-4.8),再与 Business 端点对照:</p>
     <div class="panel reveal">
       <table>
-        <thead><tr><th style="width:22%">Payload</th><th style="width:16%">individual 端点</th><th>说明</th></tr></thead>
+        <thead><tr><th style="width:22%">Payload</th><th style="width:16%">结果</th><th>说明</th></tr></thead>
         <tbody>
           <tr><td>1 MB</td><td><span class="badge ok">✓ 200</span></td><td>正常返回</td></tr>
           <tr><td>2 MB</td><td><span class="badge ok">✓ 200</span></td><td>正常返回</td></tr>
@@ -810,16 +810,16 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
             <td><span class="err-quote" style="margin-top:0;">prompt is too long: 1,209,916 tokens &gt; 1,000,000 maximum</span></td>
           </tr>
           <tr>
-            <td>同请求 → Business 端点</td>
+            <td>Business 端点 · 大 body</td>
             <td><span class="badge no">✕ 413</span></td>
-            <td><code>api.business.githubcopilot.com</code> 网关层 body size 限制(约 1MB),请求根本没到模型服务</td>
+            <td><code>api.business.githubcopilot.com</code> 网关层 body size 上限,请求未到模型服务(<strong>阈值未验证,预估约 30MB</strong>)</td>
           </tr>
         </tbody>
       </table>
     </div>
     <ul class="notes" style="margin-top: 16px;">
       <li><strong>Claude 图片硬限制:</strong>单图 ≤ <strong>5MB</strong>、≤ <strong>8000×8000px</strong>;单请求 ≤ <strong>20 张</strong>,超过则每张降到 ≤ 2000×2000px;超限上游直接 400/413(建议长边 ≤1568px)。超大图 / 超多图本身即报错,与请求体大小是两条独立失败原因。</li>
-      <li><strong>413 根因链:</strong>代理原样透传、<strong>不做图片压缩</strong>,多轮对话把历史图片全部重复携带 → body 随轮次线性膨胀 → 撞 Business 网关约 1MB body 限 → <strong>413</strong>(individual 端点无此网关限,改撞 <strong>400 token 上限</strong>)。SDK Session 通道对大小更宽松。</li>
+      <li><strong>413 根因链:</strong>代理原样透传、<strong>不做图片压缩</strong>,多轮对话把历史图片全部重复携带 → body 随轮次线性膨胀 → 撞 Business 网关 body 大小上限 → <strong>413</strong>(该阈值未验证,<strong>预估约 30MB</strong>;individual 端点无此网关限,改撞 <strong>400 token 上限</strong>)。SDK Session 通道对大小更宽松。</li>
       <li><strong>带图另一坑:</strong>缺 <code>Copilot-Vision-Request: true</code> 头 → <span style="font-family:var(--mono);font-size:16px;">"vision is not enabled…"</span>,已补齐。VS Code 会把 27MB 原图压到 ~768px(~150KB)再发 —— 客户端「能发大图」实为先压缩,本代理未做同等压缩故更易超限。</li>
     </ul>
   </div>
