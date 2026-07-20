@@ -1012,7 +1012,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
         <h2>同一根因，三种死法：thinking 静默期撞超时</h2>
       </div>
     </div>
-    <p class="sec-lede reveal">典型现象:发出 <code>message_start</code> + <code>content_block_start</code>(thinking 块)后<strong>静默 ~180s</strong>,然后断流。三种报错对照:</p>
+    <p class="sec-lede reveal">典型现象:发出 <code>message_start</code> + <code>content_block_start</code>(thinking 块)后<strong>静默 ~180s</strong>,然后断流。<strong>此为 Anthropic 官方在册的失败类(<a href="https://github.com/anthropics/claude-code/issues/70017" style="color:var(--orange);text-decoration:none;">claude-code #70017</a>,截至 07-19 仍 OPEN、未修复)。</strong> 三种报错对照:</p>
     <div class="panel reveal">
       <table>
         <thead><tr><th style="width:36%">错误</th><th style="width:26%">含义</th><th>发起方</th></tr></thead>
@@ -1035,10 +1035,11 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
         </tbody>
       </table>
     </div>
-    <ul class="notes" style="margin-top: 22px;">
-      <li><strong>根因:</strong>Opus 4.8 长思考期间上游不产出任何字节,撞中间层(网关 / LB)空闲超时。有的中间层发 RST_STREAM,有的直接断 TCP → unexpected EOF。</li>
-      <li><strong>代理侧排查结论:</strong>逐项检查并发模型(每请求一 goroutine)/ 锁(流式循环不持锁)/ CPU / 内存 —— <strong>copilot2api 自身性能瓶颈导致 EOF 的可能性极低</strong>;若是进程僵死会全量报错,与零星单请求现象不符。</li>
-      <li><strong>配套咨询:</strong>SSE vs WebSocket 差异、HTTP/2 PING 保活机制(应对静默期的正确姿势)。</li>
+    <ul class="notes" style="margin-top: 16px;">
+      <li><strong>根因(官方证实):</strong>长推理静默期上游不吐任何字节 → 空闲 SSE 被中间层(NAT/CDN/网关/LB)在 ~60–350s 驱逐,或服务端/H2 层直接关闭。#70017 社区实测:单会话 <strong>7 次</strong>断连、4.5h 编排 <strong>11 次</strong>、静默窗口最长 ~1h42m;客户端疑未设 <code>SO_KEEPALIVE</code>。</li>
+      <li><strong>官方缺口:</strong>TCP keepalive 只挡 NAT 驱逐;流重试仅覆盖<strong>前台</strong>路径,Agent-tool 子代理派发<strong>无任何重试</strong>,中途断连即永久死亡。官方诉求为服务端 <strong>SSE 心跳帧(≤30s)</strong>,但尚未进入 roadmap。</li>
+      <li><strong>代理侧解决方案(可落地):</strong>上游短期不会加心跳,copilot2api 作为中间层正是补心跳的最佳位置 —— 转发时若检测到 N 秒无上游字节,向下游注入 SSE 注释行(<code>: ping\n\n</code>)保活,即可消除本失败类,不改上游/客户端。</li>
+      <li><strong>代理侧排查结论:</strong>并发模型(每请求一 goroutine)/ 锁(流式循环不持锁)/ CPU / 内存逐项检查 —— <strong>copilot2api 自身不是 EOF 瓶颈</strong>(进程僵死会全量报错,与零星单请求现象不符)。</li>
     </ul>
   </div>
   <div class="s-foot"><span>Issue 06 · SSE Stability</span><span>2026-07-19</span></div>
@@ -1152,7 +1153,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
           <tr><td>Q3 Thinking Signature 转换丢失</td><td><span class="badge ok">✓ 已规避</span></td><td>需签名的客户端走原生 <code>/v1/messages</code> 透传(与直连等价)</td></tr>
           <tr><td>Q4 Vertex 不支持 Structured Outputs</td><td><span class="badge no">✕ 上游策略</span></td><td>GCP 组织策略缺口,漂到 Vertex 间歇失败;客户端对该 400 重试</td></tr>
           <tr><td>Q5 Token 刷新 / 免交换认证</td><td><span class="badge ok">✓ 已实现</span></td><td>惰性刷新已厘清;ModeDirect 完成实测,待合入 main</td></tr>
-          <tr><td>Q6 SSE 断流(EOF / RST_STREAM)</td><td><span class="badge ok">✓ 已定位</span></td><td>上游/中间层空闲超时 × thinking 静默期;代理自身无瓶颈</td></tr>
+          <tr><td>Q6 SSE 断流(EOF / RST_STREAM)</td><td><span class="badge ok">✓ 已定位</span></td><td>上游/中间层空闲超时 × thinking 静默期(官方在册 #70017);代理侧可注入 SSE 心跳兜底</td></tr>
         </tbody>
       </table>
     </div>
