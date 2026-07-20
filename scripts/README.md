@@ -89,7 +89,8 @@ Sampling / request parameters (group A):
 Newer Anthropic capabilities (group D):
 
 `structured_outputs` (`output_config.format` JSON schema), `web_fetch` (expect
-reject), `code_execution` / `code_execution_beta_header`, `search_result`
+reject), `code_execution` / `code_execution_beta_header` (expect reject — the
+upstream dropped the tool from its accepted list; see below), `search_result`
 blocks, `interleaved_thinking`, `token_efficient_tools`,
 `fine_grained_tool_streaming`, `extended_cache_ttl` (1h cache).
 
@@ -173,17 +174,20 @@ Sonnet 4.6, which require the new one. Since the proxy forwards `computer-use-*`
 beta headers, direct and proxy agree (both 200 with a `tool_use` response) for
 models that advertise computer use.
 
-`code_execution` is split into two cases because the upstream treats the *tool*
-and the *beta header* on different axes. **Without** the beta header the Copilot
-upstream actually runs the tool (`server_tool_use` +
-`bash_code_execution_tool_result`), so `code_execution` expects **support** on
-both targets. **With** the `code-execution-2025-08-25` beta header,
-`code_execution_beta_header` is an *expected* direct/proxy divergence: direct is
-rejected by the upstream beta-header allowlist (`400 "unsupported beta
-header(s)"`) while the proxy strips the header and the tool runs (`200`). The
-report renders this row as `↔️ 预期差异` and excludes it from the discrepancy
-summary. (`web_fetch` is still a genuine reject — Copilot rejects both its beta
-header and the tool.)
+`code_execution` is split into two cases (the bare tool vs. the
+`code-execution-2025-08-25` beta header), and both now expect **reject**: the
+Copilot upstream dropped `code_execution` from its accepted server-tool list
+(earlier reports genuinely executed code — `server_tool_use` +
+`bash_code_execution_tool_result`). Without the header the request fails
+tool-type validation (`400 tools.0: Input tag 'code_execution_20250825' ...
+does not match`); with the header, direct is rejected by the beta allowlist and
+the proxy strips the header and then hits the same tool-type validation. Both
+cases are kept as behavior-pinning probes — if the upstream re-enables the tool
+they will flip to DIFF. Beware of *deployment flapping*: during the 2026-07
+upstream rollout the old behavior (200 + real execution) was still served by
+some instances, so re-sample direct several times before recalibrating.
+(`web_fetch` is still a genuine reject — Copilot rejects both its beta header
+and the tool.)
 
 `output_300k` expects **reject**: the Copilot upstream hard-caps Opus 4.8 at
 128k output tokens regardless of the `output-300k` beta (that beta is an

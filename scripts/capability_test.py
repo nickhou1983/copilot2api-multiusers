@@ -468,32 +468,6 @@ def insp_fine_grained_stream(r):
     return has_tool, f"HTTP 200 events={len(evs)} tool_stream={has_tool} kinds={kinds[:6]}"
 
 
-def insp_code_execution(r):
-    # code_execution as a *server tool* (no beta header). The Copilot upstream
-    # actually runs it: a passing response carries server_tool_use plus a
-    # bash_code_execution_tool_result block. (The beta *header* is a separate
-    # axis — see insp_code_execution_beta.)
-    if not r["ok"]:
-        return False, f"HTTP {r['status']} {_err_msg(r)}"
-    types = _content_types(r["parsed"])
-    ran = "server_tool_use" in types or any("code_execution" in t for t in types)
-    return ran, f"HTTP 200 content={types}"
-
-
-def insp_code_execution_beta(r):
-    # code_execution *with* the anthropic-beta header. This documents the
-    # upstream beta-header allowlist: direct is rejected (400 "unsupported beta
-    # header(s)") because Copilot doesn't allowlist that token, while the proxy
-    # does not forward client beta headers, so the tool runs (200). Both
-    # outcomes are "expected" for their side — report status + a short note
-    # rather than a single pass/fail, since direct and proxy legitimately differ.
-    types = _content_types(r["parsed"])
-    if r["status"] >= 400:
-        return False, f"HTTP {r['status']} beta rejected: {_err_msg(r)}"
-    ran = "server_tool_use" in types or any("code_execution" in t for t in types)
-    return ran, f"HTTP 200 beta stripped, executed content={types}"
-
-
 def insp_effort_xhigh(r):
     # xhigh effort is an Opus 4.7/4.8-only level. On supporting models it returns
     # 200; on others the upstream rejects with a clear message listing the
@@ -884,27 +858,30 @@ def build_tests(model: str, *, heavy: bool = False):
                   messages=user("Fetch https://example.com and summarize it.")),
         inspect=insp_reject))
 
-    # code_execution as a server tool. Split into two cases because the upstream
-    # treats the *tool* and the *beta header* on different axes:
-    #  - without the beta header, the Copilot upstream actually runs the tool
-    #    (server_tool_use + bash_code_execution_tool_result) -> expect support.
-    #  - with the beta header, direct is rejected by the upstream beta-header
-    #    allowlist (400), while the proxy strips client beta headers so the tool
-    #    runs (200). This case documents that direct/proxy divergence.
+    # code_execution as a server tool. The Copilot upstream used to run this
+    # tool (verified early 2026-07: server_tool_use +
+    # bash_code_execution_tool_result) but has since dropped it from the
+    # accepted tool-type list: as of 2026-07-16 both the bare tool and the
+    # beta-header variant are rejected with 400 (accepted tags now:
+    # bash/custom/memory/text_editor/tool_search). During the upstream rollout
+    # the old behavior was still observed on some instances (responses
+    # flapped 200/400), so if these cases DIFF, re-sample direct a few times
+    # before concluding anything. Both cases are reject-probes pinning the
+    # new behavior; if the upstream re-enables the tool they will DIFF.
     code_exec_tool = {"type": "code_execution_20250825", "name": "code_execution"}
     tests.append(dict(
         name="code_execution", kind="messages", stream=False,
-        beta=[], expect="support",
+        beta=[], expect="reject",
         body=base(tools=[code_exec_tool],
                   messages=user("Use code execution to compute the mean of [1,2,3,4,5].")),
-        inspect=insp_code_execution))
+        inspect=insp_reject))
 
     tests.append(dict(
         name="code_execution_beta_header", kind="messages", stream=False,
-        beta=["code-execution-2025-08-25"], expect="support", expect_divergence=True,
+        beta=["code-execution-2025-08-25"], expect="reject",
         body=base(tools=[code_exec_tool],
                   messages=user("Use code execution to compute the mean of [1,2,3,4,5].")),
-        inspect=insp_code_execution_beta))
+        inspect=insp_reject))
 
     tests.append(dict(
         name="search_result", kind="messages", stream=False,
@@ -1099,13 +1076,16 @@ def build_tests(model: str, *, heavy: bool = False):
     # ----------------------------------------------------------------------- #
 
     # Automatic prompt caching: a single top-level cache_control instead of
-    # block-level breakpoints; the system caches the last cacheable block.
+    # block-level breakpoints. The Copilot upstream rejects the top-level
+    # field ("cache_control: Extra inputs are not permitted"); block-level
+    # breakpoints remain the way to cache (see prompt_cache). Briefly
+    # accepted during a mid-2026-07 upstream rollout, then rejected again.
     tests.append(dict(
-        name="auto_prompt_cache", kind="messages", stream=False, beta=[], expect="support",
+        name="auto_prompt_cache", kind="messages", stream=False, beta=[], expect="reject",
         body=base(cache_control={"type": "ephemeral"},
                   system=("You are a helpful capability-probe assistant. " * 200).strip(),
                   messages=user("Say hi.")),
-        inspect=insp_cache))
+        inspect=insp_reject))
 
     # Strict tool use: the other half of structured outputs (JSON outputs are
     # covered by the structured_outputs case). "strict": true on a tool def
@@ -1292,6 +1272,13 @@ def run_target(target, tests, *, base_url, headers_fn, timeout, only):
             "summary": summary,
             "expect": t["expect"],
             "error": r["error"],
+            "request": {
+                "method": method,
+                "endpoint": endpoint_for(kind, target),
+                "anthropic_beta": t["beta"],
+                "stream": bool(t.get("stream", False)),
+                "body": _truncate_json(body) if body is not None else None,
+            },
             "raw": scrub_result(r),
         }
         flag = "ok " if (ok if t["expect"] == "support" else r["status"] >= 400) else "DIFF"
@@ -1307,6 +1294,9 @@ def scrub_result(r):
     if r.get("events") is not None:
         out["event_count"] = len(r["events"])
         out["event_kinds"] = sorted({e.get("type") for e in r["events"]})
+        # Keep a bounded sample of real SSE events so reports can show what a
+        # streaming response actually looks like on the wire.
+        out["events_sample"] = [_truncate_json(e) for e in r["events"][:12]]
     return out
 
 
