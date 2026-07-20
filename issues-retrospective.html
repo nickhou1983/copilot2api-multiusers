@@ -797,7 +797,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
         <h2>413 Request Entity Too Large：根因是 Business 端点网关层</h2>
       </div>
     </div>
-    <p class="sec-lede reveal">现象:带图片或长历史会话的请求经 <code>/chat/completions</code> 报 413。<strong>报错链路:Claude 本身有单图/单请求图片上限;代理侧不压缩图片,历史图片逐轮重复携带 → 请求体越滚越大 → 撞上 Business 端点网关的 body 大小上限 → 413。</strong> 逐级加码直连 individual 端点实测(claude-opus-4.8),再与 Business 端点对照:</p>
+    <p class="sec-lede reveal">现象:带图片或长历史会话的请求经 <code>/chat/completions</code> 报 413。<strong>报错链路:Claude 本身有单图/单请求图片上限;代理侧不压缩图片,历史图片逐轮重复携带 → 请求体越滚越大 → 撞上 Business 端点网关的 body 大小上限 → 413。</strong> 逐级加码直连上游实测(claude-opus-4.8):</p>
     <div class="panel reveal">
       <table>
         <thead><tr><th style="width:22%">Payload</th><th style="width:16%">结果</th><th>说明</th></tr></thead>
@@ -819,7 +819,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
     </div>
     <ul class="notes" style="margin-top: 16px;">
       <li><strong>Claude 图片硬限制:</strong>单图 ≤ <strong>5MB</strong>、≤ <strong>8000×8000px</strong>;单请求 ≤ <strong>20 张</strong>,超过则每张降到 ≤ 2000×2000px;超限上游直接 400/413(建议长边 ≤1568px)。超大图 / 超多图本身即报错,与请求体大小是两条独立失败原因。</li>
-      <li><strong>413 根因链:</strong>代理原样透传、<strong>不做图片压缩</strong>,多轮对话把历史图片全部重复携带 → body 随轮次线性膨胀 → 撞 Business 网关 body 大小上限 → <strong>413</strong>(该阈值未验证,<strong>预估约 30MB</strong>;individual 端点无此网关限,改撞 <strong>400 token 上限</strong>)。SDK Session 通道对大小更宽松。</li>
+      <li><strong>413 根因链:</strong>代理原样透传、<strong>不做图片压缩</strong>,多轮对话把历史图片全部重复携带 → body 随轮次线性膨胀 → 撞 Business 网关 body 大小上限 → <strong>413</strong>(该阈值未验证,<strong>预估约 30MB</strong>)。</li>
       <li><strong>带图另一坑:</strong>缺 <code>Copilot-Vision-Request: true</code> 头 → <span style="font-family:var(--mono);font-size:16px;">"vision is not enabled…"</span>,已补齐。VS Code 会把 27MB 原图压到 ~768px(~150KB)再发 —— 客户端「能发大图」实为先压缩,本代理未做同等压缩故更易超限。</li>
     </ul>
   </div>
@@ -853,7 +853,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
           </tr>
           <tr><td>Haiku 4.5 · 300K tokens</td><td><span class="badge no">✕ 502</span></td><td>超出该模型窗口,同类报错</td></tr>
           <tr><td>Haiku 4.5 · 100K tokens</td><td><span class="badge ok">✓ 200</span></td><td>8.5s 正常返回,<code>stop_reason: end_turn</code></td></tr>
-          <tr><td>Opus 4.8 · 2M · <strong>流式 + Thinking(high)</strong></td><td><span class="badge warn">△ 200</span></td><td>SDK Session 通道下 HTTP 层通过(与非流式 502 对照,通道行为不同)</td></tr>
+          <tr><td>Opus 4.8 · 2M · <strong>流式 + Thinking(high)</strong></td><td><span class="badge warn">△ 200</span></td><td>流式请求 HTTP 层通过(与非流式 502 对照,行为不同)</td></tr>
         </tbody>
       </table>
     </div>
@@ -1148,7 +1148,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
         <thead><tr><th style="width:30%">问题</th><th style="width:16%">状态</th><th>处置</th></tr></thead>
         <tbody>
           <tr><td>Q1 上游硬性不支持(web_search / web_fetch / 外链图 / 300K 输出)</td><td><span class="badge warn">△ 上游限制</span></td><td>base64 图 / 客户端工具替代;computer use 经 beta 头转发已打通</td></tr>
-          <tr><td>Q2 413 请求体超限</td><td><span class="badge ok">✓ 已定位</span></td><td>Business 端点网关层 body limit;individual 端点为 400 token 上限;SDK 通道更宽松</td></tr>
+          <tr><td>Q2 413 请求体超限</td><td><span class="badge ok">✓ 已定位</span></td><td>Business 端点网关层 body 大小上限(阈值未验证,预估约 30MB);代理不压缩图片 + 历史重复携带致 body 膨胀</td></tr>
           <tr><td>Q3 Thinking Signature 转换丢失</td><td><span class="badge ok">✓ 已规避</span></td><td>需签名的客户端走原生 <code>/v1/messages</code> 透传(与直连等价)</td></tr>
           <tr><td>Q4 Vertex 不支持 Structured Outputs</td><td><span class="badge no">✕ 上游策略</span></td><td>GCP 组织策略缺口,漂到 Vertex 间歇失败;客户端对该 400 重试</td></tr>
           <tr><td>Q5 Token 刷新 / 免交换认证</td><td><span class="badge ok">✓ 已实现</span></td><td>惰性刷新已厘清;ModeDirect 完成实测,待合入 main</td></tr>
