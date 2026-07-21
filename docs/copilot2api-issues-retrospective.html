@@ -418,6 +418,7 @@ td {
   vertical-align: top;
 }
 tr:last-child td { border-bottom: none; }
+#verdict-tbl td { padding: 9px 22px; line-height: 1.4; }
 td.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 
 /* 判定徽章 */
@@ -626,7 +627,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="title-body">
     <p class="kicker reveal">问题复盘 · Issues &amp; Resolutions</p>
     <h1 class="reveal">测试与咨询问题<br><span class="amp">×</span> 解决方案复盘</h1>
-    <p class="title-sub reveal">汇总 2026-06-10 ~ 07-19 期间在 copilot2api 项目中的全部测试与咨询：上游能力缺口 · 413 请求体超限 · Thinking Signature · Structured Outputs(Vertex) · Token 与认证 · SSE 流式稳定性 · 缓存与多账户。每个问题按「现象 → 分析 → 解决方案/结论」组织。</p>
+    <p class="title-sub reveal">汇总 2026-06-10 ~ 07-20 期间在 copilot2api 项目中的全部测试与咨询：上游能力缺口 · 413 请求体超限 · Thinking Signature · Structured Outputs(Vertex) · Token 与认证 · SSE 流式稳定性 · Client-ID 模型可见性 · 缓存与多账户。每个问题按「现象 → 分析 → 解决方案/结论」组织。</p>
   </div>
   <div class="stamp">Compiled<small>2026-07-19 · 会话复盘</small></div>
   <div class="title-block reveal">
@@ -642,22 +643,22 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Key Figures — 关键指标</span>
-    <span class="doc-pg">02 / 13</span>
+    <span class="doc-pg">02 / 14</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
       <div class="sec-no">FIG</div>
       <div>
         <div class="sec-label">Instrument Panel</div>
-        <h2>复盘全景：六大问题域</h2>
+        <h2>复盘全景：七大问题域</h2>
       </div>
     </div>
     <div class="kpi-strip reveal" role="list" aria-label="关键指标">
       <div class="kpi" role="listitem">
         <span class="k-idx">FIG.01</span>
         <div class="k-label">核心问题域</div>
-        <div class="k-value">6</div>
-        <div class="k-note">上游缺口 / 413 / Thinking Signature / Structured Outputs / 认证 / SSE 流式</div>
+        <div class="k-value">7</div>
+        <div class="k-note">上游缺口 / 413 / Thinking Signature / Structured Outputs / 认证 / SSE 流式 / Client-ID 模型</div>
       </div>
       <div class="kpi" role="listitem">
         <span class="k-idx">FIG.02</span>
@@ -680,7 +681,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
       <div class="kpi" role="listitem">
         <span class="k-idx">FIG.05</span>
         <div class="k-label">问题闭环</div>
-        <div class="k-value">5/6</div>
+        <div class="k-value">6/7</div>
         <div class="k-note">唯一悬置:SO 落 Vertex 为上游组织策略,只能重试</div>
       </div>
       <div class="kpi" role="listitem">
@@ -699,7 +700,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 01 — Upstream Gaps</span>
-    <span class="doc-pg">03 / 13</span>
+    <span class="doc-pg">03 / 14</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -754,7 +755,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 01 — Upstream Gaps</span>
-    <span class="doc-pg">04 / 13</span>
+    <span class="doc-pg">04 / 14</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -787,7 +788,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 02 — HTTP 413</span>
-    <span class="doc-pg">05 / 13</span>
+    <span class="doc-pg">05 / 14</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -831,7 +832,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 02 — HTTP 413</span>
-    <span class="doc-pg">06 / 13</span>
+    <span class="doc-pg">06 / 14</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -870,7 +871,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 03 — Thinking Signature</span>
-    <span class="doc-pg">07 / 13</span>
+    <span class="doc-pg">07 / 14</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -907,7 +908,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 04 — Structured Outputs</span>
-    <span class="doc-pg">08 / 13</span>
+    <span class="doc-pg">08 / 14</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -956,7 +957,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 05 — Auth &amp; Token</span>
-    <span class="doc-pg">09 / 13</span>
+    <span class="doc-pg">09 / 14</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1002,7 +1003,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 06 — SSE Stability</span>
-    <span class="doc-pg">10 / 13</span>
+    <span class="doc-pg">10 / 14</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1045,12 +1046,56 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-foot"><span>Issue 06 · SSE Stability</span><span>2026-07-19</span></div>
 </section>
 
-<!-- ==================== SLIDE 11 · 缓存与多账户 ==================== -->
+<!-- ==================== SLIDE 11 · Q7 OpenCode 模型不全 ==================== -->
+<section class="slide" aria-label="Q7 OpenCode 方案模型不全">
+  <div class="s-top">
+    <span class="doc-no">TD-2620</span>
+    <span class="doc-sec">Issue 07 — Client-ID &amp; Model Visibility</span>
+    <span class="doc-pg">11 / 14</span>
+  </div>
+  <div class="s-body">
+    <div class="sec-head reveal">
+      <div class="sec-no">Q7</div>
+      <div>
+        <div class="sec-label">Issue 07 — OpenCode 类方案:GitHub Token 直连模型不全</div>
+        <h2>模型清单由 Client-ID 决定:换用 OpenCode 的 gho_ Token</h2>
+      </div>
+    </div>
+    <p class="sec-lede reveal">现象:在类似 <strong>OpenCode</strong> 的方案里,用 GitHub Token(Device Flow)直连 Copilot 时,<code>/models</code> 返回的<strong>模型清单不全</strong> —— 部分 Claude / GPT 高阶模型缺失,只拿到基础子集。<strong>根因:Copilot 按签发 token 的 OAuth Client-ID 做模型可见性授权</strong>,用哪个 Client-ID 申请 token 决定能看到哪些模型。</p>
+    <div class="panel reveal">
+      <table>
+        <thead><tr><th style="width:34%">Client-ID</th><th style="width:14%">Token 前缀</th><th style="width:16%">应用类型</th><th>模型清单</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><code>Iv1.b507a08c87ecfe98</code>(旧)</td>
+            <td><code>ghu_</code></td>
+            <td>GitHub App</td>
+            <td><span class="badge no">✕ 不全</span> 仅基础子集</td>
+          </tr>
+          <tr>
+            <td><code>Ov23li8tweQw6odWQebz</code>(OpenCode)</td>
+            <td><code>gho_</code></td>
+            <td>OAuth App</td>
+            <td><span class="badge ok">✓ 完整</span> 与 OpenCode 等价</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <ul class="notes" style="margin-top: 16px;">
+      <li><strong>解决方案:</strong>改用 OpenCode 注册的 Client-ID <code>Ov23li8tweQw6odWQebz</code> 走 Device Flow 申请 <code>gho_</code> token(<code>auth/device_flow.go</code> 已切换),即可拿到完整模型清单。</li>
+      <li><strong>配套请求头(<code>ProfileOpenCode</code>):</strong>必须完整模仿 OpenCode 的 chat fetch —— <code>User-Agent: opencode/1.18.3</code> + <code>Openai-Intent</code> + <code>X-Github-Api-Version</code> + <code>x-initiator</code>,且<strong>不发</strong> VS Code 身份头(<code>Editor-Version</code> / <code>Editor-Plugin-Version</code> / <code>Copilot-Integration-Id</code>)与生成的 <code>X-Request-Id</code>(<code>internal/copilot/headers.go</code>)。</li>
+      <li><strong>与 Q5 呼应:</strong><code>gho_</code>(OAuth App)可直接作 Copilot Bearer,无需二次交换 —— 正是 <code>ModeDirect</code> 直连认证的基础;<code>ghu_</code>(GitHub App)则需 <code>/copilot_internal/v2/token</code> 交换。</li>
+    </ul>
+  </div>
+  <div class="s-foot"><span>Issue 07 · Client-ID &amp; Model Visibility</span><span>2026-07-20</span></div>
+</section>
+
+<!-- ==================== SLIDE 12 · 缓存与多账户 ==================== -->
 <section class="slide" aria-label="缓存与多账户">
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Extended — Cache &amp; Multi-Account</span>
-    <span class="doc-pg">11 / 13</span>
+    <span class="doc-pg">12 / 14</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1087,7 +1132,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Deliverables Index</span>
-    <span class="doc-pg">12 / 13</span>
+    <span class="doc-pg">13 / 14</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1134,18 +1179,18 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Verdict — 结论与状态</span>
-    <span class="doc-pg">13 / 13</span>
+    <span class="doc-pg">14 / 14</span>
   </div>
   <div class="s-body">
-    <div class="sec-head reveal" style="margin-bottom: 22px;">
+    <div class="sec-head reveal" style="margin-bottom: 12px;">
       <div class="sec-no">✓</div>
       <div>
         <div class="sec-label">Verdict</div>
-        <h2>六大问题最终状态</h2>
+        <h2>七大问题最终状态</h2>
       </div>
     </div>
     <div class="panel reveal">
-      <table style="font-size: 19px;">
+      <table id="verdict-tbl" style="font-size: 15px;">
         <thead><tr><th style="width:30%">问题</th><th style="width:16%">状态</th><th>处置</th></tr></thead>
         <tbody>
           <tr><td>Q1 上游硬性不支持(web_search / web_fetch / 外链图 / 300K 输出)</td><td><span class="badge warn">△ 上游限制</span></td><td>base64 图 / 客户端工具替代;computer use 经 beta 头转发已打通</td></tr>
@@ -1154,15 +1199,15 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
           <tr><td>Q4 Vertex 不支持 Structured Outputs</td><td><span class="badge no">✕ 上游策略</span></td><td>GCP 组织策略缺口,漂到 Vertex 间歇失败;客户端对该 400 重试</td></tr>
           <tr><td>Q5 Token 刷新 / 免交换认证</td><td><span class="badge ok">✓ 已实现</span></td><td>惰性刷新已厘清;ModeDirect 完成实测,待合入 main</td></tr>
           <tr><td>Q6 SSE 断流(EOF / RST_STREAM)</td><td><span class="badge ok">✓ 已定位</span></td><td>上游/中间层空闲超时 × thinking 静默期(官方在册 #70017);代理侧可注入 SSE 心跳兜底</td></tr>
+          <tr><td>Q7 OpenCode 方案模型不全</td><td><span class="badge ok">✓ 已解决</span></td><td>模型可见性按 OAuth Client-ID 授权;换 OpenCode 的 Client-ID 申请 <code>gho_</code> token + <code>ProfileOpenCode</code> 头,拿到完整清单</td></tr>
         </tbody>
       </table>
     </div>
-    <div class="colophon-label reveal" style="margin-top: 16px;">Sources / 数据来源</div>
+    <div class="colophon-label reveal" style="margin-top: 12px;">Sources / 数据来源</div>
     <ul class="sources reveal">
-      <li>会话记录 60+ 场(2026-06-10 ~ 07-19,Copilot CLI + VS Code Chat)· git 提交历史(main / test/authentication / feat/account-pool / fix-context-1m-resolution)</li>
-      <li>TD-2607 <code>docs/copilot-capability-report.html</code> 能力矩阵报告 · <code>scripts/</code> 下三层实测报告与探测脚本输出</li>
+      <li>会话记录 60+ 场(2026-06-10 ~ 07-20,Copilot CLI + VS Code Chat)· git 提交历史 · TD-2607 能力矩阵报告 · <code>scripts/</code> 三层实测报告与探测脚本输出</li>
     </ul>
-    <div class="end-mark reveal">End of Dossier · TD-2620 · 2026-07-19</div>
+    <div class="end-mark reveal">End of Dossier · TD-2620 · 2026-07-20</div>
   </div>
 </section>
 
@@ -1173,7 +1218,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
 <!-- 页码指示 + 导航按钮(舞台之外的 UI) -->
 <div class="deck-controls" aria-hidden="true">
   <button id="navPrev" title="上一页 (←)">‹</button>
-  <span id="pageIndicator">01 / 13</span>
+  <span id="pageIndicator">01 / 14</span>
   <button id="navNext" title="下一页 (→)">›</button>
 </div>
 
