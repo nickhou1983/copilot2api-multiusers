@@ -644,7 +644,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Key Figures — 关键指标</span>
-    <span class="doc-pg">02 / 15</span>
+    <span class="doc-pg">02 / 16</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -701,7 +701,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 01 — Upstream Gaps</span>
-    <span class="doc-pg">03 / 15</span>
+    <span class="doc-pg">03 / 16</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -756,7 +756,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 01 — Upstream Gaps</span>
-    <span class="doc-pg">04 / 15</span>
+    <span class="doc-pg">04 / 16</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -789,7 +789,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 02 — HTTP 413</span>
-    <span class="doc-pg">05 / 15</span>
+    <span class="doc-pg">05 / 16</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -833,7 +833,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 02 — HTTP 413</span>
-    <span class="doc-pg">06 / 15</span>
+    <span class="doc-pg">06 / 16</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -872,7 +872,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 03 — Thinking Signature</span>
-    <span class="doc-pg">07 / 15</span>
+    <span class="doc-pg">07 / 16</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -909,7 +909,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 04 — Structured Outputs</span>
-    <span class="doc-pg">08 / 15</span>
+    <span class="doc-pg">08 / 16</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -958,7 +958,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 05 — Auth &amp; Token</span>
-    <span class="doc-pg">09 / 15</span>
+    <span class="doc-pg">09 / 16</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1004,7 +1004,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 06 — SSE Stability</span>
-    <span class="doc-pg">10 / 15</span>
+    <span class="doc-pg">10 / 16</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1035,12 +1035,60 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-foot"><span>Issue 06 · SSE Stability</span><span>2026-07-22</span></div>
 </section>
 
-<!-- ==================== SLIDE 11 · Q7 OpenCode 模型不全 ==================== -->
+<!-- ==================== SLIDE 11 · Q6 延伸 断连三种死法 ==================== -->
+<section class="slide" aria-label="Q6 延伸 断连三种死法与官方缺口">
+  <div class="s-top">
+    <span class="doc-no">TD-2620</span>
+    <span class="doc-sec">Issue 06 延伸 — Three Failure Modes</span>
+    <span class="doc-pg">11 / 16</span>
+  </div>
+  <div class="s-body">
+    <div class="sec-head reveal">
+      <div class="sec-no">Q6＋</div>
+      <div>
+        <div class="sec-label">Issue 06 延伸 — thinking 静默期撞超时的「三兄弟」(2026-07-17)</div>
+        <h2>同一根因，三种死法：~180s 静默后断流</h2>
+      </div>
+    </div>
+    <p class="sec-lede reveal">这是 630s 硬上限之外的<strong>另一类断流</strong>:发出 <code>message_start</code> + <code>content_block_start</code>(thinking 块)后<strong>静默 ~180s</strong> 不吐字节 → 空闲 SSE 被中途关闭。同一根因(长推理静默期)在不同链路上呈现<strong>三种报错</strong>,本页专门拆解:</p>
+    <div class="panel reveal">
+      <table>
+        <thead><tr><th style="width:38%">报错</th><th style="width:28%">含义</th><th>发起方</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><code>stream read error: context canceled</code></td>
+            <td>下游客户端不等了(取消 / 断开)</td>
+            <td><span class="badge warn">客户端</span> 代理已归类为 Warn 级正常运维事件</td>
+          </tr>
+          <tr>
+            <td><code>RST_STREAM; INTERNAL_ERROR; received from peer</code></td>
+            <td>上游显式重置 HTTP/2 流(带错误码)</td>
+            <td><span class="badge no">上游</span> 网关 / LB 空闲超时的一种表现</td>
+          </tr>
+          <tr>
+            <td><code>stream read error: unexpected EOF</code></td>
+            <td>连接被「默默」关掉,流没收尾(无 <code>[DONE]</code> / 终止块)</td>
+            <td><span class="badge no">上游或中间层</span> 直接 FIN 断连 —— 同一根因的另一种死法</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <ul class="notes" style="margin-top: 16px;">
+      <li><strong>根因(官方证实):</strong>长推理静默期上游不吐任何字节 → 空闲 SSE 被中间层(NAT / CDN / 网关 / LB)在 <strong>~60–350s</strong> 驱逐,或服务端 / H2 层直接关闭。<a href="https://github.com/anthropics/claude-code/issues/70017" style="color:var(--orange);text-decoration:none;">claude-code #70017</a> 社区实测:单会话 <strong>7 次</strong>断连、4.5h 编排 <strong>11 次</strong>、静默窗口最长 <strong>~1h42m</strong>;客户端疑未设 <code>SO_KEEPALIVE</code>。</li>
+      <li><strong>官方缺口:</strong>TCP keepalive 只挡 NAT 驱逐;流重试仅覆盖<strong>前台</strong>路径,Agent-tool 子代理派发<strong>无任何重试</strong>,中途断连即永久死亡。官方诉求为服务端 <strong>SSE 心跳帧(≤30s)</strong>,但尚未进入 roadmap。</li>
+      <li><strong>代理侧解决方案(可落地):</strong>上游短期不会加心跳,copilot2api 作为中间层正是补心跳的最佳位置 —— 转发时若检测到 N 秒无上游字节,向下游注入 SSE 注释行(<code>: ping\n\n</code>)保活,即可消除本失败类,不改上游 / 客户端。</li>
+      <li><strong>与 630s 硬上限的区别:</strong>本页三种死法源于<strong>静默期</strong>(可被心跳缓解);上一页 630s 是<strong>持续吐字仍被切断</strong>的时间硬上限(心跳无解,只能多轮续写)。两者可叠加出现。</li>
+    </ul>
+  </div>
+  <div class="s-foot"><span>Issue 06 延伸 · Three Failure Modes</span><span>2026-07-17</span></div>
+</section>
+
+<!-- ==================== SLIDE 12 · Q7 OpenCode 模型不全 ==================== -->
 <section class="slide" aria-label="Q7 OpenCode 方案模型不全">
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 07 — Client-ID &amp; Model Visibility</span>
-    <span class="doc-pg">11 / 15</span>
+    <span class="doc-pg">12 / 16</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1079,12 +1127,12 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-foot"><span>Issue 07 · Client-ID &amp; Model Visibility</span><span>2026-07-20</span></div>
 </section>
 
-<!-- ==================== SLIDE 12 · Q7 实测 模型差异 & 1M 上下文 ==================== -->
+<!-- ==================== SLIDE 13 · Q7 实测 模型差异 & 1M 上下文 ==================== -->
 <section class="slide" aria-label="实测 两种方式模型差异与 1M 上下文">
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 07 · Live Probe — Model Diff &amp; 1M Context</span>
-    <span class="doc-pg">12 / 15</span>
+    <span class="doc-pg">13 / 16</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1138,12 +1186,12 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-foot"><span>Issue 07 · Live Probe</span><span>2026-07-22</span></div>
 </section>
 
-<!-- ==================== SLIDE 13 · 缓存与多账户 ==================== -->
+<!-- ==================== SLIDE 14 · 缓存与多账户 ==================== -->
 <section class="slide" aria-label="缓存与多账户">
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Extended — Cache &amp; Multi-Account</span>
-    <span class="doc-pg">13 / 15</span>
+    <span class="doc-pg">14 / 16</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1175,12 +1223,12 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-foot"><span>Extended · Cache &amp; Multi-Account</span><span>2026-07-19</span></div>
 </section>
 
-<!-- ==================== SLIDE 14 · 工程产出索引 ==================== -->
+<!-- ==================== SLIDE 15 · 工程产出索引 ==================== -->
 <section class="slide" aria-label="工程产出索引">
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Deliverables Index</span>
-    <span class="doc-pg">14 / 15</span>
+    <span class="doc-pg">15 / 16</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1221,13 +1269,13 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-foot"><span>Deliverables Index</span><span>2026-07-19</span></div>
 </section>
 
-<!-- ==================== SLIDE 15 · 结论与状态 ==================== -->
+<!-- ==================== SLIDE 16 · 结论与状态 ==================== -->
 <section class="slide" aria-label="结论与状态">
   <div class="crop tl"></div><div class="crop tr"></div><div class="crop bl"></div><div class="crop br"></div>
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Verdict — 结论与状态</span>
-    <span class="doc-pg">15 / 15</span>
+    <span class="doc-pg">16 / 16</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal" style="margin-bottom: 12px;">
@@ -1266,7 +1314,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
 <!-- 页码指示 + 导航按钮(舞台之外的 UI) -->
 <div class="deck-controls" aria-hidden="true">
   <button id="navPrev" title="上一页 (←)">‹</button>
-  <span id="pageIndicator">01 / 15</span>
+  <span id="pageIndicator">01 / 16</span>
   <button id="navNext" title="下一页 (→)">›</button>
 </div>
 
