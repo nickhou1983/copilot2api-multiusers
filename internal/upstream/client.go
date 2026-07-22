@@ -21,6 +21,8 @@ type TokenProvider interface {
 	GetToken(ctx context.Context) (string, error)
 	// GetBaseURL returns the base URL for the upstream API (e.g. "https://...").
 	GetBaseURL() string
+	// HeaderProfile returns the outbound header profile to use.
+	HeaderProfile() copilot.Profile
 }
 
 // Client makes requests to the upstream Copilot API.
@@ -129,7 +131,7 @@ func (c *Client) Do(ctx context.Context, r Request) (*http.Response, []byte, err
 		return nil, nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	copilot.AddHeaders(req, token)
+	copilot.AddHeadersForProfile(req, token, c.TokenProvider.HeaderProfile())
 
 	if r.Stream {
 		req.Header.Set("Accept", "text/event-stream")

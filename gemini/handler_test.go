@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/whtsky/copilot2api/internal/copilot"
 	"github.com/whtsky/copilot2api/internal/models"
 	"github.com/whtsky/copilot2api/internal/upstream"
 )
@@ -24,6 +25,10 @@ func (s *stubTokenProvider) GetToken(_ context.Context) (string, error) {
 
 func (s *stubTokenProvider) GetBaseURL() string {
 	return s.baseURL
+}
+
+func (s *stubTokenProvider) HeaderProfile() copilot.Profile {
+	return copilot.ProfileEditor
 }
 
 func TestHandler_ModelsListsGeminiMethods(t *testing.T) {

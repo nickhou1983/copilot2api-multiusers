@@ -17,7 +17,7 @@ A lightweight Go proxy that exposes GitHub Copilot as OpenAI-compatible, Anthrop
 - **Anthropic Routing**: Uses native `/v1/messages` when the model supports it, otherwise routes via `/responses` or `/chat/completions`. Native passthrough preserves advanced fields such as `context_management` (auto-adding the `context-management-2025-06-27` beta, plus the `compact-2026-01-12` beta when its edits request server-side compaction) and `search_result` content blocks, and forwards the client's `computer-use-*` beta header so the Computer Use tool works upstream.
 - **Multi-Account**: Map API keys to GitHub accounts 1:1 with isolated credential stores (see [Multiple GitHub Accounts](#multiple-github-accounts))
 - **Web Admin UI**: Manage accounts and view token-usage statistics at `/admin/` (multi-account mode)
-- **Auto Authentication**: GitHub Device Flow OAuth with automatic token refresh
+- **Auto Authentication**: GitHub Device Flow OAuth with automatic token refresh (see [Authentication Flow](docs/auth-flow.md))
 - **Usage Monitoring**: Built-in `/usage` endpoint for quota tracking
 - **Models Cache**: 5-minute cache for `/v1/models` and Anthropic model capability lookups
 

@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/whtsky/copilot2api/auth"
 	"github.com/whtsky/copilot2api/internal/stats"
 )
 
@@ -58,6 +59,7 @@ type accountView struct {
 	ID            string `json:"id"`
 	APIKey        string `json:"api_key"`
 	TokenDir      string `json:"token_dir"`
+	AuthMode      string `json:"auth_mode,omitempty"`
 	Authenticated bool   `json:"authenticated"`
 	BaseURL       string `json:"base_url,omitempty"`
 }
@@ -115,7 +117,7 @@ func (m *Manager) handleList(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (m *Manager) viewOf(a *Account) accountView {
-	v := accountView{ID: a.ID, APIKey: a.APIKey, TokenDir: a.TokenDir}
+	v := accountView{ID: a.ID, APIKey: a.APIKey, TokenDir: a.TokenDir, AuthMode: a.AuthMode}
 	if a.Auth != nil {
 		v.Authenticated = a.Auth.IsAuthenticated()
 		v.BaseURL = a.Auth.GetBaseURL()
@@ -127,6 +129,7 @@ type createRequest struct {
 	ID       string `json:"id"`
 	APIKey   string `json:"api_key"`
 	TokenDir string `json:"token_dir"`
+	AuthMode string `json:"auth_mode"`
 }
 
 func (m *Manager) handleGenerateKey(w http.ResponseWriter, _ *http.Request) {
@@ -146,11 +149,15 @@ func (m *Manager) handleCreate(w http.ResponseWriter, r *http.Request) {
 	if req.APIKey == "" {
 		req.APIKey = GenerateAPIKey()
 	}
+	if _, err := auth.ParseMode(req.AuthMode); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	acct, err := m.factory(AccountConfig{ID: req.ID, APIKey: req.APIKey, TokenDir: req.TokenDir})
+	acct, err := m.factory(AccountConfig{ID: req.ID, APIKey: req.APIKey, TokenDir: req.TokenDir, AuthMode: req.AuthMode})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -170,6 +177,7 @@ func (m *Manager) handleCreate(w http.ResponseWriter, r *http.Request) {
 type updateRequest struct {
 	APIKey   *string `json:"api_key"`
 	TokenDir *string `json:"token_dir"`
+	AuthMode *string `json:"auth_mode"`
 }
 
 func (m *Manager) handleUpdate(w http.ResponseWriter, r *http.Request) {
@@ -189,13 +197,30 @@ func (m *Manager) handleUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// A token_dir change requires rebuilding the account (new auth client).
-	if req.TokenDir != nil && *req.TokenDir != existing.TokenDir {
+	if req.AuthMode != nil {
+		if _, err := auth.ParseMode(*req.AuthMode); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+	}
+
+	// A token_dir or auth_mode change requires rebuilding the account (new auth client).
+	tokenDirChanged := req.TokenDir != nil && *req.TokenDir != existing.TokenDir
+	authModeChanged := req.AuthMode != nil && *req.AuthMode != existing.AuthMode
+	if tokenDirChanged || authModeChanged {
 		apiKey := existing.APIKey
 		if req.APIKey != nil && *req.APIKey != "" {
 			apiKey = *req.APIKey
 		}
-		rebuilt, err := m.factory(AccountConfig{ID: id, APIKey: apiKey, TokenDir: *req.TokenDir})
+		tokenDir := existing.TokenDir
+		if req.TokenDir != nil {
+			tokenDir = *req.TokenDir
+		}
+		authMode := existing.AuthMode
+		if req.AuthMode != nil {
+			authMode = *req.AuthMode
+		}
+		rebuilt, err := m.factory(AccountConfig{ID: id, APIKey: apiKey, TokenDir: tokenDir, AuthMode: authMode})
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
@@ -396,7 +421,7 @@ func (m *Manager) persistLocked() error {
 	accs := m.reg.Accounts()
 	cfg := &Config{Accounts: make([]AccountConfig, 0, len(accs))}
 	for _, a := range accs {
-		cfg.Accounts = append(cfg.Accounts, AccountConfig{ID: a.ID, APIKey: a.APIKey, TokenDir: a.TokenDir})
+		cfg.Accounts = append(cfg.Accounts, AccountConfig{ID: a.ID, APIKey: a.APIKey, TokenDir: a.TokenDir, AuthMode: a.AuthMode})
 	}
 	sort.Slice(cfg.Accounts, func(i, j int) bool { return cfg.Accounts[i].ID < cfg.Accounts[j].ID })
 	return SaveConfig(m.cfgPath, cfg)

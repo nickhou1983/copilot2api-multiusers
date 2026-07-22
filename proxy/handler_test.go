@@ -331,6 +331,10 @@ func (s *stubTokenProvider) GetBaseURL() string {
 	return s.baseURL
 }
 
+func (s *stubTokenProvider) HeaderProfile() copilot.Profile {
+	return copilot.ProfileEditor
+}
+
 // TestHandlePassthrough_StreamingNetworkFailure_Returns502 verifies that when
 // the upstream connection fails before any response headers are written (e.g.
 // connection refused), the client receives a 502 instead of an empty 200.

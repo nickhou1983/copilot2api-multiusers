@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/whtsky/copilot2api/auth"
 )
 
 // DefaultConfigFileName is the name of the multi-account config file looked up
@@ -21,6 +23,11 @@ type AccountConfig struct {
 	// TokenDir is where this account's credentials.json is stored. If relative,
 	// it is resolved under the base token directory. Defaults to ID.
 	TokenDir string `json:"token_dir,omitempty"`
+	// AuthMode selects how this account authenticates upstream: "exchange"
+	// (default) mints short-lived Copilot tokens; "direct" uses the GitHub
+	// OAuth token directly. Empty falls back to COPILOT2API_AUTH_MODE, then
+	// "exchange".
+	AuthMode string `json:"auth_mode,omitempty"`
 }
 
 // Config is the parsed accounts.json file.
@@ -78,6 +85,9 @@ func (c *Config) validate() error {
 		if _, dup := seenKey[a.APIKey]; dup {
 			return fmt.Errorf("duplicate api_key for account %q", a.ID)
 		}
+		if _, err := auth.ParseMode(a.AuthMode); err != nil {
+			return fmt.Errorf("account %q: %w", a.ID, err)
+		}
 		seenID[a.ID] = struct{}{}
 		seenKey[a.APIKey] = struct{}{}
 	}
@@ -96,6 +106,17 @@ func (a AccountConfig) ResolveTokenDir(baseTokenDir string) string {
 		return dir
 	}
 	return filepath.Join(baseTokenDir, dir)
+}
+
+// ResolveAuthMode returns the effective auth mode for the account: the
+// account's auth_mode when set, otherwise the COPILOT2API_AUTH_MODE
+// environment variable, otherwise exchange.
+func (a AccountConfig) ResolveAuthMode() (auth.Mode, error) {
+	s := a.AuthMode
+	if s == "" {
+		s = os.Getenv("COPILOT2API_AUTH_MODE")
+	}
+	return auth.ParseMode(s)
 }
 
 // SaveConfig writes the accounts config to path atomically (temp file + rename).

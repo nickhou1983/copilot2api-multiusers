@@ -17,7 +17,7 @@
 - **Anthropic 智能路由**：模型原生支持时使用 `/v1/messages`，否则通过 `/responses` 或 `/chat/completions` 转发。原生路径会透传高级字段，如 `context_management`（自动补加 `context-management-2025-06-27` beta 头；当其 edits 请求服务端压缩时还会补加 `compact-2026-01-12` beta 头）与 `search_result` 内容块，并转发客户端的 `computer-use-*` beta 头以让 Computer Use 工具在上游生效。
 - **多账号支持**：将 API Key 与 GitHub 账号一对一映射，各账号使用独立的凭据存储（详见 [多 GitHub 账号](#多-github-账号)）
 - **Web 管理界面**：在 `/admin/` 管理账号并查看 Token 使用统计（多账号模式）
-- **自动认证**：GitHub Device Flow OAuth，自动刷新 Token
+- **自动认证**：GitHub Device Flow OAuth，自动刷新 Token（详见 [认证流程](docs/auth-flow.zh-CN.md)）
 - **用量监控**：内置 `/usage` 端点用于配额追踪
 - **模型缓存**：`/v1/models` 与 Anthropic 模型能力查询结果缓存 5 分钟
 

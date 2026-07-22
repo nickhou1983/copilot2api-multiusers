@@ -42,7 +42,7 @@ func (c *Client) StoredTokens() StoredTokenInfo {
 // codes so a caller (e.g. a web UI) can present them to the user. Use
 // CompleteDeviceFlow with the returned DeviceCode to finish authentication.
 func (c *Client) StartDeviceFlow() (*DeviceCodeResponse, error) {
-	resp, err := InitiateDeviceFlow()
+	resp, err := InitiateDeviceFlow(c.mode)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initiate device flow: %w", err)
 	}
@@ -58,7 +58,7 @@ func (c *Client) CompleteDeviceFlow(deviceCode string, interval int, timeout tim
 	c.refreshMu.Lock()
 	defer c.refreshMu.Unlock()
 
-	accessToken, err := PollForAccessToken(deviceCode, interval, timeout)
+	accessToken, err := PollForAccessToken(c.mode, deviceCode, interval, timeout)
 	if err != nil {
 		return fmt.Errorf("failed to get access token: %w", err)
 	}
@@ -66,6 +66,15 @@ func (c *Client) CompleteDeviceFlow(deviceCode string, interval int, timeout tim
 	c.mu.Lock()
 	c.creds.GitHubToken = accessToken
 	c.mu.Unlock()
+
+	// Direct mode uses the GitHub token as the bearer; no Copilot token needed.
+	if c.mode == ModeDirect {
+		if err := c.saveCredentials(); err != nil {
+			return err
+		}
+		slog.Info("device flow authentication completed", "mode", c.mode)
+		return nil
+	}
 
 	if err := c.refreshCopilotToken(); err != nil {
 		return fmt.Errorf("failed to get copilot token: %w", err)

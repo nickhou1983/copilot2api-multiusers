@@ -12,15 +12,24 @@ import (
 	"github.com/whtsky/copilot2api/internal/copilot"
 )
 
+const (
+	// DirectBaseURL is the static Copilot API base URL used in direct mode.
+	DirectBaseURL = "https://api.githubcopilot.com"
+)
+
 type Client struct {
 	storage   *TokenStorage
+	mode      Mode
 	mu        sync.RWMutex
 	creds     *StoredCredentials
 	refreshMu sync.Mutex // serializes refresh/device-flow operations
 }
 
-// NewClient creates a new auth client
-func NewClient(tokenDir string) (*Client, error) {
+// NewClient creates a new auth client operating in the given mode.
+func NewClient(tokenDir string, mode Mode) (*Client, error) {
+	if mode == "" {
+		mode = ModeExchange
+	}
 	storage, err := NewTokenStorage(tokenDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create token storage: %w", err)
@@ -33,12 +42,21 @@ func NewClient(tokenDir string) (*Client, error) {
 
 	return &Client{
 		storage: storage,
+		mode:    mode,
 		creds:   creds,
 	}, nil
 }
 
+// Mode returns the auth mode this client operates in.
+func (c *Client) Mode() Mode {
+	return c.mode
+}
+
 // GetValidToken returns a valid Copilot token, performing authentication if necessary
 func (c *Client) GetValidToken(ctx context.Context) (*CopilotToken, error) {
+	if c.mode == ModeDirect {
+		return nil, fmt.Errorf("direct mode does not use Copilot tokens; use GetToken")
+	}
 	// Fast path: check with read lock only
 	c.mu.RLock()
 	if c.creds.CopilotToken != nil && c.creds.CopilotToken.IsTokenUsable() {
@@ -85,8 +103,18 @@ func (c *Client) GetValidToken(ctx context.Context) (*CopilotToken, error) {
 }
 
 // GetToken returns a valid Copilot bearer token string. It satisfies the
-// upstream.TokenProvider interface.
+// upstream.TokenProvider interface. In direct mode the stored GitHub OAuth
+// token is used as the bearer directly.
 func (c *Client) GetToken(ctx context.Context) (string, error) {
+	if c.mode == ModeDirect {
+		c.mu.RLock()
+		token := c.creds.GitHubToken
+		c.mu.RUnlock()
+		if token == "" {
+			return "", fmt.Errorf("authentication required: no GitHub token available (run device flow at startup)")
+		}
+		return token, nil
+	}
 	tok, err := c.GetValidToken(ctx)
 	if err != nil {
 		return "", err
@@ -96,6 +124,9 @@ func (c *Client) GetToken(ctx context.Context) (string, error) {
 
 // GetBaseURL returns the base URL for API calls
 func (c *Client) GetBaseURL() string {
+	if c.mode == ModeDirect {
+		return DirectBaseURL
+	}
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	if c.creds.CopilotToken != nil {
@@ -104,14 +135,22 @@ func (c *Client) GetBaseURL() string {
 	return DefaultBaseURL
 }
 
+// HeaderProfile returns the outbound header profile for this client's mode.
+func (c *Client) HeaderProfile() copilot.Profile {
+	if c.mode == ModeDirect {
+		return copilot.ProfileOpencode
+	}
+	return copilot.ProfileEditor
+}
+
 
 // EnsureAuthenticated runs the interactive device flow if needed and verifies
-// that a valid Copilot token can be obtained. Call this at startup only.
+// that a valid bearer token can be obtained. Call this at startup only.
 func (c *Client) EnsureAuthenticated(ctx context.Context) error {
 	if err := c.RunDeviceFlowIfNeeded(); err != nil {
 		return fmt.Errorf("device flow failed: %w", err)
 	}
-	if _, err := c.GetValidToken(ctx); err != nil {
+	if _, err := c.GetToken(ctx); err != nil {
 		return fmt.Errorf("failed to obtain valid token: %w", err)
 	}
 	return nil
@@ -136,7 +175,7 @@ func (c *Client) performDeviceFlow() error {
 	slog.Info("starting GitHub Device Flow OAuth")
 
 	// Step 1: Get device code
-	deviceResp, err := InitiateDeviceFlow()
+	deviceResp, err := InitiateDeviceFlow(c.mode)
 	if err != nil {
 		return fmt.Errorf("failed to initiate device flow: %w", err)
 	}
@@ -149,7 +188,7 @@ func (c *Client) performDeviceFlow() error {
 
 	// Step 3: Poll for access token
 	timeout := time.Duration(deviceResp.ExpiresIn) * time.Second
-	accessToken, err := PollForAccessToken(deviceResp.DeviceCode, deviceResp.Interval, timeout)
+	accessToken, err := PollForAccessToken(c.mode, deviceResp.DeviceCode, deviceResp.Interval, timeout)
 	if err != nil {
 		return fmt.Errorf("failed to get access token: %w", err)
 	}
@@ -161,11 +200,27 @@ func (c *Client) performDeviceFlow() error {
 	c.creds.GitHubToken = accessToken
 	c.mu.Unlock()
 
+	// Direct mode uses the GitHub token as the bearer; no Copilot token needed.
+	if c.mode == ModeDirect {
+		return c.saveCredentials()
+	}
+
 	// Get Copilot token
 	if err := c.refreshCopilotToken(); err != nil {
 		return fmt.Errorf("failed to get copilot token: %w", err)
 	}
 
+	return nil
+}
+
+// saveCredentials persists the current credentials snapshot to disk.
+func (c *Client) saveCredentials() error {
+	c.mu.RLock()
+	credsCopy := *c.creds
+	c.mu.RUnlock()
+	if err := c.storage.SaveCredentials(&credsCopy); err != nil {
+		return fmt.Errorf("failed to save credentials: %w", err)
+	}
 	return nil
 }
 

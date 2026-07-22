@@ -293,7 +293,7 @@ func TestManagerTokensEndpoint(t *testing.T) {
 
 	reg, _ := NewRegistry(nil)
 	factory := func(c AccountConfig) (*Account, error) {
-		ac, err := auth.NewClient(tokenDir)
+		ac, err := auth.NewClient(tokenDir, auth.ModeExchange)
 		if err != nil {
 			return nil, err
 		}

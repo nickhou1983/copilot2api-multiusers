@@ -11,11 +11,22 @@ import (
 )
 
 const (
-	GitHubClientID      = "Iv1.b507a08c87ecfe98"
+	// GitHubClientID is the GitHub Copilot app client id used in exchange mode.
+	GitHubClientID = "Iv1.b507a08c87ecfe98"
+	// DirectClientID is the OAuth App client id used in direct mode.
+	DirectClientID      = "Ov23li8tweQw6odWQebz"
 	GitHubDeviceCodeURL = "https://github.com/login/device/code"
 	GitHubTokenURL      = "https://github.com/login/oauth/access_token"
 	GitHubScope         = "read:user"
 )
+
+// clientIDForMode returns the GitHub client id to use for the device flow.
+func clientIDForMode(mode Mode) string {
+	if mode == ModeDirect {
+		return DirectClientID
+	}
+	return GitHubClientID
+}
 
 type DeviceCodeResponse struct {
 	DeviceCode      string `json:"device_code"`
@@ -31,10 +42,11 @@ type AccessTokenResponse struct {
 	Error       string `json:"error"`
 }
 
-// InitiateDeviceFlow starts the GitHub Device Flow OAuth process
-func InitiateDeviceFlow() (*DeviceCodeResponse, error) {
+// InitiateDeviceFlow starts the GitHub Device Flow OAuth process using the
+// client id for the given auth mode.
+func InitiateDeviceFlow(mode Mode) (*DeviceCodeResponse, error) {
 	data := url.Values{
-		"client_id": {GitHubClientID},
+		"client_id": {clientIDForMode(mode)},
 		"scope":     {GitHubScope},
 	}
 
@@ -70,7 +82,7 @@ func InitiateDeviceFlow() (*DeviceCodeResponse, error) {
 }
 
 // PollForAccessToken polls GitHub for the access token after user authorization
-func PollForAccessToken(deviceCode string, interval int, timeout time.Duration) (string, error) {
+func PollForAccessToken(mode Mode, deviceCode string, interval int, timeout time.Duration) (string, error) {
 	pollInterval := time.Duration(interval) * time.Second
 	if pollInterval <= 0 {
 		pollInterval = 5 * time.Second
@@ -85,7 +97,7 @@ func PollForAccessToken(deviceCode string, interval int, timeout time.Duration) 
 		case <-timeoutTimer.C:
 			return "", fmt.Errorf("polling timeout exceeded")
 		case <-pollTicker.C:
-			token, err := checkAccessToken(deviceCode)
+			token, err := checkAccessToken(mode, deviceCode)
 			if err != nil {
 				// Continue polling on certain errors
 				if strings.Contains(err.Error(), "authorization_pending") {
@@ -107,9 +119,9 @@ func PollForAccessToken(deviceCode string, interval int, timeout time.Duration) 
 	}
 }
 
-func checkAccessToken(deviceCode string) (string, error) {
+func checkAccessToken(mode Mode, deviceCode string) (string, error) {
 	data := url.Values{
-		"client_id":   {GitHubClientID},
+		"client_id":   {clientIDForMode(mode)},
 		"device_code": {deviceCode},
 		"grant_type":  {"urn:ietf:params:oauth:grant-type:device_code"},
 	}

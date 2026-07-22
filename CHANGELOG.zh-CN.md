@@ -32,6 +32,7 @@
 
 ### 文档
 
+- 新增 `docs/upstream-messages-live-tests.zh-CN.md` —— Copilot 上游 `/v1/messages` 实测记录（2026-07-21/22），经代理与直连上游两条链路交叉验证：web_search / web_fetch / 图片 URL 在网关层对全部模型拦截（含 Anthropic 最新工具版本）；structured outputs 在 Anthropic / Bedrock 落点可用、Vertex 落点（`sonnet-4.5` / `opus-4.5`）被 GCP 组织策略拦截；`max_tokens` 真实上限 128K / 64K（高于 `/models` 宣告值，300K 被拒）；SSE 流约 630 秒生存期，以 HTTP/2 RST_STREAM 终止且无任何终止事件——附各模型吞吐实测与客户端处理建议。
 - 新增 `docs/auth-flow.md` 与 `docs/auth-flow.zh-CN.md` —— 端到端的认证流程参考,涵盖下游 API Key 校验与上游 GitHub Device Flow,包括按模式区分的 Device Flow client id（`exchange` → `Iv1.b507a08c87ecfe98`，`direct` → `Ov23li8tweQw6odWQebz`）、exchange 与 direct 两种 token 获取方式、`editor`/`opencode` 请求头 profile、token 刷新,以及管理界面驱动的登录。已从 README「自动认证」特性处链接。
 - 新增 `docs/copilot2api-issues-retrospective.html` —— 15 页 16:9 HTML 复盘报告（与能力报告同款 TD 档案风格与翻页交互），汇总 2026-06-10 ~ 07-22 期间测试与咨询过的全部问题，按「现象 → 分析 → 解决方案」组织：上游能力缺口与 beta 头白名单、Business 端点 413 根因、超长上下文行为、`/chat/completions` 转换路径的 thinking signature 丢失、Vertex 落点 structured outputs 失败、Token 刷新与直连认证、SSE 断流排查（关联上游 claude-code #70017）、OpenCode 类方案下模型清单由 Client-ID 决定（改用 OpenCode 的 Client-ID 申请 `gho_` token 拿到完整清单）、实测对比 `ghu_`（交换）与 `gho_`（直连）两种方式的 `/models` 清单差异、必须发送 `X-Github-Api-Version: 2026-06-01` 才能看到 1M 上下文窗口、缓存命中机制。
 - 将 `docs/copilot-capability-report.html` 从滚动长页报告重新设计为 17 页 16:9 HTML 幻灯片（支持键盘 / 滚轮 / 触摸翻页、打印导出 PDF、页内文本编辑）；报告内容全部保留。
