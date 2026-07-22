@@ -419,6 +419,7 @@ td {
 }
 tr:last-child td { border-bottom: none; }
 #verdict-tbl td { padding: 9px 22px; line-height: 1.4; }
+#q6-notes li { padding-top: 10px; padding-bottom: 10px; }
 td.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 
 /* 判定徽章 */
@@ -1009,41 +1010,29 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
     <div class="sec-head reveal">
       <div class="sec-no">Q6</div>
       <div>
-        <div class="sec-label">Issue 06 — SSE 流式断连「三兄弟」(2026-07-17)</div>
-        <h2>同一根因，三种死法：thinking 静默期撞超时</h2>
+        <div class="sec-label">Issue 06 — SSE 流式稳定性 · ~630s 硬上限实测 (2026-07-21/22)</div>
+        <h2>根因量化：SSE 流约 630 秒被硬切断 —— 时间维度，非体积</h2>
       </div>
     </div>
-    <p class="sec-lede reveal">典型现象:发出 <code>message_start</code> + <code>content_block_start</code>(thinking 块)后<strong>静默 ~180s</strong>,然后断流。<strong>此为 Anthropic 官方在册的失败类(<a href="https://github.com/anthropics/claude-code/issues/70017" style="color:var(--orange);text-decoration:none;">claude-code #70017</a>,截至 07-19 仍 OPEN、未修复)。</strong> 三种报错对照:</p>
+    <p class="sec-lede reveal">两类断流:(a) 长推理<strong>静默期</strong>撞中间层空闲超时(<a href="https://github.com/anthropics/claude-code/issues/70017" style="color:var(--orange);text-decoration:none;">claude-code #70017</a>,仍 OPEN,社区实测单会话多达 7–11 次);(b) 即便<strong>持续吐字</strong>,SSE 流也在 <strong>~630s</strong> 被硬切断。三次长输出实验(<code>max_tokens=128000</code>)<strong>经代理与直连上游逐项一致</strong>,证明是上游行为:</p>
     <div class="panel reveal">
-      <table>
-        <thead><tr><th style="width:36%">错误</th><th style="width:26%">含义</th><th>发起方</th></tr></thead>
+      <table style="font-size:18px">
+        <thead><tr><th style="width:5%">#</th><th style="width:16%">链路</th><th style="width:15%">模型</th><th style="width:13%">流时长</th><th>切断前交付</th><th style="width:22%">终止方式</th></tr></thead>
         <tbody>
-          <tr>
-            <td><code>stream read error: context canceled</code></td>
-            <td>下游客户端不等了(取消/断开)</td>
-            <td><span class="badge warn">客户端</span> 代理已归类为 Warn 级正常运维事件</td>
-          </tr>
-          <tr>
-            <td><code>RST_STREAM; INTERNAL_ERROR; received from peer</code></td>
-            <td>上游显式重置 HTTP/2 流(带错误码)</td>
-            <td><span class="badge no">上游</span> 网关/LB 空闲超时的一种表现</td>
-          </tr>
-          <tr>
-            <td><code>stream read error: unexpected EOF</code></td>
-            <td>连接被「默默」关掉,流没收尾(无 <code>[DONE]</code>/终止块)</td>
-            <td><span class="badge no">上游或中间层</span> 直接 FIN 断连 —— 同一根因的另一种死法</td>
-          </tr>
+          <tr><td>1</td><td>经代理</td><td><code>sonnet-5</code></td><td><strong>630.3 s</strong></td><td>36,928 行(~10 万+ tok)</td><td>裸 EOF</td></tr>
+          <tr><td>2</td><td>经代理</td><td><code>opus-4.8</code></td><td><strong>631.8 s</strong></td><td>23,529 汉字(~3 万 tok)</td><td>裸 EOF</td></tr>
+          <tr><td>3</td><td><strong>直连上游</strong></td><td><code>sonnet-5</code></td><td><strong>632 s</strong></td><td>37,077 行(~21 万字符)</td><td><span class="badge no">HTTP/2 RST_STREAM</span></td></tr>
         </tbody>
       </table>
     </div>
-    <ul class="notes" style="margin-top: 16px;">
-      <li><strong>根因(官方证实):</strong>长推理静默期上游不吐任何字节 → 空闲 SSE 被中间层(NAT/CDN/网关/LB)在 ~60–350s 驱逐,或服务端/H2 层直接关闭。#70017 社区实测:单会话 <strong>7 次</strong>断连、4.5h 编排 <strong>11 次</strong>、静默窗口最长 ~1h42m;客户端疑未设 <code>SO_KEEPALIVE</code>。</li>
-      <li><strong>官方缺口:</strong>TCP keepalive 只挡 NAT 驱逐;流重试仅覆盖<strong>前台</strong>路径,Agent-tool 子代理派发<strong>无任何重试</strong>,中途断连即永久死亡。官方诉求为服务端 <strong>SSE 心跳帧(≤30s)</strong>,但尚未进入 roadmap。</li>
-      <li><strong>代理侧解决方案(可落地):</strong>上游短期不会加心跳,copilot2api 作为中间层正是补心跳的最佳位置 —— 转发时若检测到 N 秒无上游字节,向下游注入 SSE 注释行(<code>: ping\n\n</code>)保活,即可消除本失败类,不改上游/客户端。</li>
-      <li><strong>代理侧排查结论:</strong>并发模型(每请求一 goroutine)/ 锁(流式循环不持锁)/ CPU / 内存逐项检查 —— <strong>copilot2api 自身不是 EOF 瓶颈</strong>(进程僵死会全量报错,与零星单请求现象不符)。</li>
+    <ul class="notes" id="q6-notes" style="margin-top: 10px;">
+      <li><strong>时间维度而非体积:</strong>对照组 <code>haiku-4.5</code> 在 <strong>185s</strong> 内完整交付 62,005 tok 并正常收尾(<code>end_turn</code>+<code>message_stop</code>+<code>[DONE]</code>)—— 未撞 630s 即结束,故限制是时长。三次实验均<strong>无</strong> <code>message_delta</code>/<code>message_stop</code>/<code>[DONE]</code>,最后一个事件是普通 <code>content_block_delta</code>(直连那次末行数字被拦腰截断)。</li>
+      <li><strong>630s 窗口实际可交付(实测吞吐):</strong>haiku ~335 tok/s 可跑满 64K;sonnet-5 ~170 tok/s 约 10 万 tok(跑不满 128K);opus-4.8 ~50 tok/s 约 3 万 tok。<strong>单次上限 = min(<code>max_tokens</code> 上限, 速率 × 630s)</strong>。</li>
+      <li><strong>客户端必读:</strong>「流突然 EOF / HTTP/2 stream error 且无 <code>message_stop</code>」必须当作<strong>可恢复截断</strong>处理(保留已收内容 + 续写重试),不可当完整响应;300K 级输出需多轮拼接(haiku 1 轮 / sonnet-5 ~3 轮 / opus-4.8 10+ 轮)。</li>
+      <li><strong>代理侧结论:</strong>copilot2api 流式路径<strong>无 ReadTimeout</strong>(<code>main.go</code> 特意不设),并发/锁/CPU/内存逐项排除 —— 已确认非代理瓶颈。针对(a)类空闲超时,代理可注入 SSE 心跳注释行(<code>: ping\n\n</code>)保活缓解。</li>
     </ul>
   </div>
-  <div class="s-foot"><span>Issue 06 · SSE Stability</span><span>2026-07-19</span></div>
+  <div class="s-foot"><span>Issue 06 · SSE Stability</span><span>2026-07-22</span></div>
 </section>
 
 <!-- ==================== SLIDE 11 · Q7 OpenCode 模型不全 ==================== -->
@@ -1257,7 +1246,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
           <tr><td>Q3 Thinking Signature 转换丢失</td><td><span class="badge ok">✓ 已规避</span></td><td>需签名的客户端走原生 <code>/v1/messages</code> 透传(与直连等价)</td></tr>
           <tr><td>Q4 Vertex 不支持 Structured Outputs</td><td><span class="badge no">✕ 上游策略</span></td><td>GCP 组织策略缺口,漂到 Vertex 间歇失败;客户端对该 400 重试</td></tr>
           <tr><td>Q5 Token 刷新 / 免交换认证</td><td><span class="badge ok">✓ 已实现</span></td><td>惰性刷新已厘清;ModeDirect 完成实测,待合入 main</td></tr>
-          <tr><td>Q6 SSE 断流(EOF / RST_STREAM)</td><td><span class="badge ok">✓ 已定位</span></td><td>上游/中间层空闲超时 × thinking 静默期(官方在册 #70017);代理侧可注入 SSE 心跳兜底</td></tr>
+          <tr><td>Q6 SSE 断流(EOF / RST_STREAM)</td><td><span class="badge ok">✓ 已定位</span></td><td>实测 ~630s 硬上限(时间维度非体积)＋ thinking 静默期空闲超时(#70017);经代理/直连交叉验证,代理侧可注入 SSE 心跳兜底</td></tr>
           <tr><td>Q7 OpenCode 方案模型不全</td><td><span class="badge ok">✓ 已解决</span></td><td>模型可见性按 OAuth Client-ID 授权;换 OpenCode 的 Client-ID 申请 <code>gho_</code> token + <code>ProfileOpenCode</code> 头,拿到完整清单</td></tr>
         </tbody>
       </table>
