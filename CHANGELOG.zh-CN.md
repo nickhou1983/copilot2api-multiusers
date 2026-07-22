@@ -6,6 +6,7 @@
 
 ### 新特性
 
+- 新增按账号的认证模式:`exchange`(默认,行为不变)通过 `copilot_internal/v2/token` 铸造短时 Copilot token;新增的 `direct` 模式直接把 GitHub OAuth token 作为 Copilot bearer,使用静态 base URL(`https://api.githubcopilot.com`)且无 token 刷新。可在 `accounts.json` 中按账号设置 `auth_mode`,或通过新的 `COPILOT2API_AUTH_MODE` 环境变量设置全局默认(账号设置优先)。GitHub Device Flow 按模式选择 client id(`exchange` → `Iv1.b507a08c87ecfe98`,`direct` → `Ov23li8tweQw6odWQebz`),出站请求使用与模式对应的请求头 profile:exchange 用 `editor`(VS Code Copilot Chat,与之前一致),direct 用 `opencode`(`User-Agent: opencode/…`、`Openai-Intent: conversation-edits`、`X-Initiator: user`,不含 editor / request-id 头)。管理界面与 API 支持在创建账号时设置 `auth_mode`,也支持更新时修改(会重建该账号的 auth client)。既有配置不受影响——缺省 `auth_mode` 即保持 exchange 行为。
 - 在原生 `/v1/messages`（及 `/v1/messages/count_tokens`）路由上支持 Computer Use 工具：代理会把客户端的 `computer-use-*` beta 头转发到上游。代理仍不会盲目转发任意客户端 `anthropic-beta` 头，但现在放行 `computer-use-2025-11-24`（Claude Opus 4.8/4.7/4.6、Sonnet 4.6 等）与 `computer-use-2025-01-24`（更旧的模型），并与自动注入的 `context-management` beta 合并成单个 `anthropic-beta` 值。Copilot 上游本就支持 computer use；此前该 beta 头被剥离，导致 `computer_20251124` / `computer_20250124` 工具型被 `400` 拒绝。不带 `computer-use-*` 头的请求不受影响。
 - 在原生 `/v1/messages`（及 `/v1/messages/count_tokens`）路由上转发客户端的 `interleaved-thinking-*` beta 头（如 `interleaved-thinking-2025-05-14`）到上游，复用 `computer-use-*` 所在的同一白名单。此前剥离该头是良性的（请求仍成功且能产出 thinking 块），但转发后可确保多步工具调用之间 thinking 块的穿插位置与直连上游完全一致。其他客户端 `anthropic-beta` token 仍会被剥离。
 - 在原生 `/v1/messages`（及 `/v1/messages/count_tokens`）路由上支持服务端上下文压缩（compaction）：当 `context_management.edits` 包含 `compact_*` 编辑类型（如 `compact_20260112`）时，代理会自动附加上游要求的 `anthropic-beta: compact-2026-01-12` 头。此前客户端的 compaction beta 头会被剥离，导致上游以 `400` 拒绝该编辑类型；实测确认带上该 beta 后 Copilot 上游支持 compaction。
@@ -31,7 +32,8 @@
 
 ### 文档
 
-- 新增 `docs/copilot2api-issues-retrospective.html` —— 14 页 16:9 HTML 复盘报告（与能力报告同款 TD 档案风格与翻页交互），汇总 2026-06-10 ~ 07-20 期间测试与咨询过的全部问题，按「现象 → 分析 → 解决方案」组织：上游能力缺口与 beta 头白名单、Business 端点 413 根因、超长上下文行为、`/chat/completions` 转换路径的 thinking signature 丢失、Vertex 落点 structured outputs 失败、Token 刷新与直连认证、SSE 断流排查（关联上游 claude-code #70017）、OpenCode 类方案下模型清单由 Client-ID 决定（改用 OpenCode 的 Client-ID 申请 `gho_` token 拿到完整清单）、缓存命中机制。
+- 新增 `docs/auth-flow.md` 与 `docs/auth-flow.zh-CN.md` —— 端到端的认证流程参考,涵盖下游 API Key 校验与上游 GitHub Device Flow,包括按模式区分的 Device Flow client id（`exchange` → `Iv1.b507a08c87ecfe98`，`direct` → `Ov23li8tweQw6odWQebz`）、exchange 与 direct 两种 token 获取方式、`editor`/`opencode` 请求头 profile、token 刷新,以及管理界面驱动的登录。已从 README「自动认证」特性处链接。
+- 新增 `docs/copilot2api-issues-retrospective.html` —— 15 页 16:9 HTML 复盘报告（与能力报告同款 TD 档案风格与翻页交互），汇总 2026-06-10 ~ 07-22 期间测试与咨询过的全部问题，按「现象 → 分析 → 解决方案」组织：上游能力缺口与 beta 头白名单、Business 端点 413 根因、超长上下文行为、`/chat/completions` 转换路径的 thinking signature 丢失、Vertex 落点 structured outputs 失败、Token 刷新与直连认证、SSE 断流排查（关联上游 claude-code #70017）、OpenCode 类方案下模型清单由 Client-ID 决定（改用 OpenCode 的 Client-ID 申请 `gho_` token 拿到完整清单）、实测对比 `ghu_`（交换）与 `gho_`（直连）两种方式的 `/models` 清单差异、必须发送 `X-Github-Api-Version: 2026-06-01` 才能看到 1M 上下文窗口、缓存命中机制。
 - 将 `docs/copilot-capability-report.html` 从滚动长页报告重新设计为 17 页 16:9 HTML 幻灯片（支持键盘 / 滚轮 / 触摸翻页、打印导出 PDF、页内文本编辑）；报告内容全部保留。
 - 在 `README.md` 与 `README.zh-CN.md` 中记录 `/v1/messages/count_tokens` 端点及原生透传字段（`context_management`、`search_result`）（Features 列表与 API 端点表）。
 - 在 README 中记录多账号、管理界面与 Token 用量统计，并新增简体中文翻译（`README.zh-CN.md`、`CHANGELOG.zh-CN.md`）及语言切换链接。
