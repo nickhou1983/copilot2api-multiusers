@@ -1101,24 +1101,27 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
     <p class="sec-lede reveal">现象:在类似 <strong>OpenCode</strong> 的方案里,用 GitHub Token(Device Flow)直连 Copilot 时,<code>/models</code> 返回的<strong>模型清单不全</strong> —— 部分 Claude / GPT 高阶模型缺失,只拿到基础子集。<strong>根因:Copilot 按签发 token 的 OAuth Client-ID 做模型可见性授权</strong>,用哪个 Client-ID 申请 token 决定能看到哪些模型。</p>
     <div class="panel reveal">
       <table>
-        <thead><tr><th style="width:34%">Client-ID</th><th style="width:14%">Token 前缀</th><th style="width:16%">应用类型</th><th>模型清单</th></tr></thead>
+        <thead><tr><th style="width:30%">Client-ID</th><th style="width:12%">Token 前缀</th><th style="width:14%">应用类型</th><th style="width:20%">访问端点</th><th>模型清单</th></tr></thead>
         <tbody>
           <tr>
             <td><code>Iv1.b507a08c87ecfe98</code>(旧)</td>
             <td><code>ghu_</code></td>
             <td>GitHub App</td>
+            <td>交换后由 token 的 <code>proxy-ep</code> 决定<br><span style="color:var(--ink-soft);font-size:15px">(如 <code>api.individual/enterprise.githubcopilot.com</code>)</span></td>
             <td><span class="badge no">✕ 不全</span> 仅基础子集</td>
           </tr>
           <tr>
             <td><code>Ov23li8tweQw6odWQebz</code>(OpenCode)</td>
             <td><code>gho_</code></td>
             <td>OAuth App</td>
+            <td><span class="badge ok">直连固定</span> <code>api.githubcopilot.com</code></td>
             <td><span class="badge ok">✓ 完整</span> 与 OpenCode 等价</td>
           </tr>
         </tbody>
       </table>
     </div>
     <ul class="notes" style="margin-top: 16px;">
+      <li><strong>访问端点差异(关键):</strong><code>gho_</code> 走 <code>ModeDirect</code>,直接以静态基址 <strong><code>https://api.githubcopilot.com</code></strong> 访问上游(<code>auth/client.go</code> 的 <code>DirectBaseURL</code>),不做 token 交换、也不从 token 解析 <code>proxy-ep</code>;而 <code>ghu_</code> 必须先交换出 copilot_token,再由其中的 <code>proxy-ep=</code> 推导出 <code>api.individual/enterprise.githubcopilot.com</code> 等专属基址。</li>
       <li><strong>解决方案:</strong>改用 OpenCode 注册的 Client-ID <code>Ov23li8tweQw6odWQebz</code> 走 Device Flow 申请 <code>gho_</code> token(<code>auth/device_flow.go</code> 已切换),即可拿到完整模型清单。</li>
       <li><strong>配套请求头(<code>ProfileOpenCode</code>):</strong>必须完整模仿 OpenCode 的 chat fetch —— <code>User-Agent: opencode/1.18.3</code> + <code>Openai-Intent</code> + <code>X-Github-Api-Version</code> + <code>x-initiator</code>,且<strong>不发</strong> VS Code 身份头(<code>Editor-Version</code> / <code>Editor-Plugin-Version</code> / <code>Copilot-Integration-Id</code>)与生成的 <code>X-Request-Id</code>(<code>internal/copilot/headers.go</code>)。</li>
       <li><strong>与 Q5 呼应:</strong><code>gho_</code>(OAuth App)可直接作 Copilot Bearer,无需二次交换 —— 正是 <code>ModeDirect</code> 直连认证的基础;<code>ghu_</code>(GitHub App)则需 <code>/copilot_internal/v2/token</code> 交换。</li>
