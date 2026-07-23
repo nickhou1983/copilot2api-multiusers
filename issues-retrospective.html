@@ -419,7 +419,7 @@ td {
 }
 tr:last-child td { border-bottom: none; }
 #verdict-tbl td { padding: 9px 22px; line-height: 1.4; }
-#q6-notes li { padding-top: 10px; padding-bottom: 10px; }
+#q6-notes li { padding-top: 8px; padding-bottom: 8px; font-size: 18px; line-height: 1.5; }
 td.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 
 /* 判定徽章 */
@@ -1014,7 +1014,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
         <h2>根因量化：SSE 流约 630 秒被硬切断 —— 时间维度，非体积</h2>
       </div>
     </div>
-    <p class="sec-lede reveal">两类断流:(a) 长推理<strong>静默期</strong>撞中间层空闲超时(<a href="https://github.com/anthropics/claude-code/issues/70017" style="color:var(--orange);text-decoration:none;">claude-code #70017</a>,仍 OPEN,社区实测单会话多达 7–11 次);(b) 即便<strong>持续吐字</strong>,SSE 流也在 <strong>~630s</strong> 被硬切断。三次长输出实验(<code>max_tokens=128000</code>)<strong>经代理与直连上游逐项一致</strong>,证明是上游行为:</p>
+    <p class="sec-lede reveal">两类断流:(a) 长推理<strong>静默期</strong>撞中间层空闲超时(<a href="https://github.com/anthropics/claude-code/issues/70017" style="color:var(--orange);text-decoration:none;">claude-code #70017</a>,仍 OPEN);(b) 即便<strong>持续吐字</strong>,SSE 流也在 <strong>~630s</strong> 被硬切断 —— 这不是 Copilot 专属,而是<strong>全行业 ~10 分钟请求时长惯例</strong>的体现。三次长输出实验(<code>max_tokens=128000</code>)<strong>经代理与直连上游逐项一致</strong>,证明是上游行为:</p>
     <div class="panel reveal">
       <table style="font-size:18px">
         <thead><tr><th style="width:5%">#</th><th style="width:16%">链路</th><th style="width:15%">模型</th><th style="width:13%">流时长</th><th>切断前交付</th><th style="width:22%">终止方式</th></tr></thead>
@@ -1026,6 +1026,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
       </table>
     </div>
     <ul class="notes" id="q6-notes" style="margin-top: 10px;">
+      <li><strong>这是行业默认规范,非 Copilot 专属:</strong>~630s ≈ <strong>600s(10 分钟)＋ 网关 ~30s 宽限</strong>,而 600s 正是全行业事实标准 —— <strong>Anthropic</strong> 非流式硬限 10 分钟(超时 504,SDK 按 <code>(max_tokens/128000)×3600&gt;600s</code> 强制要求流式)、<strong>OpenAI</strong> 客户端默认 600s、<strong>Google Vertex AI</strong> 600s 硬上限、<strong>AWS Bedrock</strong> 实用 600s(经网关最长 900s)。故该切断源于<strong>网关/LB 通用请求时长上限</strong>,直连 Anthropic 官方也会撞到同类 ~10 分钟限制。</li>
       <li><strong>时间维度而非体积:</strong>对照组 <code>haiku-4.5</code> 在 <strong>185s</strong> 内完整交付 62,005 tok 并正常收尾(<code>end_turn</code>+<code>message_stop</code>+<code>[DONE]</code>)—— 未撞 630s 即结束,故限制是时长。三次实验均<strong>无</strong> <code>message_delta</code>/<code>message_stop</code>/<code>[DONE]</code>,最后一个事件是普通 <code>content_block_delta</code>(直连那次末行数字被拦腰截断)。</li>
       <li><strong>630s 窗口实际可交付(实测吞吐):</strong>haiku ~335 tok/s 可跑满 64K;sonnet-5 ~170 tok/s 约 10 万 tok(跑不满 128K);opus-4.8 ~50 tok/s 约 3 万 tok。<strong>单次上限 = min(<code>max_tokens</code> 上限, 速率 × 630s)</strong>。</li>
       <li><strong>客户端必读:</strong>「流突然 EOF / HTTP/2 stream error 且无 <code>message_stop</code>」必须当作<strong>可恢复截断</strong>处理(保留已收内容 + 续写重试),不可当完整响应;300K 级输出需多轮拼接(haiku 1 轮 / sonnet-5 ~3 轮 / opus-4.8 10+ 轮)。</li>
