@@ -1,4 +1,4 @@
-# GitHub Copilot 上游 `/v1/messages` 实测记录（2026-07-21 / 22）
+# GitHub Copilot 上游 `/v1/messages` 实测记录（2026-07-21 / 22，07-25 复测）
 
 本文记录对 GitHub Copilot 上游 Anthropic 兼容端点（`https://api.githubcopilot.com/v1/messages`）
 的一组实测：四项 Anthropic 原生能力（web_search、web_fetch、图片 URL、structured output）、
@@ -16,9 +16,10 @@
   `X-Github-Api-Version: 2026-06-01`、`X-Initiator: user`，另带 `anthropic-version: 2023-06-01`。
 - **链路**：① curl → copilot2api（当前代码构建，127.0.0.1:7877）→ 上游；② curl → 上游直连。
 - **请求格式**：测试前从 Anthropic 官方文档（platform.claude.com）确认为当时最新：
-  - web_search：工具类型 `web_search_20250305` 与 `web_search_20260318`（最新），无需 beta 头；
-  - web_fetch：`web_fetch_20250910` 与 `web_fetch_20260318`（最新），已 GA 无需 beta 头
-    （旧头 `web-fetch-2025-09-10` 亦对照测试）；
+  - web_search：工具类型 `web_search_20250305`、`web_search_20260209` 与 `web_search_20260318`
+    （最新），无需 beta 头；`20260209` 起新增 `allowed_callers` 字段，直调需设 `["direct"]`；
+  - web_fetch：`web_fetch_20250910`、`20260209`、`20260309` 与 `web_fetch_20260318`（最新），
+    已 GA 无需 beta 头（旧头 `web-fetch-2025-09-10` 亦对照测试）；
   - 图片 URL：`{"type":"image","source":{"type":"url","url":...}}`，无需 beta 头；
   - structured output：GA 新参数 `output_config.format`（`{"type":"json_schema","schema":...}`），
     无需 beta 头；旧参数 `output_format` + `structured-outputs-2025-11-13` 头作对照。
@@ -30,29 +31,74 @@
 | web_search | ❌ 所有模型 | 400 `The use of the web search tool is not supported.`（`unsupported_value`） |
 | web_fetch | ❌ 所有模型 | 400 `rejected tool(s): web_fetch`（`invalid_request_body`） |
 | 图片 URL | ❌ 所有模型 | 400 `external image URLs are not supported`（base64 图片正常 ✅） |
-| structured output | ✅ 8/10 模型 | 取决于后端路由，见下节 |
+| structured output | ✅ 40/50 请求 | 取决于后端路由，见下节 |
 
 web_search / web_fetch / 图片 URL 三项的拒绝与模型无关、与工具版本无关、与 beta 头无关，
 是 Copilot 网关层的统一拦截。
 
+### 2026-07-25 复测（direct 模式，最新工具版本）
+
+按 platform.claude.com 当日文档取最新版本重测，三项仍全部被拒，**报错文本逐字未变**：
+
+| 能力 | 测试的版本 | 结果 |
+|---|---|---|
+| web_search | `web_search_20250305` / `20260209` / **`20260318`**（含 `allowed_callers: ["direct"]` 与默认两种写法） | ❌ 全部 400 |
+| web_fetch | `web_fetch_20250910` / `20260209` / `20260309` / **`20260318`** | ❌ 全部 400 |
+| 图片 URL | `source.type = "url"` | ❌ 全部 400 |
+
+覆盖 8 个 Claude 模型（opus-4.8 / sonnet-5 / fable-5 / sonnet-4.6 / opus-4.5 / haiku-4.5 /
+opus-4.7 / opus-4.6）全部 400。
+
+**对照组证明是定向拦截而非通用故障**：
+
+| 对照 | 结果 |
+|---|---|
+| base64 图片 | ✅ 200 正常返回（4 模型） |
+| 普通客户端工具（`tool_use`） | ✅ 200 正常返回 `tool_use` 块（3 模型） |
+
+**拦截发生在 GitHub 网关层，不是 Anthropic**：响应带 `X-GitHub-Request-Id`，且错误体为
+GitHub 格式 `{"error":{"message":…,"code":…}}`，而非 Anthropic 的
+`{"type":"error","error":{…}}` —— 说明请求在到达模型前即被拒。
+
 ## 二、structured output 路由矩阵
 
-Copilot 将不同 Claude 模型路由到三种后端（可从消息 ID 前缀识别）：
+Copilot 将 Claude 模型路由到三种后端（可从消息 ID 前缀识别）：`msg_`（Anthropic 一方）、
+`msg_bdrk_`（AWS Bedrock）、`msg_vrtx_`（GCP Vertex）。
 
-| 后端（ID 前缀） | 模型 | `output_config.format` / `strict: true` |
-|---|---|---|
-| Anthropic 一方（`msg_`） | fable-5、sonnet-5、opus-4.8、opus-4.8-fast、opus-4.7 | ✅ |
-| AWS Bedrock（`msg_bdrk_`） | opus-4.6、sonnet-4.6、haiku-4.5 | ✅ |
-| GCP Vertex（`msg_vrtx_`） | sonnet-4.5、opus-4.5 | ❌ |
+| 后端（ID 前缀） | `output_config.format` / `strict: true` |
+|---|---|
+| Anthropic 一方（`msg_`） | ✅ |
+| AWS Bedrock（`msg_bdrk_`） | ✅ |
+| GCP Vertex（`msg_vrtx_`） | ❌ |
 
 Vertex 路由的失败原因：GitHub 自己 GCP 项目（`projects/524636045653`）的组织策略
 `constraints/vertexai.allowedPartnerModelFeatures` 未放行 `structured_outputs` 特性
 （400 `FAILED_PRECONDITION`，报错建议联系组织管理员添加
 `publishers/anthropic/models/claude-sonnet-4-5:structured_outputs`）。
 
+### 路由随时间漂移（2026-07-25 direct 模式复测修正）
+
+**模型与后端不是固定映射**：同一模型在不同时刻会落到不同后端，因此
+**structured output 的失败名单会随时间变化**。同一批请求在 26 分钟内观察到三种结果：
+
+| 时刻 | 失败模型（落到 Vertex） |
+|---|---|
+| 18:44 | opus-4.6、sonnet-4.6、sonnet-4.5 |
+| 18:47 | opus-4.7、opus-4.6 |
+| 18:50 | opus-4.6、opus-4.5 |
+
+已用 A/B 排除法确认变量：BIG/SMALL schema × LONG/SHORT prompt 四种组合各 4 次，
+结果**完全一致**——schema 与 prompt 都不影响路由，**唯一变量是时间**（网关侧动态负载均衡）。
+
+因此正确的表述是**「凡落到 Vertex 必失败，落到 Anthropic / Bedrock 必成功」**，
+而非「某几个模型不支持」。**无法靠避开特定模型规避**，应对该特定 400 做自动重试
+（重试大概率改落 Anthropic / Bedrock 而成功）。
+
+最终全量采样（10 模型 × 5 次 = 50 请求）：**40/50 成功**，失败全部且仅来自 Vertex 落点。
+
 旧参数 `output_format` 会被上游明确拒绝：
 `output_format: This field is deprecated. Use 'output_config.format' instead.`
-——接入时应直接使用新 GA 格式。
+——接入时应直接使用新 GA 格式（即便附带 `structured-outputs-2025-11-13` beta 头也同样被拒）。
 
 ## 三、max_tokens 真实上限（300K 探测）
 
@@ -119,8 +165,10 @@ web_search / web_fetch / 图片 URL 拒绝、structured output 成功、630 s �
 
 - 需要联网检索 / 抓取网页 / 传 URL 图片：在代理或客户端侧自行实现，不要指望上游；
   图片一律转 base64（或走 Files 方案）再发。
-- structured output：用新 GA 参数 `output_config.format`，并避开 Vertex 路由的
-  sonnet-4.5 / opus-4.5 两个模型。
+- structured output：用新 GA 参数 `output_config.format`（旧 `output_format` 已被硬拒）。
+  **不要用"避开某几个模型"的方式规避 Vertex** —— 路由随时间漂移，失败名单会变；
+  正确做法是对 `vertexai.allowedPartnerModelFeatures` 这一特定 400 做自动重试，
+  重试大概率改落 Anthropic / Bedrock 而成功。
 - 超长输出：单次请求的实际上限 = min(`max_tokens` 上限, 输出速率 × 630 s)。
   300K 级输出需多轮续写拼接（haiku 1 轮 64K、sonnet-5 约 3 轮、opus-4.8 约 10+ 轮）。
 - 客户端必须把"流突然 EOF / HTTP/2 stream error 且无 `message_stop`"当作**可恢复的截断**
@@ -128,7 +176,8 @@ web_search / web_fetch / 图片 URL 拒绝、structured output 成功、630 s �
 
 ## 数据来源
 
-2026-07-21 与 2026-07-22 live 实测；账号为 direct 模式企业订阅
-（base URL `https://api.githubcopilot.com`）。官方请求格式依据
+2026-07-21、07-22 与 07-25 live 实测；账号为 direct 模式（GitHub OAuth `gho_` token 直接作
+Copilot bearer，base URL `https://api.githubcopilot.com`）。官方请求格式依据
 [platform.claude.com](https://platform.claude.com/docs/) 当日文档
-（web search / web fetch / vision / structured outputs 四篇）。
+（web search / web fetch / vision / structured outputs 四篇）。07-25 复测取当日最新工具版本
+（`web_search_20260318`、`web_fetch_20260318`）并补充对照组与多轮采样。
