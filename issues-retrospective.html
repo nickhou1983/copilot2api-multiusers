@@ -420,6 +420,7 @@ td {
 tr:last-child td { border-bottom: none; }
 #verdict-tbl td { padding: 9px 22px; line-height: 1.4; }
 #q6-notes li { padding-top: 8px; padding-bottom: 8px; font-size: 18px; line-height: 1.5; }
+#q4-notes li { padding-top: 8px; padding-bottom: 8px; font-size: 18px; line-height: 1.5; }
 td.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 
 /* 判定徽章 */
@@ -919,7 +920,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
         <h2>可用性完全取决于路由落点，Vertex 是策略缺口</h2>
       </div>
     </div>
-    <p class="sec-lede reveal">两种机制:A = JSON outputs(<code>output_config.format</code>) · B = strict tool use(<code>strict: true</code> + 强制 tool_choice)。用 <code>scripts/structured_outputs_platform_test.py</code> 按三平台字段风格构造请求实测:</p>
+    <p class="sec-lede reveal">两种机制:A = JSON outputs(<code>output_config.format</code>,GA 新参数,无需 beta 头) · B = strict tool use(<code>strict: true</code> + 强制 tool_choice)。<strong>2026-07-25 direct 模式(<code>gho_</code>)复测:10 模型 × 5 次 = <span style="color:var(--pass)">40/50 成功</span></strong>,失败全部且仅来自 Vertex 落点:</p>
     <div class="panel reveal">
       <table>
         <thead><tr><th>落点</th><th>机制 A</th><th>机制 B</th><th style="width:42%">备注</th></tr></thead>
@@ -928,29 +929,31 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
             <td><span class="host"><span class="dot anthropic"></span>Anthropic 第一方</span></td>
             <td><span class="badge ok">✓ 通过</span></td>
             <td><span class="badge ok">✓ 通过</span></td>
-            <td>fable-5 / sonnet-5 / opus-4.8 稳定落此</td>
+            <td>fable-5 / sonnet-5 / opus-4.8 / opus-4.8-fast 稳定落此;opus-4.7 / sonnet-4.6 多数时候落此</td>
           </tr>
           <tr>
             <td><span class="host"><span class="dot bedrock"></span>AWS Bedrock</span></td>
             <td><span class="badge ok">✓ 通过</span></td>
             <td><span class="badge ok">✓ 通过</span></td>
-            <td>10/10 双重指纹验证(<code>msg_bdrk_</code> + <code>toolu_bdrk_</code>)</td>
+            <td>haiku-4.5 / sonnet-4.5 常落此;双重指纹(<code>msg_bdrk_</code> + <code>toolu_bdrk_</code>)</td>
           </tr>
           <tr>
             <td><span class="host"><span class="dot vertex"></span>Google Vertex</span></td>
             <td><span class="badge no">✕ 400</span></td>
             <td><span class="badge no">✕ 400</span></td>
-            <td>GitHub 的 GCP 组织策略 <code>vertexai.allowedPartnerModelFeatures</code> 未放行 —— <strong>Copilot 侧配置缺口,非 Vertex 平台能力问题</strong>(返回 Google 原生 <code>FAILED_PRECONDITION</code>)</td>
+            <td>GitHub 的 GCP 组织策略 <code>vertexai.allowedPartnerModelFeatures</code> 未放行(<code>projects/524636045653</code>) —— <strong>Copilot 侧配置缺口,非 Vertex 平台能力问题</strong>。<strong>哪个模型漂到此处随时间变化</strong></td>
           </tr>
         </tbody>
       </table>
     </div>
-    <ul class="notes" style="margin-top: 22px;">
-      <li><strong>路由动态漂移</strong>:sonnet-4.6 / sonnet-4.5 / haiku-4.5 / opus-4.7 / opus-4.5 会漂到 Vertex → <strong>间歇性失败</strong>。生产建议:对该特定 400 做客户端重试,无法通过改写请求规避。</li>
-      <li><strong>代理侧配套缺口</strong>:Anthropic→Responses / Chat Completions 转换会静默丢 <code>output_config.format</code> 与工具 <code>strict</code>;上游 <code>/chat/completions</code> 也静默忽略 <code>response_format.json_schema</code> —— <strong>structured outputs 只在原生 <code>/v1/messages</code> 路由端到端生效</strong>。</li>
+    <ul class="notes" id="q4-notes" style="margin-top: 18px;">
+      <li><strong>路由漂移已量化(2026-07-25 实测):</strong>同一模型在不同时刻落到不同后端,<strong>失败名单随时间变化</strong> —— 18:44 失败 {opus-4.6, sonnet-4.6, sonnet-4.5} → 18:47 {opus-4.7, opus-4.6} → 18:50 {<strong>opus-4.6, opus-4.5</strong>}。A/B 排除法(BIG/SMALL schema × LONG/SHORT prompt 各 4 次)结果<strong>完全一致</strong>,证明 schema 与 prompt 均非变量,<strong>唯一变量是时间</strong>(网关侧动态负载均衡)。</li>
+      <li><strong>规律与对策:</strong>不是「某几个模型不支持」,而是<strong>「凡落到 Vertex 必失败,落到 Anthropic / Bedrock 必成功」</strong> —— 故<strong>无法靠避开特定模型规避</strong>。生产做法:对 <code>vertexai.allowedPartnerModelFeatures</code> 这一特定 400 做<strong>自动重试</strong>,重试大概率改落 Anthropic / Bedrock 而成功。</li>
+      <li><strong>废弃参数已被硬拒:</strong>旧 <code>output_format</code>(即便带 <code>structured-outputs-2025-11-13</code> 头)返回 <code>This field is deprecated. Use 'output_config.format' instead.</code> —— 接入必须用新 GA 格式。</li>
+      <li><strong>代理侧配套缺口:</strong>Anthropic→Responses / Chat Completions 转换会静默丢 <code>output_config.format</code> 与工具 <code>strict</code>;上游 <code>/chat/completions</code> 也静默忽略 <code>response_format.json_schema</code> —— <strong>structured outputs 只在原生 <code>/v1/messages</code> 路由端到端生效</strong>。</li>
     </ul>
   </div>
-  <div class="s-foot"><span>Issue 04 · Structured Outputs</span><span>2026-07-19</span></div>
+  <div class="s-foot"><span>Issue 04 · Structured Outputs</span><span>2026-07-25</span></div>
 </section>
 
 <!-- ==================== SLIDE 09 · Q5 Token 与认证 ==================== -->
