@@ -108,12 +108,26 @@ func TestNormalizeNativeMessagesBody_RemovesCacheControlScope(t *testing.T) {
 }
 
 func TestUpstreamNativeHeaders(t *testing.T) {
-	h := upstreamNativeHeaders()
+	h := upstreamNativeHeaders(false)
 	if got := h["anthropic-version"]; got != anthropicVersion {
 		t.Fatalf("anthropic-version = %q, want %q", got, anthropicVersion)
 	}
 	if got := h["anthropic-beta"]; got != interleavedThinkingBeta {
-		t.Fatalf("anthropic-beta = %q, want %q (fixed single token)", got, interleavedThinkingBeta)
+		t.Fatalf("anthropic-beta = %q, want %q (base single token)", got, interleavedThinkingBeta)
+	}
+	if len(h) != 2 {
+		t.Fatalf("headers = %v, want exactly anthropic-version and anthropic-beta", h)
+	}
+}
+
+func TestUpstreamNativeHeaders_ContextManagement(t *testing.T) {
+	h := upstreamNativeHeaders(true)
+	want := interleavedThinkingBeta + "," + contextManagementBeta + "," + compactionBeta
+	if got := h["anthropic-beta"]; got != want {
+		t.Fatalf("anthropic-beta = %q, want %q", got, want)
+	}
+	if got := h["anthropic-version"]; got != anthropicVersion {
+		t.Fatalf("anthropic-version = %q, want %q", got, anthropicVersion)
 	}
 	if len(h) != 2 {
 		t.Fatalf("headers = %v, want exactly anthropic-version and anthropic-beta", h)

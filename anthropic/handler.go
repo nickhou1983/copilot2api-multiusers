@@ -124,7 +124,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 			reqBody = newBody
 		}
-		h.handleNativeMessagesPassthrough(w, r, reqBody, anthropicReq.Stream)
+		h.handleNativeMessagesPassthrough(w, r, reqBody, anthropicReq.Stream, topLevelInfo.HasContextManagement)
 		return
 	}
 
@@ -158,8 +158,8 @@ func (h *Handler) validateRequest(req AnthropicMessagesRequest) error {
 	return nil
 }
 
-func (h *Handler) handleNativeMessagesPassthrough(w http.ResponseWriter, r *http.Request, body []byte, stream bool) {
-	extraHeaders := upstreamNativeHeaders()
+func (h *Handler) handleNativeMessagesPassthrough(w http.ResponseWriter, r *http.Request, body []byte, stream bool, hasContextManagement bool) {
+	extraHeaders := upstreamNativeHeaders(hasContextManagement)
 	if stream {
 		resp, _, err := h.upstream.Do(r.Context(), upstream.Request{Endpoint: "/v1/messages", Body: body, Stream: true, QueryString: r.URL.RawQuery, ExtraHeaders: extraHeaders})
 		if err != nil {
@@ -714,22 +714,34 @@ func normalizeNativeMessagesBody(body []byte, newModel string, replaceModel bool
 // /v1/messages (and count_tokens) upstream requests.
 const anthropicVersion = "2023-06-01"
 
-// interleavedThinkingBeta is the only anthropic-beta token the proxy sends
+// interleavedThinkingBeta is the base anthropic-beta token the proxy sends
 // upstream on the native route, mirroring the opencode CLI. It keeps
 // thinking-block placement in multi-step tool use identical to a direct
-// upstream connection. Client anthropic-beta headers are never forwarded, and
-// no other beta tokens (context-management, compaction, computer-use, ...) are
-// injected.
+// upstream connection. Client anthropic-beta headers are never forwarded.
 const interleavedThinkingBeta = "interleaved-thinking-2025-05-14"
 
-// upstreamNativeHeaders returns the fixed ExtraHeaders map attached to every
+// contextManagementBeta and compactionBeta are auto-injected into the
+// anthropic-beta header when the request body carries a top-level
+// context_management field, so context editing and server-side compaction
+// work upstream without the client sending any beta header.
+const (
+	contextManagementBeta = "context-management-2025-06-27"
+	compactionBeta        = "compact-2026-01-12"
+)
+
+// upstreamNativeHeaders returns the ExtraHeaders map attached to every
 // upstream native /v1/messages (and count_tokens) request:
-// "anthropic-version" plus a fixed "anthropic-beta" containing only the
-// interleaved-thinking token.
-func upstreamNativeHeaders() map[string]string {
+// "anthropic-version" plus an "anthropic-beta" that always contains the
+// interleaved-thinking token and, when the body has a context_management
+// field, additionally the context-management and compaction tokens.
+func upstreamNativeHeaders(hasContextManagement bool) map[string]string {
+	beta := interleavedThinkingBeta
+	if hasContextManagement {
+		beta += "," + contextManagementBeta + "," + compactionBeta
+	}
 	return map[string]string{
 		"anthropic-version": anthropicVersion,
-		"anthropic-beta":    interleavedThinkingBeta,
+		"anthropic-beta":    beta,
 	}
 }
 
@@ -786,7 +798,7 @@ func (h *Handler) handleCountTokens(w http.ResponseWriter, r *http.Request) {
 		Endpoint:     "/v1/messages/count_tokens",
 		Body:         body,
 		QueryString:  r.URL.RawQuery,
-		ExtraHeaders: upstreamNativeHeaders(),
+		ExtraHeaders: upstreamNativeHeaders(inspectTopLevelFields(reqBody).HasContextManagement),
 	})
 	if err != nil {
 		var upstreamErr *upstream.UpstreamError
