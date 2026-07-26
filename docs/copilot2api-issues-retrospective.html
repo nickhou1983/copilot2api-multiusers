@@ -1305,21 +1305,24 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
         </div>
       </div>
       <div>
-        <div class="sec-label" style="margin-bottom:8px">③ 代理注入的出站 Header（按 profile）</div>
+        <div class="sec-label" style="margin-bottom:8px">③ 代理注入的出站 Header（按模式 / profile）</div>
         <div class="panel">
           <table class="q7pp-tbl">
-            <thead><tr><th style="width:30%">类别</th><th>Editor（Exchange）</th><th>Opencode（Direct）</th></tr></thead>
+            <thead><tr><th style="width:26%">类别</th><th>Editor（Exchange）</th><th>Opencode（Direct）</th></tr></thead>
             <tbody>
+              <tr><td>Authorization</td><td>Bearer <strong>短期交换</strong> token</td><td>Bearer <code>gho_</code> <strong>原样长期</strong></td></tr>
               <tr><td>User-Agent</td><td><code>GitHubCopilotChat/0.39.0</code></td><td><code>opencode/0.4.2</code></td></tr>
               <tr><td>编辑器标识</td><td>Editor-Version / Plugin / Integration-Id</td><td><code>X-Initiator: user</code></td></tr>
               <tr><td>Openai-Intent</td><td><code>conversation-agent</code></td><td><code>conversation-edits</code></td></tr>
-              <tr><td>API 版本</td><td colspan="2" style="text-align:center"><code>X-Github-Api-Version: 2026-06-01</code>（共用）</td></tr>
+              <tr><td>请求追踪</td><td><code>X-Request-Id: req_&lt;32hex&gt;</code> 自动生成</td><td>—（不设）</td></tr>
+              <tr><td>共用</td><td colspan="2" style="text-align:center"><code>Content-Type: application/json</code> · <code>X-Github-Api-Version: 2026-06-01</code> · 流式加 <code>Accept: text/event-stream</code></td></tr>
             </tbody>
           </table>
         </div>
         <ul class="notes" id="hdrfilter-notes" style="margin-top:12px">
           <li><strong>body 触发的自动 beta：</strong>请求体含 <code>context_management</code> → 自动附 <code>context-management-2025-06-27</code>；含 <code>compact_*</code> edit → 附 <code>compact-2026-01-12</code>，客户端无需自带头。</li>
           <li><strong>请求体仅两处改动：</strong>模型别名重写（dated ID → Copilot ID）与递归删除 <code>cache_control.scope</code>（上游 400 拒收）；tools / thinking 等功能字段原样透传，上限 10MB。</li>
+          <li><strong>其他路由与认证：</strong>OpenAI / Gemini 路由仅回传客户端 <code>Content-Type</code> / <code>Accept</code> / <code>Cache-Control</code>；Exchange 换 token 时另向 <code>api.github.com</code> 发 <code>Bearer ghu_</code> + Copilot UA。</li>
           <li><strong>设计取向「默认丢弃 + 白名单」：</strong>不把不可信 beta 带到上游，能力开关（1M / computer-use 等）由代理显式管理，行为可审计。</li>
         </ul>
       </div>
