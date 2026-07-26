@@ -106,8 +106,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		route = "native"
 		cacheControlInfo := inspectCacheControl(reqBody)
 		topLevelInfo := inspectTopLevelFields(reqBody)
-		forwardedBetas := extractForwardedBetas(r.Header.Values("anthropic-beta"))
-		slog.Debug("native /messages passthrough request", "model", anthropicReq.Model, "top_level_keys", topLevelInfo.Keys, "has_context_management", topLevelInfo.HasContextManagement, "forwarded_betas", forwardedBetas, "cache_control_count", cacheControlInfo.Count, "cache_control_scope_count", cacheControlInfo.ScopeCount, "cache_control_paths", cacheControlInfo.Paths, "cache_control_scope_paths", cacheControlInfo.ScopePaths)
+		slog.Debug("native /messages passthrough request", "model", anthropicReq.Model, "top_level_keys", topLevelInfo.Keys, "has_context_management", topLevelInfo.HasContextManagement, "cache_control_count", cacheControlInfo.Count, "cache_control_scope_count", cacheControlInfo.ScopeCount, "cache_control_paths", cacheControlInfo.Paths, "cache_control_scope_paths", cacheControlInfo.ScopePaths)
 		// Only re-encode the body for native passthrough (the only path that
 		// sends raw reqBody). Responses and Chat Completions paths use the
 		// parsed struct, so they skip this JSON round-trip. context_management
@@ -125,7 +124,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 			reqBody = newBody
 		}
-		h.handleNativeMessagesPassthrough(w, r, reqBody, anthropicReq.Stream, topLevelInfo, forwardedBetas)
+		h.handleNativeMessagesPassthrough(w, r, reqBody, anthropicReq.Stream)
 		return
 	}
 
@@ -159,8 +158,8 @@ func (h *Handler) validateRequest(req AnthropicMessagesRequest) error {
 	return nil
 }
 
-func (h *Handler) handleNativeMessagesPassthrough(w http.ResponseWriter, r *http.Request, body []byte, stream bool, topLevelInfo topLevelFieldInspection, forwardedBetas []string) {
-	extraHeaders := buildUpstreamBetaHeaders(collectUpstreamBetas(topLevelInfo.HasContextManagement, topLevelInfo.HasCompactionEdit, forwardedBetas))
+func (h *Handler) handleNativeMessagesPassthrough(w http.ResponseWriter, r *http.Request, body []byte, stream bool) {
+	extraHeaders := upstreamNativeHeaders()
 	if stream {
 		resp, _, err := h.upstream.Do(r.Context(), upstream.Request{Endpoint: "/v1/messages", Body: body, Stream: true, QueryString: r.URL.RawQuery, ExtraHeaders: extraHeaders})
 		if err != nil {
@@ -711,107 +710,27 @@ func normalizeNativeMessagesBody(body []byte, newModel string, replaceModel bool
 	return json.Marshal(obj)
 }
 
-// contextManagementBeta is the anthropic-beta token that activates the
-// context_management feature upstream. The proxy adds it automatically when a
-// request carries a context_management field so the feature is honored without
-// the client having to set the header (which the proxy does not blindly
-// forward).
-const contextManagementBeta = "context-management-2025-06-27"
+// anthropicVersion is the Anthropic API version header value sent on native
+// /v1/messages (and count_tokens) upstream requests.
+const anthropicVersion = "2023-06-01"
 
-// compactionBeta is the anthropic-beta token that activates server-side
-// compaction upstream. The proxy adds it automatically when the request's
-// context_management.edits contains a compact_* edit type, mirroring the
-// contextManagementBeta handling (the proxy does not blindly forward client
-// beta headers, and the upstream supports compaction behind this beta).
-const compactionBeta = "compact-2026-01-12"
+// interleavedThinkingBeta is the only anthropic-beta token the proxy sends
+// upstream on the native route, mirroring the opencode CLI. It keeps
+// thinking-block placement in multi-step tool use identical to a direct
+// upstream connection. Client anthropic-beta headers are never forwarded, and
+// no other beta tokens (context-management, compaction, computer-use, ...) are
+// injected.
+const interleavedThinkingBeta = "interleaved-thinking-2025-05-14"
 
-// extractForwardedBetas returns the client anthropic-beta tokens matching the
-// forwardedBetaRes allowlist (computer-use-* and interleaved-thinking-*), in
-// order and de-duplicated. Each header value is split on commas and trimmed,
-// then matched against the anchored allowlist patterns so only standalone
-// tokens are forwarded (never a substring of a larger token). The proxy does
-// not blindly forward client beta headers on the native route: computer-use
-// tokens are needed so the computer use tool types are recognized upstream,
-// and interleaved-thinking tokens keep thinking-block placement in multi-step
-// tool use identical to a direct upstream connection. All other tokens are
-// ignored.
-func extractForwardedBetas(betaHeaderValues []string) []string {
-	if len(betaHeaderValues) == 0 {
-		return nil
+// upstreamNativeHeaders returns the fixed ExtraHeaders map attached to every
+// upstream native /v1/messages (and count_tokens) request:
+// "anthropic-version" plus a fixed "anthropic-beta" containing only the
+// interleaved-thinking token.
+func upstreamNativeHeaders() map[string]string {
+	return map[string]string{
+		"anthropic-version": anthropicVersion,
+		"anthropic-beta":    interleavedThinkingBeta,
 	}
-	seen := make(map[string]struct{})
-	var out []string
-	for _, hv := range betaHeaderValues {
-		for _, tok := range strings.Split(hv, ",") {
-			tok = strings.TrimSpace(tok)
-			if tok == "" || !matchesForwardedBeta(tok) {
-				continue
-			}
-			if _, dup := seen[tok]; dup {
-				continue
-			}
-			seen[tok] = struct{}{}
-			out = append(out, tok)
-		}
-	}
-	return out
-}
-
-// matchesForwardedBeta reports whether a single beta token is on the
-// forwardedBetaRes allowlist.
-func matchesForwardedBeta(tok string) bool {
-	for _, re := range forwardedBetaRes {
-		if re.MatchString(tok) {
-			return true
-		}
-	}
-	return false
-}
-
-// buildUpstreamBetaHeaders merges the given anthropic-beta tokens into a single
-// ExtraHeaders map for an upstream native request. The upstream client applies
-// ExtraHeaders with a plain header Set (overwrite), so all beta tokens must be
-// combined into one comma-separated "anthropic-beta" value rather than set
-// separately. Tokens are de-duplicated in order; an empty result returns nil so
-// no header is attached.
-func buildUpstreamBetaHeaders(betas []string) map[string]string {
-	if len(betas) == 0 {
-		return nil
-	}
-	seen := make(map[string]struct{}, len(betas))
-	ordered := make([]string, 0, len(betas))
-	for _, b := range betas {
-		if b == "" {
-			continue
-		}
-		if _, dup := seen[b]; dup {
-			continue
-		}
-		seen[b] = struct{}{}
-		ordered = append(ordered, b)
-	}
-	if len(ordered) == 0 {
-		return nil
-	}
-	return map[string]string{"anthropic-beta": strings.Join(ordered, ",")}
-}
-
-// collectUpstreamBetas assembles the anthropic-beta tokens the proxy attaches to
-// an upstream native request: the context-management beta (added automatically
-// when the body carries a context_management field), the compaction beta (added
-// when context_management.edits contains a compact_* edit), plus any allowlisted
-// tokens forwarded from the client's anthropic-beta header (see
-// extractForwardedBetas).
-func collectUpstreamBetas(hasContextManagement bool, hasCompactionEdit bool, forwardedBetas []string) []string {
-	var betas []string
-	if hasContextManagement {
-		betas = append(betas, contextManagementBeta)
-	}
-	if hasCompactionEdit {
-		betas = append(betas, compactionBeta)
-	}
-	betas = append(betas, forwardedBetas...)
-	return betas
 }
 
 // handleCountTokens proxies POST /v1/messages/count_tokens to the upstream
@@ -848,7 +767,6 @@ func (h *Handler) handleCountTokens(w http.ResponseWriter, r *http.Request) {
 	resolvedModel := resolveModelAlias(probe.Model)
 	modelChanged := resolvedModel != probe.Model
 	cacheControlInfo := inspectCacheControl(reqBody)
-	topLevelInfo := inspectTopLevelFields(reqBody)
 
 	defer func() {
 		slog.Info("anthropic request", "endpoint", "/v1/messages/count_tokens", "model", resolvedModel, "route", "native", "duration_ms", time.Since(start).Milliseconds())
@@ -865,14 +783,10 @@ func (h *Handler) handleCountTokens(w http.ResponseWriter, r *http.Request) {
 	}
 
 	_, respData, err := h.upstream.Do(r.Context(), upstream.Request{
-		Endpoint:    "/v1/messages/count_tokens",
-		Body:        body,
-		QueryString: r.URL.RawQuery,
-		ExtraHeaders: buildUpstreamBetaHeaders(collectUpstreamBetas(
-			topLevelInfo.HasContextManagement,
-			topLevelInfo.HasCompactionEdit,
-			extractForwardedBetas(r.Header.Values("anthropic-beta")),
-		)),
+		Endpoint:     "/v1/messages/count_tokens",
+		Body:         body,
+		QueryString:  r.URL.RawQuery,
+		ExtraHeaders: upstreamNativeHeaders(),
 	})
 	if err != nil {
 		var upstreamErr *upstream.UpstreamError

@@ -30,29 +30,6 @@ var dateSuffixRe = regexp.MustCompile(`-(\d{8,})$`)
 // used by Claude Code to signal the 1M context window variant.
 var context1mRe = regexp.MustCompile(`\bcontext-1m\b`)
 
-// computerUseBetaRe matches a single computer-use beta token, e.g.
-// "computer-use-2025-11-24" (Opus 4.8/4.7, Sonnet 4.6, ...) or
-// "computer-use-2025-01-24" (older models). The proxy forwards these tokens
-// verbatim so the computer use tool types (computer_20251124 / computer_20250124)
-// are recognized upstream. The pattern is anchored (^...$) and applied to each
-// comma-separated token individually so it never matches a substring inside a
-// larger token. The date is written as YYYY-MM-DD.
-var computerUseBetaRe = regexp.MustCompile(`^computer-use-\d{4}-\d{2}-\d{2}$`)
-
-// interleavedThinkingBetaRe matches a single interleaved-thinking beta token,
-// e.g. "interleaved-thinking-2025-05-14". Forwarding it lets thinking blocks
-// appear between tool calls exactly as on a direct upstream connection;
-// stripping it was benign (requests still succeeded) but could change where
-// thinking blocks are placed in multi-step tool use.
-var interleavedThinkingBetaRe = regexp.MustCompile(`^interleaved-thinking-\d{4}-\d{2}-\d{2}$`)
-
-// forwardedBetaRes is the allowlist of client anthropic-beta tokens the proxy
-// forwards to the upstream on the native route. Each pattern is anchored and
-// matched against individual comma-separated tokens. Tokens matching none of
-// these patterns are stripped (the proxy never blindly forwards client beta
-// headers).
-var forwardedBetaRes = []*regexp.Regexp{computerUseBetaRe, interleavedThinkingBetaRe}
-
 // oneMillionContextTokens is the threshold (in tokens) at which a model is
 // considered to already provide a 1M context window natively.
 const oneMillionContextTokens = 1_000_000
