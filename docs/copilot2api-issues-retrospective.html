@@ -715,7 +715,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
         <h2>现象与判定：不是代理丢功能，是上游不放行</h2>
       </div>
     </div>
-    <p class="sec-lede reveal">早期怀疑「代理把功能弄丢了」。用<strong>三层对照法</strong>(① Anthropic 官方文档 → ② 直连上游 → ③ 经代理)复测后判定:以下能力在上游即被拒,换任何 beta 头 / 工具版本都打不通:</p>
+    <p class="sec-lede reveal">早期怀疑「代理把功能弄丢了」。用<strong>三层对照法</strong>(① Anthropic 官方文档 → ② 直连上游 → ③ 经代理)复测后判定:以下能力在上游即被拒,换任何 beta 头 / 工具版本都打不通(fast mode 例外 —— 07-26 复测已翻转为支持):</p>
     <div class="panel reveal">
       <table>
         <thead><tr><th style="width:38%">能力</th><th style="width:15%">实测</th><th>上游报错 / 结论</th></tr></thead>
@@ -741,18 +741,19 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
             <td>输出 128K 硬上限</td>
           </tr>
           <tr>
-            <td>fast mode 真实加速</td>
-            <td><span class="badge warn">△ 200 但无效</span></td>
-            <td>字段 / beta 被容忍,不实现加速</td>
+            <td>fast mode 真实加速<br><span style="color:var(--ink-soft);font-size:14px">07-26 复测状态翻转</span></td>
+            <td><span class="badge ok">✓ 已支持</span></td>
+            <td>专属 ID <code>claude-opus-4.8-fast</code> 生效:回报 <code>usage.speed:"fast"</code>,实测 <strong>2.46×</strong>(54.3→133.4 tok/s);官方 <code>speed</code> 参数 + beta 头仍被静默忽略</td>
           </tr>
         </tbody>
       </table>
     </div>
     <ul class="notes" style="margin-top: 24px;">
       <li><strong>处置:</strong>上游限制,无法从代理侧绕过。图片走 base64;web 检索由客户端自带工具替代(本项目即用本地 web_fetch/web_search 工具完成检索类任务)。</li>
+      <li><strong>上游能力会翻转,须定期复测:</strong>fast mode 早期探测为「容忍但不实现」,2026-07-26 复测确认上游已真实部署(双模式一致) —— 加速比与官方宣称的 2.5× 精确吻合;差异在开启方式:官方是 <code>speed:"fast"</code> ＋ beta 头,Copilot 是换 <code>-fast</code> 模型 ID。</li>
     </ul>
   </div>
-  <div class="s-foot"><span>Issue 01 · Upstream Gaps (1 of 2)</span><span>2026-07-19</span></div>
+  <div class="s-foot"><span>Issue 01 · Upstream Gaps (1 of 2)</span><span>2026-07-26</span></div>
 </section>
 
 <!-- ==================== SLIDE 04 · Q1 解法 ==================== -->
@@ -1364,7 +1365,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
       <table id="verdict-tbl" style="font-size: 15px;">
         <thead><tr><th style="width:30%">问题</th><th style="width:16%">状态</th><th>处置</th></tr></thead>
         <tbody>
-          <tr><td>Q1 上游硬性不支持(web_search / web_fetch / 外链图 / 300K 输出)</td><td><span class="badge warn">△ 上游限制</span></td><td>base64 图 / 客户端工具替代;computer use 经 beta 头转发已打通</td></tr>
+          <tr><td>Q1 上游硬性不支持(web_search / web_fetch / 外链图 / 300K 输出)</td><td><span class="badge warn">△ 上游限制</span></td><td>base64 图 / 客户端工具替代;computer use 经 beta 头转发已打通;fast mode 07-26 翻转为可用(<code>-fast</code> 模型 ID,实测 2.46×)</td></tr>
           <tr><td>Q2 413 请求体超限</td><td><span class="badge ok">✓ 已定位</span></td><td>Business 端点网关层 body 大小上限(阈值未验证,预估约 30MB);代理不压缩图片 + 历史重复携带致 body 膨胀</td></tr>
           <tr><td>Q3 Thinking Signature 转换丢失</td><td><span class="badge ok">✓ 已规避</span></td><td>需签名的客户端走原生 <code>/v1/messages</code> 透传(与直连等价)</td></tr>
           <tr><td>Q4 Vertex 不支持 Structured Outputs</td><td><span class="badge no">✕ 上游策略</span></td><td>GCP 组织策略缺口,漂到 Vertex 间歇失败;客户端对该 400 重试</td></tr>
