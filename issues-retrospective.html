@@ -1196,8 +1196,8 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-foot"><span>Issue 07 · Live Probe</span><span>2026-07-22</span></div>
 </section>
 
-<!-- ==================== SLIDE 14 · Q7 实测 双模式调用与目录漂移 ==================== -->
-<section class="slide" aria-label="实测 双模式真实调用与目录漂移">
+<!-- ==================== SLIDE 14 · Q7 实测 双模式调用与 Claude 地域过滤 ==================== -->
+<section class="slide" aria-label="实测 双模式真实调用与 Claude 地域过滤">
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 07 · Live Invoke — Direct vs Exchange</span>
@@ -1208,23 +1208,24 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
       <div class="sec-no">Q7＋＋</div>
       <div>
         <div class="sec-label">Live Invoke — 双模式真实调用 42 次（2026-07-26）</div>
-        <h2>目录按天漂移；共有模型调用完全对等，独占是网关强制</h2>
+        <h2>Claude 可见性由出口 IP 决定；共有模型调用完全对等</h2>
       </div>
     </div>
-    <p class="sec-lede reveal" style="margin-bottom:16px">不止看清单:对两种模式各发起 21 次<strong>真实调用</strong>(共 42 次,覆盖 <code>/v1/messages</code> · <code>/chat/completions</code> · <code>/responses</code> 三个端点族)。结论:共有模型两种模式<strong>调用结果完全对等</strong>,差异只在目录范围;而 07-25 整条 Claude 消失、07-26 全线回归,证明<strong>上游目录按天漂移 —— 一切清单结论必须带时间戳</strong>。</p>
+    <p class="sec-lede reveal" style="margin-bottom:16px">不止看清单:对两种模式各发起 21 次<strong>真实调用</strong>(共 42 次,覆盖 <code>/v1/messages</code> · <code>/chat/completions</code> · <code>/responses</code> 三个端点族)。结论:共有模型两种模式<strong>调用结果完全对等</strong>,差异只在目录范围;07-25 Claude 全线消失的根因是<strong>未挂 VPN —— 上游按客户端出口 IP 对 Anthropic 系做地域过滤</strong>,清单可见性与调用权同步收缩,其余厂商不受影响。</p>
     <div class="reveal" style="display:grid; grid-template-columns: 1fr 1.18fr; gap: 24px; align-items:start;">
       <div>
-        <div class="sec-label" style="margin-bottom:8px">① 目录三日漂移(同账号 · 同请求头)</div>
+        <div class="sec-label" style="margin-bottom:8px">① 同账号 · 同请求头,唯一变量是网络出口</div>
         <div class="panel">
           <table class="q7pp-tbl">
-            <thead><tr><th>快照</th><th>Direct</th><th>Exchange</th><th>Claude 系</th></tr></thead>
+            <thead><tr><th>快照</th><th>网络出口</th><th>Direct</th><th>Exchange</th><th>Claude 系</th></tr></thead>
             <tbody>
-              <tr><td>07-22</td><td>38</td><td>43</td><td><span class="badge ok">在列</span></td></tr>
-              <tr><td>07-25</td><td>31</td><td>35</td><td><span class="badge no">0 · 全线消失</span></td></tr>
-              <tr><td>07-26</td><td><strong>42</strong></td><td><strong>45</strong></td><td><span class="badge ok">11 / 10 款回归</span></td></tr>
+              <tr><td>07-22</td><td>VPN · 海外</td><td>38</td><td>43</td><td><span class="badge ok">在列</span></td></tr>
+              <tr><td>07-25</td><td><strong>未挂 VPN</strong></td><td>31</td><td>35</td><td><span class="badge no">0 · 全线消失</span></td></tr>
+              <tr><td>07-26</td><td>VPN · 海外</td><td><strong>42</strong></td><td><strong>45</strong></td><td><span class="badge ok">11 / 10 款回归</span></td></tr>
             </tbody>
           </table>
         </div>
+        <p style="font-size:15px;color:var(--ink-soft);margin-top:8px;line-height:1.5">两次快照之差<strong>恰好等于全部 Claude 模型</strong>(Direct 42−31=11,Exchange 45−35=10):地域过滤只作用于 Anthropic 系,GPT / Gemini / Kimi / DeepSeek 均不受影响。</p>
         <div class="sec-label" style="margin:14px 0 8px">② 独占模型双向验证 = 调用时强制</div>
         <div class="panel">
           <table class="q7pp-tbl">
