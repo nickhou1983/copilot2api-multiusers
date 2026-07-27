@@ -1273,11 +1273,11 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
     <div class="sec-head reveal">
       <div class="sec-no">＋</div>
       <div>
-        <div class="sec-label">Extended Topics — 代理移除了哪些头（2026-07-26 代码审查）</div>
-        <h2>Header 默认全部丢弃：上游请求全新构建，beta 仅白名单放行</h2>
+        <div class="sec-label">Extended Topics — 代理移除与注入了哪些头（2026-07-27 代码复核 + 回显实测）</div>
+        <h2>Header 默认全部丢弃：客户端 beta 一律不转发，代理固定注入</h2>
       </div>
     </div>
-    <p class="sec-lede reveal" style="margin-bottom:16px">咨询「经代理转发 <code>/v1/messages</code> 时移除了哪些头」。审查 <code>anthropic/handler.go</code> 与 <code>internal/copilot/headers.go</code> 的结论：代理<strong>从不复制客户端 header</strong> —— 上游请求用 <code>http.NewRequestWithContext</code> 全新构建，身份头整套替换；<code>anthropic-beta</code> 逐 token 白名单过滤；请求体字节级透传，仅两处改动。</p>
+    <p class="sec-lede reveal" style="margin-bottom:16px">咨询「经代理转发 <code>/v1/messages</code> 时移除与注入了哪些头」。代理<strong>从不复制客户端 header</strong> —— 上游请求用 <code>http.NewRequestWithContext</code> 全新构建，身份头整套替换；客户端 <code>anthropic-beta</code> <strong>一律不转发</strong>，代理按固定策略注入（<code>ccf0c2a</code> 起对齐 opencode CLI）。回显服务器实测：探针带 <code>x-api-key</code> / Cookie / 自定义 UA / beta 全家桶，<strong>全部未到达上游</strong>。</p>
     <div class="reveal" style="display:grid; grid-template-columns: 1.12fr 1fr; gap: 24px; align-items:start;">
       <div>
         <div class="sec-label" style="margin-bottom:8px">① 被移除的客户端 Header（默认全丢）</div>
@@ -1286,49 +1286,46 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
             <thead><tr><th style="width:42%">客户端 Header</th><th>代理处理</th></tr></thead>
             <tbody>
               <tr><td><code>x-api-key</code> / <code>Authorization</code></td><td>丢弃 → 替换为 <code>Bearer &lt;Copilot token&gt;</code></td></tr>
-              <tr><td><code>anthropic-version</code></td><td>丢弃，代理也不自行设置（Copilot 网关不要求）</td></tr>
-              <tr><td><code>anthropic-beta</code> 非白名单 token</td><td>剥除：<code>fast-mode-*</code> · <code>output-*</code> · <code>token-efficient-tools-*</code> · <code>prompt-caching-*</code> …</td></tr>
+              <tr><td><code>anthropic-version</code></td><td>丢弃 → 固定发送 <code>2023-06-01</code></td></tr>
+              <tr><td><code>anthropic-beta</code> 全部 token</td><td>一律剥除（实测 <code>fast-mode-*</code> · <code>computer-use-*</code> · <code>output-300k</code> 均未透传）；仅 <code>context-1m*</code> 被本地消费</td></tr>
               <tr><td><code>User-Agent</code> · <code>x-stainless-*</code> · Cookie</td><td>全部丢弃，UA 由 profile 重写</td></tr>
             </tbody>
           </table>
         </div>
-        <div class="sec-label" style="margin:14px 0 8px">② anthropic-beta 白名单（models.go）</div>
+        <div class="sec-label" style="margin:14px 0 8px">② 代理主动注入的 anthropic-beta（回显实测确认）</div>
         <div class="panel">
           <table class="q7pp-tbl">
             <thead><tr><th style="width:52%">Token</th><th>行为</th></tr></thead>
             <tbody>
-              <tr><td><code>computer-use-YYYY-MM-DD</code></td><td><span class="badge ok">原样转发</span> 工具类型识别需要</td></tr>
-              <tr><td><code>interleaved-thinking-*</code></td><td><span class="badge ok">原样转发</span> thinking 块排布</td></tr>
-              <tr><td><code>context-1m*</code></td><td><span class="badge diff">消费不转发</span> 切换 <code>-1m</code> 模型变体</td></tr>
+              <tr><td><code>interleaved-thinking-2025-05-14</code></td><td><span class="badge ok">固定基线</span> 每个 native 请求必带</td></tr>
+              <tr><td><code>context-management-2025-06-27</code><br><code>compact-2026-01-12</code></td><td><span class="badge diff">成对自动注入</span> body 含 <code>context_management</code> 时</td></tr>
+              <tr><td><code>context-1m*</code>（客户端头）</td><td><span class="badge diff">消费不转发</span> 切换 <code>-1m</code> 模型变体</td></tr>
             </tbody>
           </table>
         </div>
       </div>
       <div>
-        <div class="sec-label" style="margin-bottom:8px">③ 代理注入的出站 Header（按模式 / profile）</div>
+        <div class="sec-label" style="margin-bottom:8px">③ 代理注入的出站 Header（按 profile）</div>
         <div class="panel">
           <table class="q7pp-tbl">
-            <thead><tr><th style="width:26%">类别</th><th>Editor（Exchange）</th><th>Opencode（Direct）</th></tr></thead>
+            <thead><tr><th style="width:30%">类别</th><th>Editor（Exchange）</th><th>Opencode（Direct）</th></tr></thead>
             <tbody>
-              <tr><td>Authorization</td><td>Bearer <strong>短期交换</strong> token</td><td>Bearer <code>gho_</code> <strong>原样长期</strong></td></tr>
               <tr><td>User-Agent</td><td><code>GitHubCopilotChat/0.39.0</code></td><td><code>opencode/0.4.2</code></td></tr>
               <tr><td>编辑器标识</td><td>Editor-Version / Plugin / Integration-Id</td><td><code>X-Initiator: user</code></td></tr>
               <tr><td>Openai-Intent</td><td><code>conversation-agent</code></td><td><code>conversation-edits</code></td></tr>
-              <tr><td>请求追踪</td><td><code>X-Request-Id: req_&lt;32hex&gt;</code> 自动生成</td><td>—（不设）</td></tr>
-              <tr><td>共用</td><td colspan="2" style="text-align:center"><code>Content-Type: application/json</code> · <code>X-Github-Api-Version: 2026-06-01</code> · 流式加 <code>Accept: text/event-stream</code></td></tr>
+              <tr><td>API 版本</td><td colspan="2" style="text-align:center"><code>X-Github-Api-Version: 2026-06-01</code>（共用）</td></tr>
             </tbody>
           </table>
         </div>
         <ul class="notes" id="hdrfilter-notes" style="margin-top:12px">
-          <li><strong>body 触发的自动 beta：</strong>请求体含 <code>context_management</code> → 自动附 <code>context-management-2025-06-27</code>；含 <code>compact_*</code> edit → 附 <code>compact-2026-01-12</code>，客户端无需自带头。</li>
+          <li><strong>自动 beta 成对注入：</strong>body 含 <code>context_management</code>（任意 edit 类型）→ 同时附 <code>context-management</code> + <code>compact</code> 两个 beta，客户端无需自带头；<code>count_tokens</code> 行为一致（探针实测）。</li>
           <li><strong>请求体仅两处改动：</strong>模型别名重写（dated ID → Copilot ID）与递归删除 <code>cache_control.scope</code>（上游 400 拒收）；tools / thinking 等功能字段原样透传，上限 10MB。</li>
-          <li><strong>其他路由与认证：</strong>OpenAI / Gemini 路由仅回传客户端 <code>Content-Type</code> / <code>Accept</code> / <code>Cache-Control</code>；Exchange 换 token 时另向 <code>api.github.com</code> 发 <code>Bearer ghu_</code> + Copilot UA。</li>
-          <li><strong>设计取向「默认丢弃 + 白名单」：</strong>不把不可信 beta 带到上游，能力开关（1M / computer-use 等）由代理显式管理，行为可审计。</li>
+          <li><strong>设计取向「先剥后注」：</strong>客户端 beta 全部剥除、代理固定注入，行为可审计；旧版 <code>computer-use-*</code> 白名单转发已移除 —— 依赖该工具类型的请求上游可能不再识别。</li>
         </ul>
       </div>
     </div>
   </div>
-  <div class="s-foot"><span>Extended · Header Filtering</span><span>2026-07-26</span></div>
+  <div class="s-foot"><span>Extended · Header Filtering</span><span>2026-07-27</span></div>
 </section>
 
 <!-- ==================== SLIDE 16 · Beta 头黑名单实测 ==================== -->
@@ -1392,7 +1389,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
         <ul class="notes" id="betabl-notes" style="margin-top:12px">
           <li><strong>拦截发生在网关层：</strong>错误格式是 Copilot 自己的 <code>invalid_request_body</code>（非 Anthropic error 格式）；被拦的 5 个都是需要服务端文件 / 状态存储的能力。</li>
           <li><strong>放行 ≠ 生效：</strong><code>fast-mode</code> 放行但 <code>speed</code> 参数无效（专属模型 ID 才提速）；<code>output-300k</code> 放行但 <code>max_tokens</code> 仍卡 128K —— 「200 但静默忽略」是常态。</li>
-          <li><strong>双网关策略逐 token 完全一致：</strong>Direct 与 Exchange 74 次调用零分歧。</li>
+          <li><strong>双网关策略逐 token 完全一致：</strong>Direct 与 Exchange 74 次调用零分歧。代理自身只注入 3 个 beta（interleaved-thinking / context-management / compact），全在放行名单内 —— 代理剥除是第一道防线，网关黑名单是第二道。</li>
         </ul>
       </div>
     </div>
