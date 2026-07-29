@@ -84,6 +84,30 @@ func (c *Cache) GetRaw(ctx context.Context) ([]byte, error) {
 	return raw, err
 }
 
+// Refresh forces a fetch from upstream, bypassing the TTL, and replaces the
+// cached data on success. Concurrent refreshes are deduplicated.
+func (c *Cache) Refresh(ctx context.Context) ([]byte, error) {
+	result, err, _ := c.sf.Do("refresh", func() (interface{}, error) {
+		d, err := c.fetch(context.WithoutCancel(ctx))
+		if err != nil {
+			return nil, err
+		}
+
+		c.mu.Lock()
+		c.data = d
+		c.valid = true
+		c.cachedAt = time.Now()
+		c.mu.Unlock()
+
+		slog.Info("models cache force-refreshed", "count", len(d.parsed))
+		return d, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return result.(cacheData).raw, nil
+}
+
 // GetInfo returns the parsed model info map.
 func (c *Cache) GetInfo(ctx context.Context) (map[string]*Info, error) {
 	_, parsed, err := c.get(ctx)

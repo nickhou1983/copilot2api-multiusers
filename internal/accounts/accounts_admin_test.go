@@ -3,6 +3,7 @@ package accounts
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -328,11 +329,19 @@ func TestManagerTokensEndpoint(t *testing.T) {
 }
 
 type fakeModels struct {
-	raw []byte
-	err error
+	raw        []byte
+	refreshed  []byte
+	err        error
+	refreshErr error
 }
 
 func (f fakeModels) GetRaw(context.Context) ([]byte, error) { return f.raw, f.err }
+func (f fakeModels) Refresh(context.Context) ([]byte, error) {
+	if f.refreshErr != nil {
+		return nil, f.refreshErr
+	}
+	return f.refreshed, nil
+}
 
 func TestManagerModelsEndpoint(t *testing.T) {
 	cfgPath := filepath.Join(t.TempDir(), "accounts.json")
@@ -382,6 +391,58 @@ func TestManagerModelsEndpointNoSource(t *testing.T) {
 	// Account has no models source -> 503.
 	if w := do(h, "GET", "/admin/api/accounts/alice/models", ""); w.Code != http.StatusServiceUnavailable {
 		t.Fatalf("models without source: %d %s", w.Code, w.Body.String())
+	}
+	if w := do(h, "POST", "/admin/api/accounts/alice/models/refresh", ""); w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("models refresh without source: %d %s", w.Code, w.Body.String())
+	}
+}
+
+func TestManagerModelsRefreshEndpoint(t *testing.T) {
+	cfgPath := filepath.Join(t.TempDir(), "accounts.json")
+	reg, _ := NewRegistry(nil)
+	cached := []byte(`{"data":[{"id":"gpt-5"}]}`)
+	fresh := []byte(`{"data":[{"id":"gpt-5"},{"id":"gpt-6"}]}`)
+	factory := func(c AccountConfig) (*Account, error) {
+		return &Account{ID: c.ID, APIKey: c.APIKey, Models: fakeModels{raw: cached, refreshed: fresh}}, nil
+	}
+	m := NewManager(reg, factory, cfgPath, "", nil)
+	h := m.Handler()
+
+	if w := do(h, "POST", "/admin/api/accounts", `{"id":"alice","api_key":"k1"}`); w.Code != http.StatusCreated {
+		t.Fatalf("create: %d %s", w.Code, w.Body.String())
+	}
+
+	w := do(h, "POST", "/admin/api/accounts/alice/models/refresh", "")
+	if w.Code != http.StatusOK {
+		t.Fatalf("models refresh: %d %s", w.Code, w.Body.String())
+	}
+	if ct := w.Header().Get("Content-Type"); ct != "application/json" {
+		t.Fatalf("models refresh content-type: %s", ct)
+	}
+	if w.Body.String() != string(fresh) {
+		t.Fatalf("refresh returned cached data: %s", w.Body.String())
+	}
+
+	// Unknown account -> 404.
+	if w := do(h, "POST", "/admin/api/accounts/ghost/models/refresh", ""); w.Code != http.StatusNotFound {
+		t.Fatalf("ghost models refresh: %d", w.Code)
+	}
+}
+
+func TestManagerModelsRefreshEndpointUpstreamError(t *testing.T) {
+	cfgPath := filepath.Join(t.TempDir(), "accounts.json")
+	reg, _ := NewRegistry(nil)
+	factory := func(c AccountConfig) (*Account, error) {
+		return &Account{ID: c.ID, APIKey: c.APIKey, Models: fakeModels{refreshErr: errors.New("upstream down")}}, nil
+	}
+	m := NewManager(reg, factory, cfgPath, "", nil)
+	h := m.Handler()
+
+	if w := do(h, "POST", "/admin/api/accounts", `{"id":"alice","api_key":"k1"}`); w.Code != http.StatusCreated {
+		t.Fatalf("create: %d %s", w.Code, w.Body.String())
+	}
+	if w := do(h, "POST", "/admin/api/accounts/alice/models/refresh", ""); w.Code != http.StatusBadGateway {
+		t.Fatalf("models refresh upstream error: %d %s", w.Code, w.Body.String())
 	}
 }
 

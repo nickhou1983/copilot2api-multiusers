@@ -16,6 +16,8 @@ import (
 // implemented by the per-account models cache.
 type ModelsSource interface {
 	GetRaw(ctx context.Context) ([]byte, error)
+	// Refresh forces a fetch from upstream, bypassing any cache TTL.
+	Refresh(ctx context.Context) ([]byte, error)
 }
 
 // Protocol identifies which per-account handler a route should dispatch to.

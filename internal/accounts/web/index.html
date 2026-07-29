@@ -110,9 +110,10 @@
       <div class="row" style="align-items:center">
         <select id="models-account"></select>
         <button class="ghost" id="models-refresh">Refresh</button>
+        <button id="models-update">Update from upstream</button>
       </div>
     </div>
-    <p class="muted small">Models advertised by the GitHub Copilot upstream <code>/models</code> endpoint for the selected account.</p>
+    <p class="muted small">Models advertised by the GitHub Copilot upstream <code>/models</code> endpoint for the selected account. <strong>Refresh</strong> re-reads the cached list; <strong>Update from upstream</strong> forces a fresh fetch, bypassing the cache.</p>
     <div id="models-body"><p class="muted">Loading…</p></div>
   </section>
   </div>
@@ -466,13 +467,16 @@ function modelRows(list) {
   }).join("");
 }
 
-async function loadModels() {
+async function loadModels(force) {
   const body = document.getElementById("models-body");
   const id = document.getElementById("models-account").value;
   if (!id) return;
+  const updateBtn = document.getElementById("models-update");
+  updateBtn.disabled = true;
   body.innerHTML = '<p class="muted">Loading…</p>';
   try {
-    const resp = await api("GET", "/admin/api/accounts/" + encodeURIComponent(id) + "/models");
+    const base = "/admin/api/accounts/" + encodeURIComponent(id) + "/models";
+    const resp = force ? await api("POST", base + "/refresh") : await api("GET", base);
     const list = (resp.data || []).slice().sort((a, b) => a.id.localeCompare(b.id));
     if (!list.length) {
       body.innerHTML = '<p class="muted">Upstream returned no models.</p>';
@@ -484,13 +488,18 @@ async function loadModels() {
         <th class="num">Context</th><th class="num">Max output</th><th>Endpoints</th><th></th></tr></thead>
         <tbody>${modelRows(list)}</tbody>
       </table>`;
+    if (force) toast("Models updated from upstream");
   } catch (e) {
     body.innerHTML = `<p class="badge no">${e.message}</p>`;
+    if (force) toast(e.message, "err");
+  } finally {
+    updateBtn.disabled = false;
   }
 }
 
-document.getElementById("models-refresh").addEventListener("click", loadModels);
-document.getElementById("models-account").addEventListener("change", loadModels);
+document.getElementById("models-refresh").addEventListener("click", () => loadModels(false));
+document.getElementById("models-update").addEventListener("click", () => loadModels(true));
+document.getElementById("models-account").addEventListener("change", () => loadModels(false));
 
 load();
 </script>
