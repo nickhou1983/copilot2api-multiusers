@@ -421,7 +421,7 @@ tr:last-child td { border-bottom: none; }
 #verdict-tbl td { padding: 9px 22px; line-height: 1.4; }
 #q6-notes li { padding-top: 8px; padding-bottom: 8px; font-size: 18px; line-height: 1.5; }
 #q4-notes li { padding-top: 8px; padding-bottom: 8px; font-size: 18px; line-height: 1.5; }
-#q7pp-notes li, #hdrfilter-notes li, #betabl-notes li { padding-top: 6px; padding-bottom: 6px; font-size: 16px; line-height: 1.5; }
+#q7pp-notes li, #hdrfilter-notes li, #betabl-notes li, #routing-notes li { padding-top: 6px; padding-bottom: 6px; font-size: 16px; line-height: 1.5; }
 .q7pp-tbl td { padding: 10px 16px; font-size: 16px; line-height: 1.45; }
 .q7pp-tbl th { padding: 10px 16px; }
 td.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
@@ -648,7 +648,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Key Figures — 关键指标</span>
-    <span class="doc-pg">02 / 19</span>
+    <span class="doc-pg">02 / 20</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -705,7 +705,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 01 — Upstream Gaps</span>
-    <span class="doc-pg">03 / 19</span>
+    <span class="doc-pg">03 / 20</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -761,7 +761,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 01 — Upstream Gaps</span>
-    <span class="doc-pg">04 / 19</span>
+    <span class="doc-pg">04 / 20</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -794,7 +794,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 02 — HTTP 413</span>
-    <span class="doc-pg">05 / 19</span>
+    <span class="doc-pg">05 / 20</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -838,7 +838,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 02 — HTTP 413</span>
-    <span class="doc-pg">06 / 19</span>
+    <span class="doc-pg">06 / 20</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -877,7 +877,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 03 — Thinking Signature</span>
-    <span class="doc-pg">07 / 19</span>
+    <span class="doc-pg">07 / 20</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -914,7 +914,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 04 — Structured Outputs</span>
-    <span class="doc-pg">08 / 19</span>
+    <span class="doc-pg">08 / 20</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -951,7 +951,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
       </table>
     </div>
     <ul class="notes" id="q4-notes" style="margin-top: 18px;">
-      <li><strong>路由漂移已量化(2026-07-25 实测):</strong>同一模型在不同时刻落到不同后端,<strong>失败名单随时间变化</strong> —— 18:44 失败 {opus-4.6, sonnet-4.6, sonnet-4.5} → 18:47 {opus-4.7, opus-4.6} → 18:50 {<strong>opus-4.6, opus-4.5</strong>}。A/B 排除法(BIG/SMALL schema × LONG/SHORT prompt 各 4 次)结果<strong>完全一致</strong>,证明 schema 与 prompt 均非变量,<strong>唯一变量是时间</strong>(网关侧动态负载均衡)。</li>
+      <li><strong>路由漂移已量化(2026-07-25 实测):</strong>同一模型在不同时刻落到不同后端,<strong>失败名单随时间变化</strong> —— 18:44 失败 {opus-4.6, sonnet-4.6, sonnet-4.5} → 18:47 {opus-4.7, opus-4.6} → 18:50 {<strong>opus-4.6, opus-4.5</strong>}。A/B 排除法(BIG/SMALL schema × LONG/SHORT prompt 各 4 次)结果<strong>完全一致</strong>,证明 schema 与 prompt 均非变量,<strong>唯一变量是时间</strong>(网关侧动态负载均衡)。<strong>08-02 复测 50/50 全过 → P17</strong>。</li>
       <li><strong>规律与对策:</strong>不是「某几个模型不支持」,而是<strong>「凡落到 Vertex 必失败,落到 Anthropic / Bedrock 必成功」</strong> —— 故<strong>无法靠避开特定模型规避</strong>。生产做法:对 <code>vertexai.allowedPartnerModelFeatures</code> 这一特定 400 做<strong>自动重试</strong>,重试大概率改落 Anthropic / Bedrock 而成功。</li>
       <li><strong>废弃参数已被硬拒:</strong>旧 <code>output_format</code>(即便带 <code>structured-outputs-2025-11-13</code> 头)返回 <code>This field is deprecated. Use 'output_config.format' instead.</code> —— 接入必须用新 GA 格式。</li>
       <li><strong>代理侧配套缺口:</strong>Anthropic→Responses / Chat Completions 转换会静默丢 <code>output_config.format</code> 与工具 <code>strict</code>;上游 <code>/chat/completions</code> 也静默忽略 <code>response_format.json_schema</code> —— <strong>structured outputs 只在原生 <code>/v1/messages</code> 路由端到端生效</strong>。</li>
@@ -965,7 +965,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 05 — Auth &amp; Token</span>
-    <span class="doc-pg">09 / 19</span>
+    <span class="doc-pg">09 / 20</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1011,7 +1011,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 06 — SSE Stability</span>
-    <span class="doc-pg">10 / 19</span>
+    <span class="doc-pg">10 / 20</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1048,7 +1048,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 06 延伸 — Three Failure Modes</span>
-    <span class="doc-pg">11 / 19</span>
+    <span class="doc-pg">11 / 20</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1096,7 +1096,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 07 — Client-ID &amp; Model Visibility</span>
-    <span class="doc-pg">12 / 19</span>
+    <span class="doc-pg">12 / 20</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1143,7 +1143,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 07 · Live Probe — Model Diff &amp; 1M Context</span>
-    <span class="doc-pg">13 / 19</span>
+    <span class="doc-pg">13 / 20</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1202,7 +1202,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 07 · Live Invoke — Direct vs Exchange</span>
-    <span class="doc-pg">14 / 19</span>
+    <span class="doc-pg">14 / 20</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1267,7 +1267,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Extended — Header Filtering</span>
-    <span class="doc-pg">15 / 19</span>
+    <span class="doc-pg">15 / 20</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1333,7 +1333,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Extended — Beta Header Blocklist</span>
-    <span class="doc-pg">16 / 19</span>
+    <span class="doc-pg">16 / 20</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1397,12 +1397,77 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-foot"><span>Extended · Beta Header Blocklist</span><span>2026-07-26</span></div>
 </section>
 
-<!-- ==================== SLIDE 17 · 缓存与多账户 ==================== -->
+<!-- ==================== SLIDE 17 · 后端路由复测 ==================== -->
+<section class="slide" aria-label="后端路由复测">
+  <div class="s-top">
+    <span class="doc-no">TD-2620</span>
+    <span class="doc-sec">Extended — Backend Routing Re-test</span>
+    <span class="doc-pg">17 / 20</span>
+  </div>
+  <div class="s-body">
+    <div class="sec-head reveal">
+      <div class="sec-no">＋</div>
+      <div>
+        <div class="sec-label">Extended Topics — 后端路由复测 150 次调用（2026-08-02）</div>
+        <h2>Vertex 已从 Claude 路由池消失，落点由漂移变为静态绑定</h2>
+      </div>
+    </div>
+    <p class="sec-lede reveal" style="margin-bottom:16px">Exchange 模式复测：10 个 Claude 模型 × 10 次纯调用（100 次）+ 复刻 Q4 场景的 <code>output_config.format</code> 矩阵（50 次），共 <strong>150 次调用零失败、零 Vertex</strong>。与 07-25 形成鲜明对比：当时 Vertex 占约 20% 且失败名单 3 分钟变 3 次；现在<strong>每个模型 10/10 稳定落同一后端</strong>。</p>
+    <div class="reveal" style="display:grid; grid-template-columns: 1.1fr 1fr; gap: 24px; align-items:start;">
+      <div>
+        <div class="sec-label" style="margin-bottom:8px">① 100 次落点矩阵（10 模型 × 10 次 · 全部 200）</div>
+        <div class="panel">
+          <table class="q7pp-tbl">
+            <thead><tr><th style="width:34%">落点</th><th>模型（均 10/10 稳定）</th></tr></thead>
+            <tbody>
+              <tr><td><span class="host"><span class="dot anthropic"></span>Anthropic 1P</span><br><strong>70 次</strong></td><td>fable-5 · haiku-4.5 · opus-4.7 · opus-4.8 · opus-4.8-fast · opus-5 · sonnet-5</td></tr>
+              <tr><td><span class="host"><span class="dot bedrock"></span>AWS Bedrock</span><br><strong>30 次</strong></td><td>opus-4.6 · sonnet-4.5 · sonnet-4.6</td></tr>
+              <tr><td><span class="host"><span class="dot vertex"></span>Google Vertex</span><br><strong>0 次</strong></td><td>150 次累计零命中 —— 疑似已被摘出 Claude 池</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="sec-label" style="margin:14px 0 8px">② 落点判定指纹（响应体泄漏，HTTP 头无信息）</div>
+        <div class="panel">
+          <table class="q7pp-tbl">
+            <thead><tr><th style="width:34%">落点</th><th>指纹</th></tr></thead>
+            <tbody>
+              <tr><td>Bedrock</td><td><code>msg_bdrk_</code> + <code>toolu_bdrk_</code> 双中缀</td></tr>
+              <tr><td>Anthropic 1P</td><td>无中缀 ID + 私有字段 <code>usage.inference_geo</code></td></tr>
+              <tr><td>Vertex</td><td>错误体含 <code>vertexai.*</code> 组织策略原文</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div>
+        <div class="sec-label" style="margin-bottom:8px">③ 与 2026-07-25 的对比</div>
+        <div class="panel">
+          <table class="q7pp-tbl">
+            <thead><tr><th style="width:38%">维度</th><th>07-25</th><th>08-02</th></tr></thead>
+            <tbody>
+              <tr><td>Vertex 占比</td><td>~20%</td><td><span class="badge ok">0%</span></td></tr>
+              <tr><td>路由行为</td><td>动态漂移（3 分钟变 3 次）</td><td><span class="badge diff">按模型静态绑定</span></td></tr>
+              <tr><td>Structured Outputs</td><td>40/50（Vertex 全败）</td><td><span class="badge ok">50/50 全过</span></td></tr>
+              <tr><td>规避手段</td><td>对 vertexai 400 自动重试</td><td>不再需要</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <ul class="notes" id="routing-notes" style="margin-top:12px">
+          <li><strong>分工模式清晰：</strong>最新代（sonnet-5 / opus-5 / fable-5 / opus-4.8 系）+ haiku-4.5 全在 1P；上一代主力（opus-4.6 / sonnet-4.5 / 4.6）下沉 Bedrock —— 新模型先上第一方、老模型走云容量。</li>
+          <li><strong>Q4 问题随之消解：</strong>Structured Outputs 失败源是 Vertex 组织策略；池中无 Vertex 后 50/50 全过。但无法确证策略本身是否放行 —— 更可能是路由摘除。</li>
+          <li><strong>落点仍会调整：</strong>与 07-25 相比 haiku-4.5 从 Bedrock 迁到 1P、opus-4.6 反向迁移 —— 池子构成非永久，结论仅代表当前时段。</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="s-foot"><span>Extended · Backend Routing Re-test</span><span>2026-08-02</span></div>
+</section>
+
+<!-- ==================== SLIDE 18 · 缓存与多账户 ==================== -->
 <section class="slide" aria-label="缓存与多账户">
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Extended — Cache &amp; Multi-Account</span>
-    <span class="doc-pg">17 / 19</span>
+    <span class="doc-pg">18 / 20</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1434,12 +1499,12 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-foot"><span>Extended · Cache &amp; Multi-Account</span><span>2026-07-19</span></div>
 </section>
 
-<!-- ==================== SLIDE 18 · 工程产出索引 ==================== -->
+<!-- ==================== SLIDE 19 · 工程产出索引 ==================== -->
 <section class="slide" aria-label="工程产出索引">
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Deliverables Index</span>
-    <span class="doc-pg">18 / 19</span>
+    <span class="doc-pg">19 / 20</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1480,13 +1545,13 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-foot"><span>Deliverables Index</span><span>2026-07-19</span></div>
 </section>
 
-<!-- ==================== SLIDE 19 · 结论与状态 ==================== -->
+<!-- ==================== SLIDE 20 · 结论与状态 ==================== -->
 <section class="slide" aria-label="结论与状态">
   <div class="crop tl"></div><div class="crop tr"></div><div class="crop bl"></div><div class="crop br"></div>
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Verdict — 结论与状态</span>
-    <span class="doc-pg">19 / 19</span>
+    <span class="doc-pg">20 / 20</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal" style="margin-bottom: 12px;">
@@ -1525,7 +1590,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
 <!-- 页码指示 + 导航按钮(舞台之外的 UI) -->
 <div class="deck-controls" aria-hidden="true">
   <button id="navPrev" title="上一页 (←)">‹</button>
-  <span id="pageIndicator">01 / 19</span>
+  <span id="pageIndicator">01 / 20</span>
   <button id="navNext" title="下一页 (→)">›</button>
 </div>
 
