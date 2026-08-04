@@ -297,6 +297,54 @@ func TestConvertResponsesToChatRequest_BasicMessage(t *testing.T) {
 	}
 }
 
+func TestConvertResponsesToChatRequest_StringInput(t *testing.T) {
+	var req types.ResponsesRequest
+	body := `{"model":"gpt-4","input":"Hello"}`
+	if err := json.Unmarshal([]byte(body), &req); err != nil {
+		t.Fatalf("Unmarshal string input failed: %v", err)
+	}
+
+	result := ConvertResponsesToChatRequest(req)
+
+	if len(result.Messages) != 1 {
+		t.Fatalf("Messages length = %d, want 1", len(result.Messages))
+	}
+	msg := result.Messages[0]
+	if msg.Role != "user" {
+		t.Errorf("Role = %q, want user", msg.Role)
+	}
+	if msg.Content == nil || msg.Content.Text == nil || *msg.Content.Text != "Hello" {
+		t.Errorf("Content = %v, want Hello", msg.Content)
+	}
+}
+
+func TestConvertResponsesToChatRequest_InputItemWithoutType(t *testing.T) {
+	var req types.ResponsesRequest
+	body := `{"model":"gpt-4","input":[{"role":"user","content":[{"type":"input_text","text":"Hello"}]}]}`
+	if err := json.Unmarshal([]byte(body), &req); err != nil {
+		t.Fatalf("Unmarshal array input failed: %v", err)
+	}
+
+	result := ConvertResponsesToChatRequest(req)
+
+	if len(result.Messages) != 1 {
+		t.Fatalf("Messages length = %d, want 1 (item without explicit type must be a message)", len(result.Messages))
+	}
+	if result.Messages[0].Role != "user" {
+		t.Errorf("Role = %q, want user", result.Messages[0].Role)
+	}
+}
+
+func TestConvertResponsesToChatRequest_NullInput(t *testing.T) {
+	var req types.ResponsesRequest
+	if err := json.Unmarshal([]byte(`{"model":"gpt-4","input":null}`), &req); err != nil {
+		t.Fatalf("Unmarshal null input failed: %v", err)
+	}
+	if req.Input != nil {
+		t.Errorf("Input = %v, want nil", req.Input)
+	}
+}
+
 func TestConvertResponsesToChatRequest_WithInstructions(t *testing.T) {
 	instructions := "Be helpful"
 	req := types.ResponsesRequest{

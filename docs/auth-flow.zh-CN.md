@@ -132,6 +132,7 @@ Gemini 客户端。缺失 key 返回 `401 Missing API key`;未知 key 返回
 | Base URL | 动态,来自 token 的 `proxy-ep`(默认 `https://api.individual.githubcopilot.com`) | 静态 `https://api.githubcopilot.com` |
 | 请求头 profile | `editor` | `opencode` |
 | Device Flow client id | `Iv1.b507a08c87ecfe98` | `Ov23li8tweQw6odWQebz` |
+| `GET /usage` | 通过 `copilot_internal/v2/token` 支持 | 通过 `copilot_internal/user` 支持,使用原始 GitHub OAuth token |
 
 ## 出站请求头 profile
 

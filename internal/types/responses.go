@@ -1,5 +1,10 @@
 package types
 
+import (
+	"bytes"
+	"encoding/json"
+)
+
 // codexPhaseModel is the model ID that requires phase annotations on assistant messages.
 const CodexPhaseModel = "gpt-5.3-codex"
 
@@ -11,21 +16,21 @@ const MaxConsecutiveFunctionCallWhitespace = 20
 
 // ResponsesRequest is the request payload for the Responses API.
 type ResponsesRequest struct {
-	Model             string              `json:"model"`
-	Input             []ResponseInputItem `json:"input"`
-	Instructions      *string             `json:"instructions"`
-	Temperature       *float64            `json:"temperature,omitempty"`
-	TopP              *float64            `json:"top_p,omitempty"`
-	MaxOutputTokens   *int                `json:"max_output_tokens,omitempty"`
-	Tools             []ResponseTool      `json:"tools,omitempty"`
-	ToolChoice        interface{}         `json:"tool_choice,omitempty"`
-	Metadata          map[string]string   `json:"metadata,omitempty"`
-	Stream            bool                `json:"stream"`
-	Store             bool                `json:"store"`
-	ParallelToolCalls *bool               `json:"parallel_tool_calls,omitempty"`
-	Reasoning         *ResponseReasoning  `json:"reasoning,omitempty"`
-	Include           []string            `json:"include,omitempty"`
-	Text              *ResponseText       `json:"text,omitempty"`
+	Model              string             `json:"model"`
+	Input              ResponseInput      `json:"input"`
+	Instructions       *string            `json:"instructions"`
+	Temperature        *float64           `json:"temperature,omitempty"`
+	TopP               *float64           `json:"top_p,omitempty"`
+	MaxOutputTokens    *int               `json:"max_output_tokens,omitempty"`
+	Tools              []ResponseTool     `json:"tools,omitempty"`
+	ToolChoice         interface{}        `json:"tool_choice,omitempty"`
+	Metadata           map[string]string  `json:"metadata,omitempty"`
+	Stream             bool               `json:"stream"`
+	Store              bool               `json:"store"`
+	ParallelToolCalls  *bool              `json:"parallel_tool_calls,omitempty"`
+	Reasoning          *ResponseReasoning `json:"reasoning,omitempty"`
+	Include            []string           `json:"include,omitempty"`
+	Text               *ResponseText      `json:"text,omitempty"`
 	PreviousResponseID string             `json:"previous_response_id,omitempty"`
 }
 
@@ -46,10 +51,42 @@ type ResponseTextFormat struct {
 	JSONSchema interface{} `json:"json_schema,omitempty"`
 }
 
+// ResponseInput is the Responses API `input` field. The OpenAI Responses API
+// accepts either a plain string (shorthand for a single user message) or an
+// array of input items, so both forms are decoded into the array form.
+type ResponseInput []ResponseInputItem
+
+// UnmarshalJSON accepts both the string shorthand and the array form.
+func (in *ResponseInput) UnmarshalJSON(data []byte) error {
+	trimmed := bytes.TrimSpace(data)
+	if len(trimmed) == 0 || string(trimmed) == "null" {
+		*in = nil
+		return nil
+	}
+
+	if trimmed[0] == '"' {
+		var s string
+		if err := json.Unmarshal(trimmed, &s); err != nil {
+			return err
+		}
+		*in = ResponseInput{{Type: "message", Role: "user", Content: s}}
+		return nil
+	}
+
+	var items []ResponseInputItem
+	if err := json.Unmarshal(trimmed, &items); err != nil {
+		return err
+	}
+	*in = items
+	return nil
+}
+
 // ResponseInputItem is a union struct representing all input item types:
 // message, function_call, function_call_output, reasoning.
 type ResponseInputItem struct {
-	Type string `json:"type"`
+	// Type is optional in the Responses API: an item that carries a role but no
+	// explicit type is a message. Use ItemType to resolve the effective type.
+	Type string `json:"type,omitempty"`
 
 	// message fields
 	Role    string      `json:"role,omitempty"`
@@ -67,6 +104,19 @@ type ResponseInputItem struct {
 	ID               string                  `json:"id,omitempty"`
 	Summary          *[]ResponseSummaryBlock `json:"summary,omitempty"`
 	EncryptedContent string                  `json:"encrypted_content,omitempty"`
+}
+
+// ItemType returns the effective input item type. The Responses API treats
+// `type` as optional for messages, so an item that only carries a role is
+// normalized to "message".
+func (i ResponseInputItem) ItemType() string {
+	if i.Type != "" {
+		return i.Type
+	}
+	if i.Role != "" {
+		return "message"
+	}
+	return ""
 }
 
 // ResponseInputContent represents content items within a message input.
@@ -134,9 +184,9 @@ type ResponseOutputItem struct {
 	Type string `json:"type"`
 
 	// reasoning fields
-	ID               string               `json:"id,omitempty"`
+	ID               string                 `json:"id,omitempty"`
 	Summary          []ResponseSummaryBlock `json:"summary,omitempty"`
-	EncryptedContent string               `json:"encrypted_content,omitempty"`
+	EncryptedContent string                 `json:"encrypted_content,omitempty"`
 
 	// function_call fields
 	CallID    string `json:"call_id,omitempty"`

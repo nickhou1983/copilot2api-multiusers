@@ -22,6 +22,9 @@
 
 ### Bug 修复
 
+- 修复 `POST /v1/responses` 对所有上游不原生支持 Responses API 的模型（如 `claude-*`、`gemini-*`、`kimi-k2.7-code`)一律返回 `400 "Invalid JSON in request body"` 的问题。Responses→Chat Completions 转换路径此前只把 `input` 解析为数组，导致 OpenAI 官方文档中的字符串简写形式（`"input": "hello"`）解析失败。现在 `input` 同时接受纯字符串与输入项数组。
+- 修复 `POST /v1/responses` 在转换为 Chat Completions 时丢弃缺省 `type` 字段的输入项的问题（表现为上游返回 `400 "messages must be non-empty"`）。携带 `role` 的输入项现在按消息处理，与 Responses API 中 `type` 默认为 `"message"` 的行为一致。
+- 修复 `direct` 认证模式账号的 `GET /usage`:改用原始 GitHub OAuth token 查询 `copilot_internal/user`。响应现在包含账号的 Copilot 套餐、配额重置日期以及 `chat`、`completions`、`premium_interactions` 配额快照,不再错误地走仅适用于 exchange 模式的 `copilot_internal/v2/token` 路径。
 - 修复 `search_result` 内容块被以 `400 "content must be string or array of blocks"` 拒绝的问题。search_result 块携带的是裸字符串 `source`，而代理此前只建模了对象形式的 image `source`，导致在请求到达上游之前整个内容数组解析就失败。`AnthropicImageSource` 现同时接受对象 source 与裸字符串 source，恢复了 `search_result` 块的原生透传 —— Copilot 上游支持该能力，会返回 `search_result_location` 引用。Chat Completions 与 Responses 转换路径会把 `search_result` 块降级为纯文本（保留内容，丢弃这两类 API 无法表达的引用元数据）。
 - 修复 `anthropic-beta: context-1m` 头（Claude Code 使用）的 1M 上下文处理：代理不再盲目给模型 ID 追加 `-1m` 后缀，而是仅在基础模型尚未声明 1M 上下文窗口、且该 `-1m` 变体在上游确实存在时才切换。较新的 Claude 模型（如 `claude-sonnet-4.6`、`claude-opus-4.6/4.7/4.8`）在基础模型 ID 上即暴露 1M，因此请求 1M 上下文不再生成上游不存在的 `-1m` 模型 ID，避免破坏能力探测与路由。
 

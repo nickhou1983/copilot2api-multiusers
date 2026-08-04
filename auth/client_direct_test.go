@@ -2,12 +2,22 @@ package auth
 
 import (
 	"context"
+	"encoding/json"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/whtsky/copilot2api/internal/copilot"
 )
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
 
 func newDirectClient(t *testing.T, githubToken string) *Client {
 	t.Helper()
@@ -78,5 +88,67 @@ func TestNewClientDefaultsToExchange(t *testing.T) {
 	}
 	if c.Mode() != ModeExchange {
 		t.Errorf("Mode = %q, want exchange", c.Mode())
+	}
+}
+
+func TestDirectMode_GetUsageInfo(t *testing.T) {
+	oldHTTPClient := sharedHTTPClient
+	t.Cleanup(func() {
+		sharedHTTPClient = oldHTTPClient
+	})
+
+	sharedHTTPClient = &http.Client{
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			if req.URL.String() != CopilotUserURL {
+				t.Errorf("URL = %q, want %q", req.URL.String(), CopilotUserURL)
+			}
+			if got := req.Header.Get("Authorization"); got != "token gho_direct123" {
+				t.Errorf("Authorization = %q, want direct OAuth token", got)
+			}
+			if got := req.Header.Get("Editor-Version"); got != copilot.EditorVersion {
+				t.Errorf("Editor-Version = %q, want %q", got, copilot.EditorVersion)
+			}
+			if got := req.Header.Get("Editor-Plugin-Version"); got != copilot.EditorPluginVersion {
+				t.Errorf("Editor-Plugin-Version = %q, want %q", got, copilot.EditorPluginVersion)
+			}
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     make(http.Header),
+				Body: io.NopCloser(strings.NewReader(`{
+					"copilot_plan": "individual",
+					"quota_reset_date": "2026-09-01",
+					"quota_snapshots": {
+						"premium_interactions": {
+							"entitlement": 300,
+							"remaining": 250,
+							"percent_remaining": 83
+						}
+					}
+				}`)),
+			}, nil
+		}),
+	}
+
+	c := newDirectClient(t, "gho_direct123")
+	info, err := c.GetUsageInfo(context.Background())
+	if err != nil {
+		t.Fatalf("GetUsageInfo: %v", err)
+	}
+	if info.CopilotPlan != "individual" {
+		t.Errorf("CopilotPlan = %q, want individual", info.CopilotPlan)
+	}
+	if info.QuotaResetDate != "2026-09-01" {
+		t.Errorf("QuotaResetDate = %q, want 2026-09-01", info.QuotaResetDate)
+	}
+	if _, ok := info.QuotaSnapshots["premium_interactions"]; !ok {
+		t.Errorf("QuotaSnapshots = %v, want premium_interactions", info.QuotaSnapshots)
+	}
+
+	encoded, err := json.Marshal(info)
+	if err != nil {
+		t.Fatalf("Marshal usage info: %v", err)
+	}
+	if strings.Contains(string(encoded), `"sku"`) {
+		t.Errorf("direct usage response includes exchange-only fields: %s", encoded)
 	}
 }

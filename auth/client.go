@@ -3,9 +3,9 @@ package auth
 import (
 	"context"
 	"encoding/json"
-	"net/http"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"sync"
 	"time"
 
@@ -143,7 +143,6 @@ func (c *Client) HeaderProfile() copilot.Profile {
 	return copilot.ProfileEditor
 }
 
-
 // EnsureAuthenticated runs the interactive device flow if needed and verifies
 // that a valid bearer token can be obtained. Call this at startup only.
 func (c *Client) EnsureAuthenticated(ctx context.Context) error {
@@ -250,19 +249,61 @@ func (c *Client) refreshCopilotToken() error {
 	slog.Info("copilot token refreshed", "expires_at", copilotToken.ExpiresAt, "base_url", copilotToken.BaseURL, "duration_ms", time.Since(start).Milliseconds())
 	return nil
 }
+
 // UsageInfo contains Copilot usage and quota information
 type UsageInfo struct {
+	// Fields returned by copilot_internal/v2/token in exchange mode.
 	SKU                  string      `json:"sku"`
 	Individual           bool        `json:"individual"`
 	LimitedUserQuotas    interface{} `json:"limited_user_quotas"`
 	LimitedUserResetDate interface{} `json:"limited_user_reset_date"`
 	EnterpriseList       []int       `json:"enterprise_list,omitempty"`
 	OrganizationList     []string    `json:"organization_list,omitempty"`
+
+	// Fields returned by copilot_internal/user in direct mode.
+	CopilotPlan       string                 `json:"copilot_plan,omitempty"`
+	QuotaResetDate    string                 `json:"quota_reset_date,omitempty"`
+	QuotaResetDateUTC string                 `json:"quota_reset_date_utc,omitempty"`
+	QuotaSnapshots    map[string]interface{} `json:"quota_snapshots,omitempty"`
+
+	direct bool
 }
 
+// MarshalJSON keeps the existing exchange response stable while exposing the
+// distinct quota snapshot schema returned by the direct-mode endpoint.
+func (u UsageInfo) MarshalJSON() ([]byte, error) {
+	if u.direct {
+		return json.Marshal(struct {
+			CopilotPlan       string                 `json:"copilot_plan,omitempty"`
+			QuotaResetDate    string                 `json:"quota_reset_date,omitempty"`
+			QuotaResetDateUTC string                 `json:"quota_reset_date_utc,omitempty"`
+			QuotaSnapshots    map[string]interface{} `json:"quota_snapshots,omitempty"`
+		}{
+			CopilotPlan:       u.CopilotPlan,
+			QuotaResetDate:    u.QuotaResetDate,
+			QuotaResetDateUTC: u.QuotaResetDateUTC,
+			QuotaSnapshots:    u.QuotaSnapshots,
+		})
+	}
 
+	return json.Marshal(struct {
+		SKU                  string      `json:"sku"`
+		Individual           bool        `json:"individual"`
+		LimitedUserQuotas    interface{} `json:"limited_user_quotas"`
+		LimitedUserResetDate interface{} `json:"limited_user_reset_date"`
+		EnterpriseList       []int       `json:"enterprise_list,omitempty"`
+		OrganizationList     []string    `json:"organization_list,omitempty"`
+	}{
+		SKU:                  u.SKU,
+		Individual:           u.Individual,
+		LimitedUserQuotas:    u.LimitedUserQuotas,
+		LimitedUserResetDate: u.LimitedUserResetDate,
+		EnterpriseList:       u.EnterpriseList,
+		OrganizationList:     u.OrganizationList,
+	})
+}
 
-// GetUsageInfo fetches usage info from the Copilot token endpoint
+// GetUsageInfo fetches usage and quota information for the configured auth mode.
 func (c *Client) GetUsageInfo(ctx context.Context) (*UsageInfo, error) {
 	c.mu.RLock()
 	githubToken := c.creds.GitHubToken
@@ -272,12 +313,24 @@ func (c *Client) GetUsageInfo(ctx context.Context) (*UsageInfo, error) {
 		return nil, fmt.Errorf("no GitHub token available")
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "GET", "https://api.github.com/copilot_internal/v2/token", nil)
+	usageURL := CopilotTokenURL
+	if c.mode == ModeDirect {
+		usageURL = CopilotUserURL
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "GET", usageURL, nil)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", "Bearer "+githubToken)
 	req.Header.Set("User-Agent", copilot.CopilotUserAgent)
+	if c.mode == ModeDirect {
+		req.Header.Set("Authorization", "token "+githubToken)
+		req.Header.Set("Accept", "application/json")
+		req.Header.Set("Editor-Version", copilot.EditorVersion)
+		req.Header.Set("Editor-Plugin-Version", copilot.EditorPluginVersion)
+	} else {
+		req.Header.Set("Authorization", "Bearer "+githubToken)
+	}
 
 	resp, err := sharedHTTPClient.Do(req)
 	if err != nil {
@@ -293,6 +346,7 @@ func (c *Client) GetUsageInfo(ctx context.Context) (*UsageInfo, error) {
 	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
 		return nil, err
 	}
+	info.direct = c.mode == ModeDirect
 
 	return &info, nil
 }

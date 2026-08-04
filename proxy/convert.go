@@ -539,7 +539,7 @@ func convertInputToMessages(input []types.ResponseInputItem, instructions *strin
 	}
 
 	for _, item := range input {
-		switch item.Type {
+		switch item.ItemType() {
 		case "reasoning":
 			ri := types.ReasoningItem{
 				ID:               item.ID,

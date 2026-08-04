@@ -14,6 +14,7 @@ import (
 
 const (
 	CopilotTokenURL = "https://api.github.com/copilot_internal/v2/token"
+	CopilotUserURL  = "https://api.github.com/copilot_internal/user"
 	DefaultBaseURL  = "https://api.individual.githubcopilot.com"
 )
 

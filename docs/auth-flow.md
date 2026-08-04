@@ -139,6 +139,7 @@ protocol (OpenAI / Anthropic / Gemini).
 | Base URL | Dynamic, from the token's `proxy-ep` (default `https://api.individual.githubcopilot.com`) | Static `https://api.githubcopilot.com` |
 | Header profile | `editor` | `opencode` |
 | Device Flow client id | `Iv1.b507a08c87ecfe98` | `Ov23li8tweQw6odWQebz` |
+| `GET /usage` | Supported via `copilot_internal/v2/token` | Supported via `copilot_internal/user`, using the raw GitHub OAuth token |
 
 ## Outbound header profiles
 
