@@ -108,7 +108,7 @@ func TestNormalizeNativeMessagesBody_RemovesCacheControlScope(t *testing.T) {
 }
 
 func TestUpstreamNativeHeaders(t *testing.T) {
-	h := upstreamNativeHeaders(false)
+	h := upstreamNativeHeaders(false, nil)
 	if got := h["anthropic-version"]; got != anthropicVersion {
 		t.Fatalf("anthropic-version = %q, want %q", got, anthropicVersion)
 	}
@@ -121,7 +121,7 @@ func TestUpstreamNativeHeaders(t *testing.T) {
 }
 
 func TestUpstreamNativeHeaders_ContextManagement(t *testing.T) {
-	h := upstreamNativeHeaders(true)
+	h := upstreamNativeHeaders(true, nil)
 	want := interleavedThinkingBeta + "," + contextManagementBeta + "," + compactionBeta
 	if got := h["anthropic-beta"]; got != want {
 		t.Fatalf("anthropic-beta = %q, want %q", got, want)
@@ -131,6 +131,34 @@ func TestUpstreamNativeHeaders_ContextManagement(t *testing.T) {
 	}
 	if len(h) != 2 {
 		t.Fatalf("headers = %v, want exactly anthropic-version and anthropic-beta", h)
+	}
+}
+
+func TestUpstreamNativeHeaders_ForwardsComputerUseBetasOnly(t *testing.T) {
+	h := upstreamNativeHeaders(false, []string{
+		" fast-mode-2026-02-01, x-computer-use-2025-11-24, computer-use-2025-11-24 ",
+		" Computer-use-2025-01-24, output-300k-2026-03-24 ",
+	})
+	want := interleavedThinkingBeta + ",computer-use-2025-11-24"
+	if got := h["anthropic-beta"]; got != want {
+		t.Fatalf("anthropic-beta = %q, want %q", got, want)
+	}
+}
+
+func TestUpstreamNativeHeaders_DeduplicatesComputerUseBetas(t *testing.T) {
+	h := upstreamNativeHeaders(true, []string{
+		"computer-use-2025-11-24,computer-use-2025-01-24",
+		"computer-use-2025-11-24",
+	})
+	want := strings.Join([]string{
+		interleavedThinkingBeta,
+		contextManagementBeta,
+		compactionBeta,
+		"computer-use-2025-11-24",
+		"computer-use-2025-01-24",
+	}, ",")
+	if got := h["anthropic-beta"]; got != want {
+		t.Fatalf("anthropic-beta = %q, want %q", got, want)
 	}
 }
 

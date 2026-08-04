@@ -1108,7 +1108,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
             <td><span class="badge diff">↔ 有意剥离</span> 既定行为</td>
           </tr>
           <tr>
-            <td>客户端 <code>anthropic-beta</code> 头(白名单外,如 <code>code-execution-2025-08-25</code>)</td>
+            <td>客户端 <code>anthropic-beta</code> 头（<code>computer-use-*</code> 白名单外，如 <code>code-execution-2025-08-25</code>）</td>
             <td><span class="badge no">✕ 400</span> 上游 allowlist 拒</td>
             <td><span class="badge ok">✓ 200</span> 剥头后工具照常执行</td>
             <td><span class="badge diff">↔ 有意剥离</span> 白名单策略</td>
@@ -1118,7 +1118,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
     </div>
     <ul class="notes" style="margin-top: 28px;">
       <li><code>output_config.format</code> / strict tool 在 native 路由<strong>逐字节透传</strong>,端到端 schema 严格生效(07-12 经代理落 Bedrock 实测通过)。</li>
-      <li><code>POST /v1/messages/count_tokens</code> 已代理到上游计数器(此前 404);<code>search_result</code> 内容块的裸字符串 <code>source</code> 已修复解析;1M 上下文 <code>anthropic-beta: context-1m</code> 处理已修复(仅在必要且 <code>-1m</code> 变体真实存在时切换)。</li>
+      <li><code>POST /v1/messages/count_tokens</code> 已代理到上游计数器(此前 404);<code>computer-use-*</code> beta 在 Messages 与 Count Tokens 路径按窄白名单转发;<code>search_result</code> 内容块的裸字符串 <code>source</code> 已修复解析;1M 上下文 <code>anthropic-beta: context-1m</code> 处理已修复(仅在必要且 <code>-1m</code> 变体真实存在时切换)。</li>
     </ul>
   </div>
   <div class="s-foot"><span>Proxy Conformance · 5.1 (1 of 2)</span><span>2026-07-13</span></div>
