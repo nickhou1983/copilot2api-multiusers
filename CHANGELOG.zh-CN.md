@@ -6,6 +6,7 @@
 
 ### 新特性
 
+- 原生 `/v1/messages` 流式响应在长推理静默期保持连接存活:当上游持续 `COPILOT2API_SSE_KEEPALIVE_SECONDS` 秒(默认 `15`,设为 `0` 关闭)不发送任何字节时,代理会注入 Anthropic `ping` 事件(`event: ping` / `data: {"type": "ping"}`),避免空闲 SSE 连接被 NAT、CDN、网关或负载均衡器驱逐。ping 只会在 SSE 事件边界注入,因此剔除 ping 后转发的流与上游逐字节一致;符合规范的 Anthropic 客户端会直接丢弃 ping,不会影响消息累加。
 - 新增按账号的认证模式:`exchange`(默认,行为不变)通过 `copilot_internal/v2/token` 铸造短时 Copilot token;新增的 `direct` 模式直接把 GitHub OAuth token 作为 Copilot bearer,使用静态 base URL(`https://api.githubcopilot.com`)且无 token 刷新。可在 `accounts.json` 中按账号设置 `auth_mode`,或通过新的 `COPILOT2API_AUTH_MODE` 环境变量设置全局默认(账号设置优先)。GitHub Device Flow 按模式选择 client id(`exchange` → `Iv1.b507a08c87ecfe98`,`direct` → `Ov23li8tweQw6odWQebz`),出站请求使用与模式对应的请求头 profile:exchange 用 `editor`(VS Code Copilot Chat,与之前一致),direct 用 `opencode`(`User-Agent: opencode/…`、`Openai-Intent: conversation-edits`、`X-Initiator: user`,不含 editor / request-id 头)。管理界面与 API 支持在创建账号时设置 `auth_mode`,也支持更新时修改(会重建该账号的 auth client)。既有配置不受影响——缺省 `auth_mode` 即保持 exchange 行为。
 - 原生 `/v1/messages`（及 `/v1/messages/count_tokens`）的上游请求发送 `anthropic-version: 2023-06-01` 与基础 beta `interleaved-thinking-2025-05-14`。客户端 `anthropic-beta` token 默认仍会被过滤，仅窄范围放行 Anthropic Computer Use 工具类型所需的 `computer-use-*`，并对重复白名单 token 去重；`context-1m*` token 仍只在本地消费用于切换 `-1m` 模型变体，不向上游转发。
 - 原生 `/v1/messages`（及 count_tokens）自动注入 context-management beta：当请求 body 顶层含 `context_management` 字段时，代理在出站 `anthropic-beta` 头中追加 `context-management-2025-06-27` 与 `compact-2026-01-12`（与基础的 `interleaved-thinking-2025-05-14` 并列），客户端无需自带 beta 头即可使用上下文编辑与服务端压缩。
@@ -22,6 +23,8 @@
 
 ### Bug 修复
 
+- 修复原生 `/v1/messages` 流式响应把 HTTP 响应头扣留到上游首字节到达的问题。现在上游流建立后会立即 flush 响应头(含 `Content-Type: text/event-stream`),长推理静默期不会再在产出任何数据之前就触发客户端与中间层的「响应头超时」。此行为与 OpenAI、Gemini 流式路径原本的做法一致。
+- 修复原生 `/v1/messages` 流在客户端断开后仍继续读完上游响应的问题。现在请求 context 被取消(或写入失败)时会立即中止并释放上游连接,不再继续读取剩余响应 —— 长流场景下此前可能白白多跑数分钟。
 - 修复 `POST /v1/responses` 对所有上游不原生支持 Responses API 的模型（如 `claude-*`、`gemini-*`、`kimi-k2.7-code`)一律返回 `400 "Invalid JSON in request body"` 的问题。Responses→Chat Completions 转换路径此前只把 `input` 解析为数组，导致 OpenAI 官方文档中的字符串简写形式（`"input": "hello"`）解析失败。现在 `input` 同时接受纯字符串与输入项数组。
 - 修复 `POST /v1/responses` 在转换为 Chat Completions 时丢弃缺省 `type` 字段的输入项的问题（表现为上游返回 `400 "messages must be non-empty"`）。携带 `role` 的输入项现在按消息处理，与 Responses API 中 `type` 默认为 `"message"` 的行为一致。
 - 修复 `direct` 认证模式账号的 `GET /usage`:改用原始 GitHub OAuth token 查询 `copilot_internal/user`。响应现在包含账号的 Copilot 套餐、配额重置日期以及 `chat`、`completions`、`premium_interactions` 配额快照,不再错误地走仅适用于 exchange 模式的 `copilot_internal/v2/token` 路径。

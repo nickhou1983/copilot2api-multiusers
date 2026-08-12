@@ -2,13 +2,16 @@ package anthropic
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
+	"os"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -17,18 +20,52 @@ import (
 	"github.com/whtsky/copilot2api/internal/upstream"
 )
 
+// nativeKeepAliveFrame matches the Anthropic ping event format. The official
+// SDKs skip it unconditionally without parsing its data (anthropic-sdk-python
+// _streaming.py: `if sse.event == "ping": continue`), so injecting it is safe
+// for any conforming Anthropic client and never reaches the message accumulator.
+const nativeKeepAliveFrame = "event: ping\ndata: {\"type\": \"ping\"}\n\n"
+
+// defaultKeepAliveInterval sits below the idle-eviction thresholds commonly
+// applied by NATs, CDNs and load balancers (AWS ALB defaults to 60s) while
+// staying above the ~10s cadence observed from Anthropic upstream.
+const defaultKeepAliveInterval = 15 * time.Second
+
+// keepAliveEnvVar configures the native /v1/messages streaming keep-alive.
+const keepAliveEnvVar = "COPILOT2API_SSE_KEEPALIVE_SECONDS"
+
+// keepAliveIntervalFromEnv parses COPILOT2API_SSE_KEEPALIVE_SECONDS. A value of
+// 0 disables keep-alive; invalid values fall back to the default.
+func keepAliveIntervalFromEnv() time.Duration {
+	v := os.Getenv(keepAliveEnvVar)
+	if v == "" {
+		return defaultKeepAliveInterval
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil || n < 0 {
+		slog.Warn("invalid "+keepAliveEnvVar+", using default",
+			"value", v, "default_seconds", int(defaultKeepAliveInterval.Seconds()))
+		return defaultKeepAliveInterval
+	}
+	return time.Duration(n) * time.Second
+}
+
 // Handler handles Anthropic Messages API requests
 type Handler struct {
 	upstream *upstream.Client
 	models   *models.Cache
+	// keepAliveInterval is the idle period after which a ping event is injected
+	// into native /v1/messages streams. Zero disables keep-alive.
+	keepAliveInterval time.Duration
 }
 
 // NewHandler creates a new Anthropic handler.
 // The transport is used for upstream HTTP requests (pass nil to create a new one).
 func NewHandler(authClient upstream.TokenProvider, transport *http.Transport, mc *models.Cache) *Handler {
 	return &Handler{
-		upstream: upstream.NewClient(authClient, transport),
-		models:   mc,
+		upstream:          upstream.NewClient(authClient, transport),
+		models:            mc,
+		keepAliveInterval: keepAliveIntervalFromEnv(),
 	}
 }
 
@@ -183,31 +220,12 @@ func (h *Handler) handleNativeMessagesPassthrough(w http.ResponseWriter, r *http
 		}
 
 		sse.BeginSSE(w)
+		// Send the response headers immediately instead of waiting for the first
+		// upstream byte: long thinking phases would otherwise stall the 200 OK
+		// past client and intermediary response-header timeouts.
+		flusher.Flush()
 
-		reader := bufio.NewReaderSize(resp.Body, 32*1024)
-		for {
-			line, err := reader.ReadBytes('\n')
-			if len(line) > 0 {
-				if _, writeErr := w.Write(line); writeErr != nil {
-					slog.Error("failed to write native /messages stream", "error", writeErr)
-					return
-				}
-				// Flush at SSE event boundaries (blank lines) instead of every line
-				// to reduce syscall overhead while maintaining correct SSE delivery.
-				if isBlankSSELine(line) {
-					flusher.Flush()
-				}
-			}
-
-			if errors.Is(err, io.EOF) {
-				break
-			}
-			if err != nil {
-				slog.Error("error reading native /messages stream", "error", err)
-				return
-			}
-		}
-
+		h.pipeNativeStream(r.Context(), w, flusher, resp.Body)
 		return
 	}
 
@@ -225,6 +243,102 @@ func (h *Handler) handleNativeMessagesPassthrough(w http.ResponseWriter, r *http
 
 	w.Header().Set("Content-Type", "application/json")
 	_, _ = w.Write(respData)
+}
+
+// pipeNativeStream forwards the upstream SSE stream to the client line by line,
+// injecting Anthropic ping events at event boundaries whenever the upstream has
+// been idle for longer than h.keepAliveInterval.
+//
+// Reading runs in its own goroutine so the main loop stays the sole writer:
+// http.ResponseWriter is not safe for concurrent use, and only the writing loop
+// can know whether the stream currently sits on an SSE event boundary.
+func (h *Handler) pipeNativeStream(ctx context.Context, w io.Writer, flusher http.Flusher, body io.Reader) {
+	reader := bufio.NewReaderSize(body, 32*1024)
+
+	type readResult struct {
+		line []byte
+		err  error
+	}
+	lines := make(chan readResult, 8)
+	done := make(chan struct{})
+	defer close(done)
+
+	go func() {
+		for {
+			line, err := reader.ReadBytes('\n')
+			select {
+			case lines <- readResult{line: line, err: err}:
+			case <-done:
+				return
+			}
+			if err != nil {
+				return
+			}
+		}
+	}()
+
+	// A nil tickC is never selected, which disables keep-alive without needing a
+	// separate forwarding loop.
+	var (
+		ticker *time.Ticker
+		tickC  <-chan time.Time
+	)
+	if h.keepAliveInterval > 0 {
+		ticker = time.NewTicker(h.keepAliveInterval)
+		defer ticker.Stop()
+		tickC = ticker.C
+	}
+
+	atBoundary := true // the start of the stream is a valid event boundary
+	pings := 0
+
+	for {
+		select {
+		case res := <-lines:
+			if len(res.line) > 0 {
+				if _, err := w.Write(res.line); err != nil {
+					slog.Error("failed to write native /messages stream", "error", err)
+					return
+				}
+				// Flush at SSE event boundaries (blank lines) instead of every line
+				// to reduce syscall overhead while maintaining correct SSE delivery.
+				atBoundary = isBlankSSELine(res.line)
+				if atBoundary {
+					flusher.Flush()
+				}
+			}
+			if errors.Is(res.err, io.EOF) {
+				slog.Debug("native /messages stream complete", "keepalive_pings", pings)
+				return
+			}
+			if res.err != nil {
+				slog.Error("error reading native /messages stream", "error", res.err)
+				return
+			}
+			if ticker != nil {
+				ticker.Reset(h.keepAliveInterval)
+			}
+
+		case <-tickC:
+			// Never split an SSE event: an injected frame would override the
+			// pending `event:` field, demoting the original event to an unnamed
+			// one that client SDKs discard silently. Fragmentation pauses last
+			// milliseconds, so the next tick will find a boundary.
+			if !atBoundary {
+				continue
+			}
+			if _, err := io.WriteString(w, nativeKeepAliveFrame); err != nil {
+				slog.Debug("client disconnected during keep-alive", "error", err)
+				return
+			}
+			flusher.Flush()
+			pings++
+
+		case <-ctx.Done():
+			slog.Debug("client disconnected, aborting native /messages stream", "keepalive_pings", pings)
+			return
+		}
+	}
 }
 
 // --- Chat Completions path (existing fallback) ---

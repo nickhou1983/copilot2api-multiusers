@@ -301,6 +301,7 @@ message = client.messages.create(
 | `COPILOT2API_TOKEN_DIR` | Token 存储目录 | `~/.config/copilot2api` |
 | `COPILOT2API_ACCOUNTS_FILE` | 多账号配置文件路径（参见 [多 GitHub 账号](#多-github-账号)） | `<token-dir>/accounts.json` |
 | `COPILOT2API_ADMIN_TOKEN` | 若设置，`/admin/` 界面将要求此 Token（`X-Admin-Token` 请求头或 `?admin_token=`） | _（未设置，无鉴权）_ |
+| `COPILOT2API_SSE_KEEPALIVE_SECONDS` | 原生 `/v1/messages` 流式响应的空闲保活间隔（秒），超过该时长未收到上游字节时注入 `ping` 事件，避免长推理静默期被 NAT、CDN 或负载均衡器切断。设为 `0` 关闭 | `15` |
 | `COPILOT2API_DEBUG` | 开启调试日志（`true`/`false`、`1`/`0`） | `false` |
 
 命令行参数优先级高于环境变量。
