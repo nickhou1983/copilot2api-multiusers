@@ -1,6 +1,6 @@
 # 原生 `/v1/messages` 透传:SSE Keep-alive 实现计划
 
-> 状态:待实现
+> 状态:**已实现**(提交 `ec94ec8`,分支 `feat/native-messages-sse-keepalive`)
 > 范围:**仅** `anthropic/handler.go` 的 `handleNativeMessagesPassthrough` 的 `stream=true` 分支
 > 不涉及:`proxy/stream.go`(OpenAI 透传)、`gemini/handler.go`、`anthropic` 的 OpenAI→Anthropic 转换路径(`streamSSE`)
 
@@ -439,14 +439,14 @@ func (h *Handler) pipeNativeStream(ctx context.Context, w io.Writer, flusher htt
 
 ## 9. 交付清单
 
-- [ ] `anthropic/handler.go` —— 新增 `nativeKeepAliveFrame`、`defaultKeepAliveInterval`、`keepAliveIntervalFromEnv()`
-- [ ] `anthropic/handler.go` —— `Handler` 增加 `keepAliveInterval` 字段,`NewHandler` 中初始化
-- [ ] `anthropic/handler.go` —— 新增 `pipeNativeStream()`,替换 `handleNativeMessagesPassthrough` 中的内联循环
-- [ ] `anthropic/handler.go` —— `sse.BeginSSE(w)` 后补 `flusher.Flush()`(修复 A)
-- [ ] `anthropic/native_stream_test.go` —— 覆盖 §8 全部 8 个用例
-- [ ] `CHANGELOG.md` —— `## [Unreleased]` 下的 `Features` / `Bug Fixes`
-- [ ] `CHANGELOG.zh-CN.md` —— 同步
-- [ ] `README.md` / `README.zh-CN.md` —— 环境变量说明
+- [x] `anthropic/handler.go` —— 新增 `nativeKeepAliveFrame`、`defaultKeepAliveInterval`、`keepAliveIntervalFromEnv()`
+- [x] `anthropic/handler.go` —— `Handler` 增加 `keepAliveInterval` 字段,`NewHandler` 中初始化
+- [x] `anthropic/handler.go` —— 新增 `pipeNativeStream()`,替换 `handleNativeMessagesPassthrough` 中的内联循环
+- [x] `anthropic/handler.go` —— `sse.BeginSSE(w)` 后补 `flusher.Flush()`(修复 A)
+- [x] `anthropic/native_stream_test.go` —— 覆盖 §8 全部 8 个用例
+- [x] `CHANGELOG.md` —— `## [Unreleased]` 下的 `Features` / `Bug Fixes`
+- [x] `CHANGELOG.zh-CN.md` —— 同步
+- [x] `README.md` / `README.zh-CN.md` —— 环境变量说明
 
 验证命令:
 
@@ -456,6 +456,29 @@ go build ./...
 ```
 
 `-race` 是必需的:本改动引入了 goroutine 间通信。
+
+### 9.1 实测结果(已完成)
+
+```
+go test ./... -race -count=1     全部包通过
+gofmt / go vet / go build        干净
+```
+
+注:`gofmt -l .` 报告的 17 个文件在改动前的 `main` 分支上已存在(经 `git stash` 比对确认),与本次改动无关;本次新增/修改的两个文件格式干净。
+
+**变异测试** —— 临时移除防护逻辑以确认测试非假阳性:
+
+| 移除的逻辑 | 结果 |
+|---|---|
+| `if !atBoundary { continue }` | `NeverSplitsEvent` **FAIL**,精确复现 §4.2 B 组的损坏:`event: content_block_delta` 之后被塞入 6 个 ping,原事件名被覆盖 |
+| `flusher.Flush()` | `HeadersFlushedImmediately` **FAIL**,响应头被扣留 702ms(上游延迟 700ms) |
+
+**相对计划的偏离:**
+
+1. 增补 `keepAliveEnvVar` 常量,使测试引用变量名而非硬编码字符串
+2. 增补两个计划外用例:`StopsOnWriteFailure`(写失败兜底路径)与 `PingsReachClientIncrementally`(经真实 `httptest` server + HTTP 客户端验证 ping 实时刷新而非末尾缓冲——in-memory recorder 的 `Flush` 是 no-op,覆盖不到这一维度)
+
+最终测试文件共 10 个测试(含 6 个子测试)。
 
 ---
 
