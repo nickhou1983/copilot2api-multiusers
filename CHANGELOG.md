@@ -48,6 +48,7 @@
 - Document the `/v1/messages/count_tokens` endpoint and native-passthrough fields (`context_management`, `search_result`) in both `README.md` and `README.zh-CN.md` (Features list and API Endpoints table).
 - Document multi-account, admin UI, and token-usage stats in the README, and add Simplified Chinese translations (`README.zh-CN.md`, `CHANGELOG.zh-CN.md`) with language switch links.
 - Add `scripts/capability-request-response-guide.md` — a Chinese learning guide generated from a live full-matrix run, listing every capability case with its purpose, the exact request sent (endpoint, beta headers, JSON body) and the observed response (parsed JSON, or SSE event samples for streaming), with direct-upstream differences noted where the proxy behaves differently.
+- Add `scripts/capability-request-response-guide.fr.md` — a French translation of the capability request/response guide, covering the same cases and live measurements as the Chinese original.
 
 ### Tests
 

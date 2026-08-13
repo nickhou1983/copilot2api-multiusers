@@ -45,6 +45,7 @@
 - 在 `README.md` 与 `README.zh-CN.md` 中记录 `/v1/messages/count_tokens` 端点及原生透传字段（`context_management`、`search_result`）（Features 列表与 API 端点表）。
 - 在 README 中记录多账号、管理界面与 Token 用量统计，并新增简体中文翻译（`README.zh-CN.md`、`CHANGELOG.zh-CN.md`）及语言切换链接。
 - 新增 `scripts/capability-request-response-guide.md` —— 一份基于全量矩阵实测生成的中文学习指南：逐条列出每个能力用例的作用说明、实际发送的请求（端点、beta 头、JSON 请求体）与观测到的响应（解析后的 JSON，流式用例为 SSE 事件样本），并在代理与直连上游行为不同处单独标注。
+- 新增 `scripts/capability-request-response-guide.fr.md` —— 能力请求/响应指南的法语翻译版，覆盖与中文原版相同的用例与实测数据。
 
 ### 测试
 
