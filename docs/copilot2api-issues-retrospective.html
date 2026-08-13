@@ -442,6 +442,61 @@ tr:last-child td { border-bottom: none; }
 .general-support-slide .q7pp-tbl th { padding: 7px 12px; font-size: 13px; }
 .general-support-slide .badge { font-size: 13px; padding: 2px 8px; margin-right: 5px; }
 .general-support-slide .support-note { font-size: 14px; line-height: 1.45; color: var(--ink-soft); margin-top: 8px; }
+.sse-ping-slide .sec-head { margin-bottom: 12px; }
+.sse-ping-slide .sec-lede { font-size: 18px; line-height: 1.45; margin-bottom: 14px; }
+.sse-flow {
+  display: grid; grid-template-columns: 1fr 86px 1.18fr 86px 1fr;
+  gap: 12px; align-items: stretch; margin-bottom: 16px;
+}
+.sse-node {
+  min-height: 190px; padding: 18px 20px;
+  border: 2px solid var(--rule); background: var(--paper-raise);
+  box-shadow: 7px 7px 0 rgba(26,25,19,.08);
+}
+.sse-node.proxy { border-color: var(--orange); background: var(--tint-orange); }
+.sse-node .node-k {
+  font-family: var(--mono); font-size: 13px; font-weight: 600;
+  letter-spacing: .14em; text-transform: uppercase; color: var(--orange-ink);
+  margin-bottom: 10px;
+}
+.sse-node .node-v { font-size: 17px; line-height: 1.45; color: var(--ink-soft); }
+.sse-node .node-v strong { color: var(--ink); }
+.sse-wire {
+  align-self: center; text-align: center; color: var(--orange);
+  font-family: var(--mono); font-size: 13px; line-height: 1.35;
+}
+.sse-wire::after { content: "→"; display: block; font-size: 48px; line-height: 1; }
+.sse-detail-grid { display: grid; grid-template-columns: 1fr 1.08fr; gap: 20px; align-items: stretch; }
+.sse-detail-grid .panel { padding: 14px 18px; }
+.sse-detail-title {
+  font-family: var(--mono); font-size: 14px; font-weight: 600;
+  letter-spacing: .12em; text-transform: uppercase; color: var(--orange-ink);
+  margin-bottom: 8px;
+}
+.sse-mini-list { list-style: none; }
+.sse-mini-list li {
+  position: relative; padding: 5px 0 5px 24px;
+  font-size: 15px; line-height: 1.4; color: var(--ink-soft);
+  border-bottom: 1px dashed var(--hairline);
+}
+.sse-mini-list li:last-child { border-bottom: none; }
+.sse-mini-list li::before { position: absolute; left: 0; top: 5px; font-family: var(--mono); font-weight: 600; }
+.sse-mini-list li.yes::before { content: "✓"; color: var(--pass); }
+.sse-mini-list li.no::before { content: "×"; color: var(--fail); }
+.sse-mini-list strong { color: var(--ink); }
+.sse-ping-slide .q7pp-tbl td { padding: 7px 11px; font-size: 14px; line-height: 1.35; }
+.sse-ping-slide .q7pp-tbl th { padding: 7px 11px; font-size: 12px; }
+.sse-watchdog {
+  display: grid; grid-template-columns: auto 1fr auto;
+  gap: 16px; align-items: center; margin-top: 14px; padding: 11px 16px;
+  border: 2px solid var(--pass); background: var(--tint-pass);
+  font-size: 15px; line-height: 1.4; color: var(--ink-soft);
+}
+.sse-watchdog strong { color: var(--ink); }
+.sse-watchdog .watchdog-config {
+  font-family: var(--mono); font-size: 13px; color: var(--pass);
+  white-space: nowrap;
+}
 td.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 
 /* 判定徽章 */
@@ -650,12 +705,12 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="title-body">
     <p class="kicker reveal">问题复盘 · Issues &amp; Resolutions</p>
     <h1 class="reveal">测试与咨询问题<br><span class="amp">×</span> 解决方案复盘</h1>
-    <p class="title-sub reveal">汇总 2026-06-10 ~ 07-20 期间在 copilot2api 项目中的全部测试与咨询：上游能力缺口 · 413 请求体超限 · Thinking Signature · Structured Outputs(Vertex) · Token 与认证 · SSE 流式稳定性 · Client-ID 模型可见性 · 缓存与多账户。每个问题按「现象 → 分析 → 解决方案/结论」组织。</p>
+    <p class="title-sub reveal">汇总 2026-06-10 ~ 08-13 期间在 copilot2api 项目中的全部测试与咨询：上游能力缺口 · 413 请求体超限 · Thinking Signature · Structured Outputs(Vertex) · Token 与认证 · SSE 流式稳定性与 Ping 保活 · Client-ID 模型可见性 · 缓存与多账户。每个问题按「现象 → 分析 → 解决方案/结论」组织。</p>
   </div>
-  <div class="stamp">Compiled<small>2026-07-19 · 会话复盘</small></div>
+  <div class="stamp">Compiled<small>2026-08-13 · 会话复盘</small></div>
   <div class="title-block reveal">
-    <div class="tb"><div class="tb-k">Report Date / 报告日期</div><div class="tb-v">2026-07-19</div></div>
-    <div class="tb"><div class="tb-k">Scope / 范围</div><div class="tb-v">60+ 会话 · 40 天</div></div>
+    <div class="tb"><div class="tb-k">Report Date / 报告日期</div><div class="tb-v">2026-08-13</div></div>
+    <div class="tb"><div class="tb-k">Scope / 范围</div><div class="tb-v">60+ 会话 · 65 天</div></div>
     <div class="tb"><div class="tb-k">Method / 方法</div><div class="tb-v">会话记录 + git 提交复盘</div></div>
     <div class="tb"><div class="tb-k">Companion / 姊妹文档</div><div class="tb-v"><code>copilot-capability-report.html</code></div></div>
   </div>
@@ -666,7 +721,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Key Figures — 关键指标</span>
-    <span class="doc-pg">02 / 23</span>
+    <span class="doc-pg">02 / 24</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -687,7 +742,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
         <span class="k-idx">FIG.02</span>
         <div class="k-label">复盘会话</div>
         <div class="k-value">60<span class="unit">+</span></div>
-        <div class="k-note">2026-06-10 ~ 07-19,CLI + VS Code Chat</div>
+        <div class="k-note">2026-06-10 ~ 08-13,CLI + VS Code Chat</div>
       </div>
       <div class="kpi" role="listitem">
         <span class="k-idx">FIG.03</span>
@@ -699,7 +754,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
         <span class="k-idx">FIG.04</span>
         <div class="k-label">修复/功能落地</div>
         <div class="k-value">10<span class="unit">+</span></div>
-        <div class="k-note">beta 头转发 · 1M 解析修复 · ModeDirect · 账户池 …</div>
+        <div class="k-note">beta 头转发 · 1M 修复 · ModeDirect · SSE Ping · 账户池 …</div>
       </div>
       <div class="kpi" role="listitem">
         <span class="k-idx">FIG.05</span>
@@ -710,8 +765,8 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
       <div class="kpi" role="listitem">
         <span class="k-idx">FIG.06</span>
         <div class="k-label">专用探测脚本</div>
-        <div class="k-value">4<span class="unit">套</span></div>
-        <div class="k-note">capability / structured_outputs / TTFT / 2M payload</div>
+        <div class="k-value">5<span class="unit">套</span></div>
+        <div class="k-note">capability / structured_outputs / TTFT / 2M payload / SSE keep-alive</div>
       </div>
     </div>
   </div>
@@ -723,7 +778,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 01 — Upstream Gaps</span>
-    <span class="doc-pg">03 / 23</span>
+    <span class="doc-pg">03 / 24</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -779,7 +834,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 01 — Upstream Gaps</span>
-    <span class="doc-pg">04 / 23</span>
+    <span class="doc-pg">04 / 24</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -812,7 +867,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 02 — HTTP 413</span>
-    <span class="doc-pg">05 / 23</span>
+    <span class="doc-pg">05 / 24</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -856,7 +911,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 02 — HTTP 413</span>
-    <span class="doc-pg">06 / 23</span>
+    <span class="doc-pg">06 / 24</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -895,7 +950,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 03 — Thinking Signature</span>
-    <span class="doc-pg">07 / 23</span>
+    <span class="doc-pg">07 / 24</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -932,7 +987,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 04 — Structured Outputs</span>
-    <span class="doc-pg">08 / 23</span>
+    <span class="doc-pg">08 / 24</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -983,7 +1038,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 05 — Auth &amp; Token</span>
-    <span class="doc-pg">09 / 23</span>
+    <span class="doc-pg">09 / 24</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1029,7 +1084,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 06 — SSE Stability</span>
-    <span class="doc-pg">10 / 23</span>
+    <span class="doc-pg">10 / 24</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1055,7 +1110,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
       <li><strong>时间维度而非体积:</strong>对照组 <code>haiku-4.5</code> 在 <strong>185s</strong> 内完整交付 62,005 tok 并正常收尾(<code>end_turn</code>+<code>message_stop</code>+<code>[DONE]</code>)—— 未撞 630s 即结束,故限制是时长。三次实验均<strong>无</strong> <code>message_delta</code>/<code>message_stop</code>/<code>[DONE]</code>,最后一个事件是普通 <code>content_block_delta</code>(直连那次末行数字被拦腰截断)。</li>
       <li><strong>630s 窗口实际可交付(实测吞吐):</strong>haiku ~335 tok/s 可跑满 64K;sonnet-5 ~170 tok/s 约 10 万 tok(跑不满 128K);opus-4.8 ~50 tok/s 约 3 万 tok。<strong>单次上限 = min(<code>max_tokens</code> 上限, 速率 × 630s)</strong>。</li>
       <li><strong>客户端必读:</strong>「流突然 EOF / HTTP/2 stream error 且无 <code>message_stop</code>」必须当作<strong>可恢复截断</strong>处理(保留已收内容 + 续写重试),不可当完整响应;300K 级输出需多轮拼接(haiku 1 轮 / sonnet-5 ~3 轮 / opus-4.8 10+ 轮)。</li>
-      <li><strong>代理侧结论:</strong>copilot2api 流式路径<strong>无 ReadTimeout</strong>(<code>main.go</code> 特意不设),并发/锁/CPU/内存逐项排除 —— 已确认非代理瓶颈。针对(a)类空闲超时,代理可注入 SSE 心跳注释行(<code>: ping\n\n</code>)保活缓解。</li>
+      <li><strong>代理侧结论:</strong>copilot2api 流式路径<strong>无 ReadTimeout</strong>(<code>main.go</code> 特意不设),并发/锁/CPU/内存逐项排除 —— 已确认非代理瓶颈。针对(a)类下游空闲超时,当前分支已在原生 <code>/v1/messages</code> 注入 Anthropic 标准 Ping(<code>event: ping</code>),见 Q6++。</li>
     </ul>
   </div>
   <div class="s-foot"><span>Issue 06 · SSE Stability</span><span>2026-07-22</span></div>
@@ -1066,7 +1121,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 06 延伸 — Three Failure Modes</span>
-    <span class="doc-pg">11 / 23</span>
+    <span class="doc-pg">11 / 24</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1102,19 +1157,83 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
     <ul class="notes" style="margin-top: 16px;">
       <li><strong>根因(官方证实):</strong>长推理静默期上游不吐任何字节 → 空闲 SSE 被中间层(NAT / CDN / 网关 / LB)在 <strong>~60–350s</strong> 驱逐,或服务端 / H2 层直接关闭。<a href="https://github.com/anthropics/claude-code/issues/70017" style="color:var(--orange);text-decoration:none;">claude-code #70017</a> 社区实测:单会话 <strong>7 次</strong>断连、4.5h 编排 <strong>11 次</strong>、静默窗口最长 <strong>~1h42m</strong>;客户端疑未设 <code>SO_KEEPALIVE</code>。</li>
       <li><strong>官方缺口:</strong>TCP keepalive 只挡 NAT 驱逐;流重试仅覆盖<strong>前台</strong>路径,Agent-tool 子代理派发<strong>无任何重试</strong>,中途断连即永久死亡。官方诉求为服务端 <strong>SSE 心跳帧(≤30s)</strong>,但尚未进入 roadmap。</li>
-      <li><strong>代理侧解决方案(可落地):</strong>上游短期不会加心跳,copilot2api 作为中间层正是补心跳的最佳位置 —— 转发时若检测到 N 秒无上游字节,向下游注入 SSE 注释行(<code>: ping\n\n</code>)保活,即可消除本失败类,不改上游 / 客户端。</li>
+      <li><strong>代理侧解决方案(已落地):</strong>提交 <code>ec94ec8</code> 在原生 <code>/v1/messages</code> 转发时检测上游静默,默认每 15s 向下游注入 Anthropic 标准 <code>ping</code> 事件;只在 SSE 事件边界写入并立即 Flush,无需改上游或合规 Anthropic 客户端。</li>
       <li><strong>与 630s 硬上限的区别:</strong>本页三种死法源于<strong>静默期</strong>(可被心跳缓解);上一页 630s 是<strong>持续吐字仍被切断</strong>的时间硬上限(心跳无解,只能多轮续写)。两者可叠加出现。</li>
     </ul>
   </div>
   <div class="s-foot"><span>Issue 06 延伸 · Three Failure Modes</span><span>2026-07-17</span></div>
 </section>
 
-<!-- ==================== SLIDE 12 · Q7 OpenCode 模型不全 ==================== -->
+<!-- ==================== SLIDE 12 · Q6 延伸 SSE Ping ==================== -->
+<section class="slide sse-ping-slide" aria-label="Q6 延伸 SSE Ping 实现">
+  <div class="s-top">
+    <span class="doc-no">TD-2620</span>
+    <span class="doc-sec">Issue 06 延伸 — Native SSE Ping</span>
+    <span class="doc-pg">12 / 24</span>
+  </div>
+  <div class="s-body">
+    <div class="sec-head reveal">
+      <div class="sec-no">Q6＋＋</div>
+      <div>
+        <div class="sec-label">Issue 06 延伸 — 原生 /v1/messages SSE Keep-alive（2026-08-13）</div>
+        <h2>SSE Ping 已落地：保护下游静默窗口，抑制 watchdog 误报</h2>
+      </div>
+    </div>
+    <p class="sec-lede reveal">当前分支 <code>feat/native-messages-sse-keepalive</code> 通过提交 <code>ec94ec8</code> 增加空闲保活：上游响应头到达后启动计时器；若连续 <strong>15 秒</strong>没有读到完整上游行，且当前位于 SSE 事件边界，则向客户端注入标准 Anthropic Ping。</p>
+    <div class="sse-flow reveal" aria-label="SSE Ping 数据流">
+      <div class="sse-node">
+        <div class="node-k">01 · GitHub Copilot 上游</div>
+        <div class="node-v"><strong>不会主动发送应用层心跳</strong><br>实测 thinking 阶段可静默 <strong>167.664s</strong><br><code>message_start</code> 后可能长时间无 body 字节</div>
+      </div>
+      <div class="sse-wire">上游 SSE<br>只读</div>
+      <div class="sse-node proxy">
+        <div class="node-k">02 · pipeNativeStream</div>
+        <div class="node-v"><strong>读 goroutine + 主循环唯一写者</strong><br><code>ReadBytes('\n')</code> → channel → <code>select</code><br>上游行到达即 Reset；空闲 tick 仅在空行边界写 Ping</div>
+      </div>
+      <div class="sse-wire">转发 + Ping<br>立即 Flush</div>
+      <div class="sse-node">
+        <div class="node-k">03 · Anthropic 客户端</div>
+        <div class="node-v"><strong><code>event: ping</code></strong><br><code>data: {"type": "ping"}</code><br>官方 SDK 直接忽略，不进入 message/content 累加器</div>
+      </div>
+    </div>
+    <div class="sse-detail-grid reveal">
+      <div class="panel">
+        <div class="sse-detail-title">生效范围与配置</div>
+        <ul class="sse-mini-list">
+          <li class="yes"><strong>仅 Native：</strong><code>POST /v1/messages</code> + <code>stream=true</code></li>
+          <li class="yes"><strong>默认 15s：</strong><code>COPILOT2API_SSE_KEEPALIVE_SECONDS</code>；<code>0</code> 关闭</li>
+          <li class="yes"><strong>连接探针：</strong>客户端断开时 Ping 写失败，立即停止并关闭上游 Body</li>
+          <li class="no"><strong>未覆盖：</strong>Anthropic 转换路径、OpenAI、Responses、Gemini streaming</li>
+        </ul>
+      </div>
+      <div class="panel">
+        <div class="sse-detail-title">能力边界：解决什么 / 不解决什么</div>
+        <table class="q7pp-tbl">
+          <thead><tr><th style="width:18%">结论</th><th>场景</th><th style="width:29%">原因</th></tr></thead>
+          <tbody>
+            <tr><td><span class="badge ok">解决</span></td><td>下游 NAT / CDN / LB 空闲回收；Claude Code watchdog 误报</td><td>持续产生可 Flush 的响应体字节</td></tr>
+            <tr><td><span class="badge no">无解</span></td><td>GitHub 上游 → Copilot2API 空闲断连；约 630s 绝对寿命</td><td>Ping 只向下游写，无法反向保活</td></tr>
+            <tr><td><span class="badge no">无解</span></td><td><code>http.Server.WriteTimeout</code> 或外层绝对请求时限</td><td>Ping 不会续期固定 deadline</td></tr>
+            <tr><td><span class="badge warn">盲区</span></td><td>等待 GitHub HTTP 响应头阶段；单个 SSE 事件中途静默</td><td>计时器尚未启动 / 为避免破坏事件而跳过</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="sse-watchdog reveal">
+      <span class="badge ok">Claude Code</span>
+      <div><strong>≥ 2.1.222 可用 Ping 重置约 20s idle watchdog：</strong>当自定义 <code>ANTHROPIC_BASE_URL</code> 已进入 Native SSE、上游响应头已到达且中间层不缓冲时，可避免静默 thinking 阶段误报 <code>Check your network</code>；真实断网、RST_STREAM 与 630s 硬切断仍会失败。</div>
+      <div class="watchdog-config">推荐：KEEPALIVE_SECONDS=10</div>
+    </div>
+  </div>
+  <div class="s-foot"><span>Issue 06 延伸 · Native SSE Ping</span><span>2026-08-13</span></div>
+</section>
+
+<!-- ==================== SLIDE 13 · Q7 OpenCode 模型不全 ==================== -->
 <section class="slide" aria-label="Q7 OpenCode 方案模型不全">
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 07 — Client-ID &amp; Model Visibility</span>
-    <span class="doc-pg">12 / 23</span>
+    <span class="doc-pg">13 / 24</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1156,12 +1275,12 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-foot"><span>Issue 07 · Client-ID &amp; Model Visibility</span><span>2026-07-20</span></div>
 </section>
 
-<!-- ==================== SLIDE 13 · Q7 实测 模型差异 & 1M 上下文 ==================== -->
+<!-- ==================== SLIDE 14 · Q7 实测 模型差异 & 1M 上下文 ==================== -->
 <section class="slide" aria-label="实测 两种方式模型差异与 1M 上下文">
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 07 · Live Probe — Model Diff &amp; 1M Context</span>
-    <span class="doc-pg">13 / 23</span>
+    <span class="doc-pg">14 / 24</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1215,12 +1334,12 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-foot"><span>Issue 07 · Live Probe</span><span>2026-07-22</span></div>
 </section>
 
-<!-- ==================== SLIDE 14 · Q7 实测 双模式调用与 Claude 地域过滤 ==================== -->
+<!-- ==================== SLIDE 15 · Q7 实测 双模式调用与 Claude 地域过滤 ==================== -->
 <section class="slide" aria-label="实测 双模式真实调用与 Claude 地域过滤">
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 07 · Live Invoke — Direct vs Exchange</span>
-    <span class="doc-pg">14 / 23</span>
+    <span class="doc-pg">15 / 24</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1280,12 +1399,12 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-foot"><span>Issue 07 · Live Invoke</span><span>2026-07-26</span></div>
 </section>
 
-<!-- ==================== SLIDE 15 · Header 过滤与请求体处理 ==================== -->
+<!-- ==================== SLIDE 16 · Header 过滤与请求体处理 ==================== -->
 <section class="slide" aria-label="代理 Header 过滤与请求体处理">
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Extended — Header Filtering</span>
-    <span class="doc-pg">15 / 23</span>
+    <span class="doc-pg">16 / 24</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1346,12 +1465,12 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-foot"><span>Extended · Header Filtering</span><span>2026-07-27</span></div>
 </section>
 
-<!-- ==================== SLIDE 16 · Anthropic Beta 支持清单 ==================== -->
+<!-- ==================== SLIDE 17 · Anthropic Beta 支持清单 ==================== -->
 <section class="slide beta-support-slide" aria-label="Anthropic Beta 支持清单">
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Extended — Anthropic Beta Support</span>
-    <span class="doc-pg">16 / 23</span>
+    <span class="doc-pg">17 / 24</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1420,12 +1539,12 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-foot"><span>Extended · Anthropic Beta Support</span><span>2026-08-04</span></div>
 </section>
 
-<!-- ==================== SLIDE 17 · 通用功能清单（基础能力） ==================== -->
+<!-- ==================== SLIDE 18 · 通用功能清单（基础能力） ==================== -->
 <section class="slide general-support-slide" aria-label="通用功能清单基础能力">
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Extended — General Capability Inventory</span>
-    <span class="doc-pg">17 / 23</span>
+    <span class="doc-pg">18 / 24</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1502,12 +1621,12 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-foot"><span>Extended · General Capability Inventory I</span><span>2026-08-04</span></div>
 </section>
 
-<!-- ==================== SLIDE 18 · 通用功能清单（高级能力） ==================== -->
+<!-- ==================== SLIDE 19 · 通用功能清单（高级能力） ==================== -->
 <section class="slide general-support-slide" aria-label="通用功能清单高级能力">
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Extended — General Capability Inventory</span>
-    <span class="doc-pg">18 / 23</span>
+    <span class="doc-pg">19 / 24</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1589,12 +1708,12 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-foot"><span>Extended · General Capability Inventory II</span><span>2026-08-04</span></div>
 </section>
 
-<!-- ==================== SLIDE 19 · Beta 头黑名单实测 ==================== -->
+<!-- ==================== SLIDE 20 · Beta 头黑名单实测 ==================== -->
 <section class="slide" aria-label="Beta 头接受度实测">
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Extended — Beta Header Blocklist</span>
-    <span class="doc-pg">19 / 23</span>
+    <span class="doc-pg">20 / 24</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1658,12 +1777,12 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-foot"><span>Extended · Beta Header Blocklist</span><span>2026-07-26</span></div>
 </section>
 
-<!-- ==================== SLIDE 20 · 后端路由复测 ==================== -->
+<!-- ==================== SLIDE 21 · 后端路由复测 ==================== -->
 <section class="slide" aria-label="后端路由复测">
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Extended — Backend Routing Re-test</span>
-    <span class="doc-pg">20 / 23</span>
+    <span class="doc-pg">21 / 24</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1723,12 +1842,12 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-foot"><span>Extended · Backend Routing Re-test</span><span>2026-08-02</span></div>
 </section>
 
-<!-- ==================== SLIDE 21 · 缓存与多账户 ==================== -->
+<!-- ==================== SLIDE 22 · 缓存与多账户 ==================== -->
 <section class="slide" aria-label="缓存与多账户">
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Extended — Cache &amp; Multi-Account</span>
-    <span class="doc-pg">21 / 23</span>
+    <span class="doc-pg">22 / 24</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1760,12 +1879,12 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-foot"><span>Extended · Cache &amp; Multi-Account</span><span>2026-07-19</span></div>
 </section>
 
-<!-- ==================== SLIDE 22 · 工程产出索引 ==================== -->
+<!-- ==================== SLIDE 23 · 工程产出索引 ==================== -->
 <section class="slide" aria-label="工程产出索引">
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Deliverables Index</span>
-    <span class="doc-pg">22 / 23</span>
+    <span class="doc-pg">23 / 24</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1781,7 +1900,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
         <tbody>
           <tr>
             <td>修复 / 功能</td>
-            <td><code>738b8af</code> computer-use beta 头转发 · <code>256dd42</code> interleaved-thinking 转发 · <code>7983f2f</code> compaction beta 自动注入 · <code>b230a88</code> 1M 模型名解析修复(PR #1)· <code>eb1237a</code> search_result 内容块 · <code>a8718f4</code> API version → 2026-06-01 · count_tokens 代理</td>
+            <td><code>738b8af</code> computer-use beta 头转发 · <code>256dd42</code> interleaved-thinking 转发 · <code>7983f2f</code> compaction beta 自动注入 · <code>b230a88</code> 1M 模型名解析修复(PR #1)· <code>eb1237a</code> search_result 内容块 · <code>ec94ec8</code> Native SSE Ping · count_tokens 代理</td>
           </tr>
           <tr>
             <td>认证 / 账户</td>
@@ -1793,7 +1912,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
           </tr>
           <tr>
             <td>测试工具</td>
-            <td><code>scripts/capability_test.py</code>(95 项三层矩阵)· <code>scripts/structured_outputs_platform_test.py</code>(三平台字段风格)· TTFT 直连 vs 经代理基准 · 2M payload 生成器 · cache/thinking/image_url 探针</td>
+            <td><code>scripts/capability_test.py</code>(95 项三层矩阵)· <code>scripts/structured_outputs_platform_test.py</code>(三平台字段风格)· <code>scripts/sse_keepalive_test.py</code>(Proxy/Direct 活体对照)· TTFT 基准 · 2M payload 生成器</td>
           </tr>
           <tr>
             <td>文档 / 发布</td>
@@ -1806,13 +1925,13 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-foot"><span>Deliverables Index</span><span>2026-07-19</span></div>
 </section>
 
-<!-- ==================== SLIDE 23 · 结论与状态 ==================== -->
+<!-- ==================== SLIDE 24 · 结论与状态 ==================== -->
 <section class="slide" aria-label="结论与状态">
   <div class="crop tl"></div><div class="crop tr"></div><div class="crop bl"></div><div class="crop br"></div>
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Verdict — 结论与状态</span>
-    <span class="doc-pg">23 / 23</span>
+    <span class="doc-pg">24 / 24</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal" style="margin-bottom: 12px;">
@@ -1831,16 +1950,16 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
           <tr><td>Q3 Thinking Signature 转换丢失</td><td><span class="badge ok">✓ 已规避</span></td><td>需签名的客户端走原生 <code>/v1/messages</code> 透传(与直连等价)</td></tr>
           <tr><td>Q4 Vertex 不支持 Structured Outputs</td><td><span class="badge no">✕ 上游策略</span></td><td>GCP 组织策略缺口,漂到 Vertex 间歇失败;客户端对该 400 重试</td></tr>
           <tr><td>Q5 Token 刷新 / 免交换认证</td><td><span class="badge ok">✓ 已实现</span></td><td>惰性刷新已厘清;ModeDirect 完成实测,待合入 main</td></tr>
-          <tr><td>Q6 SSE 断流(EOF / RST_STREAM)</td><td><span class="badge ok">✓ 已定位</span></td><td>实测 ~630s 硬上限(时间维度非体积)＋ thinking 静默期空闲超时(#70017);经代理/直连交叉验证,代理侧可注入 SSE 心跳兜底</td></tr>
+          <tr><td>Q6 SSE 断流(EOF / RST_STREAM)</td><td><span class="badge warn">△ 部分缓解</span></td><td>Native <code>/v1/messages</code> 已注入 Anthropic Ping，保护代理→客户端空闲链路；上游空闲断连、约 630s 硬上限与 WriteTimeout 仍无法由心跳解决</td></tr>
           <tr><td>Q7 OpenCode 方案模型不全</td><td><span class="badge ok">✓ 已解决</span></td><td>模型可见性按 OAuth Client-ID 授权;换 OpenCode 的 Client-ID 申请 <code>gho_</code> token + <code>ProfileOpenCode</code> 头,拿到完整清单</td></tr>
         </tbody>
       </table>
     </div>
     <div class="colophon-label reveal" style="margin-top: 12px;">Sources / 数据来源</div>
     <ul class="sources reveal">
-      <li>会话记录 60+ 场(2026-06-10 ~ 07-20,Copilot CLI + VS Code Chat)· git 提交历史 · TD-2607 能力矩阵报告 · <code>scripts/</code> 三层实测报告与探测脚本输出</li>
+      <li>会话记录 60+ 场(2026-06-10 ~ 08-13,Copilot CLI + VS Code Chat)· git 提交历史 · TD-2607 能力矩阵报告 · <code>scripts/</code> 三层实测报告与 SSE 探测脚本输出</li>
     </ul>
-    <div class="end-mark reveal">End of Dossier · TD-2620 · 2026-07-20</div>
+    <div class="end-mark reveal">End of Dossier · TD-2620 · 2026-08-13</div>
   </div>
 </section>
 
@@ -1851,7 +1970,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
 <!-- 页码指示 + 导航按钮(舞台之外的 UI) -->
 <div class="deck-controls" aria-hidden="true">
   <button id="navPrev" title="上一页 (←)">‹</button>
-  <span id="pageIndicator">01 / 23</span>
+  <span id="pageIndicator">01 / 24</span>
   <button id="navNext" title="下一页 (→)">›</button>
 </div>
 
