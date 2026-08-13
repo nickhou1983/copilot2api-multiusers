@@ -230,3 +230,46 @@ at a model that lacks native messages support:
 
 Outputs are written under `scripts/out/` which is git-ignored — test artifacts
 are not committed.
+
+## SSE keep-alive tester (`sse_keepalive_test.py`)
+
+A separate live probe for the native `/v1/messages` streaming keep-alive. It
+sends one deliberately slow request — translate
+`capability-request-response-guide.md` (~22k tokens) into German — and reads the
+SSE response line by line with arrival timestamps.
+
+```bash
+# Auto-start a proxy with a 1s keep-alive and run the probe:
+python3 scripts/sse_keepalive_test.py --start-proxy --keepalive-seconds 1 \
+    --max-tokens 5000 --json scripts/out/sse-keepalive-de.json
+
+# Also hit the upstream directly for contrast (it injects no pings):
+python3 scripts/sse_keepalive_test.py --start-proxy --target both
+```
+
+What it asserts:
+
+- **No ping was dropped.** Rather than demanding a fixed count, it recomputes
+  the ticker's schedule from the idle windows actually observed and requires
+  that every ping the run made room for was sent. A fixed count would pass or
+  fail on how chatty the upstream happened to be that minute.
+- **No boundary silence beyond the interval** (`--gap-tolerance` slack). Silence
+  *inside* an event is excluded: the handler deliberately refuses to split an
+  `event:`/`data:` pair, so counting that against it would contradict the
+  invariant the feature exists to protect.
+- **The stream survived injection** — no unnamed frames, no malformed pings,
+  `message_start` / `message_stop` both present.
+
+`--min-pings N` adds a hard count on top, off by default.
+
+What the numbers looked like on a real run (2026-08-12, `claude-sonnet-4.6`,
+`--keepalive-seconds 1`): 1226 SSE events over 63s, **zero pings** — and that is
+the correct result. Once the upstream starts streaming it never goes quiet for
+more than ~0.4s, well under even the 1s floor (`COPILOT2API_SSE_KEEPALIVE_SECONDS`
+takes whole seconds only). The single longest silence of the whole request was
+the **5.5s before the upstream response headers arrived**, and the ticker only
+starts after that point, so the keep-alive cannot cover it today. Read the
+`响应头到达` line in the report before concluding anything from a ping count of
+zero. The deterministic injection cases live in
+`anthropic/native_stream_test.go` against a synthetic upstream.
+
