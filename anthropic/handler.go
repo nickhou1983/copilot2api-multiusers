@@ -34,20 +34,44 @@ const defaultKeepAliveInterval = 15 * time.Second
 // keepAliveEnvVar configures the native /v1/messages streaming keep-alive.
 const keepAliveEnvVar = "COPILOT2API_SSE_KEEPALIVE_SECONDS"
 
-// keepAliveIntervalFromEnv parses COPILOT2API_SSE_KEEPALIVE_SECONDS. A value of
-// 0 disables keep-alive; invalid values fall back to the default.
-func keepAliveIntervalFromEnv() time.Duration {
-	v := os.Getenv(keepAliveEnvVar)
+// defaultMaxUpstreamIdle bounds how long a native /v1/messages stream may sit
+// without a single upstream byte before it is aborted. Extended thinking can
+// legitimately stay silent for minutes, so this leaves ample headroom over the
+// 300s idle floor clients such as Claude Code enforce; it exists only to stop a
+// wedged upstream from pinning a goroutine, a client connection and an upstream
+// connection indefinitely, since keep-alive would otherwise ping forever.
+const defaultMaxUpstreamIdle = 10 * time.Minute
+
+// maxUpstreamIdleEnvVar configures the native /v1/messages silence ceiling.
+const maxUpstreamIdleEnvVar = "COPILOT2API_SSE_MAX_IDLE_SECONDS"
+
+// durationFromEnv parses a whole-number seconds value from the environment.
+// An unset or empty value yields def; 0 is honoured as "disabled"; negative or
+// unparseable values fall back to def with a warning.
+func durationFromEnv(name string, def time.Duration) time.Duration {
+	v := os.Getenv(name)
 	if v == "" {
-		return defaultKeepAliveInterval
+		return def
 	}
 	n, err := strconv.Atoi(v)
 	if err != nil || n < 0 {
-		slog.Warn("invalid "+keepAliveEnvVar+", using default",
-			"value", v, "default_seconds", int(defaultKeepAliveInterval.Seconds()))
-		return defaultKeepAliveInterval
+		slog.Warn("invalid "+name+", using default",
+			"value", v, "default_seconds", int(def.Seconds()))
+		return def
 	}
 	return time.Duration(n) * time.Second
+}
+
+// keepAliveIntervalFromEnv parses COPILOT2API_SSE_KEEPALIVE_SECONDS. A value of
+// 0 disables keep-alive; invalid values fall back to the default.
+func keepAliveIntervalFromEnv() time.Duration {
+	return durationFromEnv(keepAliveEnvVar, defaultKeepAliveInterval)
+}
+
+// maxUpstreamIdleFromEnv parses COPILOT2API_SSE_MAX_IDLE_SECONDS. A value of 0
+// disables the ceiling; invalid values fall back to the default.
+func maxUpstreamIdleFromEnv() time.Duration {
+	return durationFromEnv(maxUpstreamIdleEnvVar, defaultMaxUpstreamIdle)
 }
 
 // Handler handles Anthropic Messages API requests
@@ -57,6 +81,9 @@ type Handler struct {
 	// keepAliveInterval is the idle period after which a ping event is injected
 	// into native /v1/messages streams. Zero disables keep-alive.
 	keepAliveInterval time.Duration
+	// maxUpstreamIdle aborts a native /v1/messages stream once the upstream has
+	// been silent for this long. Zero disables the ceiling.
+	maxUpstreamIdle time.Duration
 }
 
 // NewHandler creates a new Anthropic handler.
@@ -66,6 +93,7 @@ func NewHandler(authClient upstream.TokenProvider, transport *http.Transport, mc
 		upstream:          upstream.NewClient(authClient, transport),
 		models:            mc,
 		keepAliveInterval: keepAliveIntervalFromEnv(),
+		maxUpstreamIdle:   maxUpstreamIdleFromEnv(),
 	}
 }
 
@@ -247,7 +275,9 @@ func (h *Handler) handleNativeMessagesPassthrough(w http.ResponseWriter, r *http
 
 // pipeNativeStream forwards the upstream SSE stream to the client line by line,
 // injecting Anthropic ping events at event boundaries whenever the upstream has
-// been idle for longer than h.keepAliveInterval.
+// been idle for longer than h.keepAliveInterval. If the upstream stays silent
+// for longer than h.maxUpstreamIdle the stream is aborted with an error event,
+// so a wedged upstream cannot be kept alive indefinitely by the pings.
 //
 // Reading runs in its own goroutine so the main loop stays the sole writer:
 // http.ResponseWriter is not safe for concurrent use, and only the writing loop
@@ -289,6 +319,18 @@ func (h *Handler) pipeNativeStream(ctx context.Context, w io.Writer, flusher htt
 		tickC = ticker.C
 	}
 
+	// The silence ceiling runs on its own timer rather than counting pings, so it
+	// still applies when keep-alive is disabled. A nil idleC is never selected.
+	var (
+		idleTimer *time.Timer
+		idleC     <-chan time.Time
+	)
+	if h.maxUpstreamIdle > 0 {
+		idleTimer = time.NewTimer(h.maxUpstreamIdle)
+		defer idleTimer.Stop()
+		idleC = idleTimer.C
+	}
+
 	atBoundary := true // the start of the stream is a valid event boundary
 	pings := 0
 
@@ -318,6 +360,9 @@ func (h *Handler) pipeNativeStream(ctx context.Context, w io.Writer, flusher htt
 			if ticker != nil {
 				ticker.Reset(h.keepAliveInterval)
 			}
+			if idleTimer != nil {
+				idleTimer.Reset(h.maxUpstreamIdle)
+			}
 
 		case <-tickC:
 			// Never split an SSE event: an injected frame would override the
@@ -333,6 +378,23 @@ func (h *Handler) pipeNativeStream(ctx context.Context, w io.Writer, flusher htt
 			}
 			flusher.Flush()
 			pings++
+
+		case <-idleC:
+			slog.Error("aborting native /messages stream after upstream silence",
+				"max_idle", h.maxUpstreamIdle.String(), "keepalive_pings", pings)
+			// Emitting the error mid-event would corrupt the pending frame, so
+			// close it out first; a stray blank line is inert to SSE parsers.
+			if !atBoundary {
+				if _, err := io.WriteString(w, "\n"); err != nil {
+					return
+				}
+			}
+			// `error` is terminal for Anthropic clients, so no message_stop
+			// follows: emitting one after a partial stream would instead feed the
+			// SDK accumulator an incomplete message that looks successful.
+			h.writeSSEError(w, fmt.Sprintf("Upstream stopped sending data for %s", h.maxUpstreamIdle))
+			flusher.Flush()
+			return
 
 		case <-ctx.Done():
 			slog.Debug("client disconnected, aborting native /messages stream", "keepalive_pings", pings)

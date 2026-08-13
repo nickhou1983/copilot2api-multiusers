@@ -418,3 +418,198 @@ func TestKeepAliveIntervalFromEnv(t *testing.T) {
 		})
 	}
 }
+
+func TestMaxUpstreamIdleFromEnv(t *testing.T) {
+	tests := []struct {
+		name string
+		env  string
+		set  bool
+		want time.Duration
+	}{
+		{name: "unset uses default", want: defaultMaxUpstreamIdle},
+		{name: "empty uses default", env: "", set: true, want: defaultMaxUpstreamIdle},
+		{name: "zero disables", env: "0", set: true, want: 0},
+		{name: "custom value", env: "90", set: true, want: 90 * time.Second},
+		{name: "negative falls back", env: "-1", set: true, want: defaultMaxUpstreamIdle},
+		{name: "garbage falls back", env: "nope", set: true, want: defaultMaxUpstreamIdle},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.set {
+				t.Setenv(maxUpstreamIdleEnvVar, tt.env)
+			}
+			if got := maxUpstreamIdleFromEnv(); got != tt.want {
+				t.Errorf("maxUpstreamIdleFromEnv() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// The silence ceiling must abort a wedged upstream instead of letting keep-alive
+// ping it forever, and must tell the client why via a terminal `error` event.
+func TestPipeNativeStream_AbortsOnUpstreamSilence(t *testing.T) {
+	body := &scriptedBody{chunks: []scriptedChunk{
+		{data: "event: message_start\ndata: {\"type\":\"message_start\"}\n\n"},
+		{delay: 10 * time.Second, data: "event: message_stop\ndata: {}\n\n"},
+	}}
+
+	rec := &recorder{}
+	h := &Handler{keepAliveInterval: 20 * time.Millisecond, maxUpstreamIdle: 200 * time.Millisecond}
+
+	returned := make(chan time.Duration, 1)
+	start := time.Now()
+	go func() {
+		h.pipeNativeStream(context.Background(), rec, rec, body)
+		returned <- time.Since(start)
+	}()
+
+	select {
+	case d := <-returned:
+		if d > 3*time.Second {
+			t.Errorf("silence ceiling took %v to fire, want ~200ms", d)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("pipeNativeStream did not abort on upstream silence")
+	}
+
+	got := rec.String()
+	if countPings(got) == 0 {
+		t.Error("expected keep-alive pings before the ceiling fired")
+	}
+	if !strings.Contains(got, "event: error") {
+		t.Fatalf("expected a terminal error event, got %q", got)
+	}
+	// message_stop after a truncated stream would make the SDK accumulator treat
+	// an incomplete message as a successful one.
+	if strings.Contains(got, "message_stop") {
+		t.Errorf("error event must not be followed by message_stop: %q", got)
+	}
+
+	// The error must be a well-formed Anthropic SSE event.
+	events := strings.Split(stripPings(got), "\n\n")
+	last := events[len(events)-2] + "\n\n"
+	ev, err := readSSEEvent(bufio.NewReader(strings.NewReader(last)))
+	if err != nil {
+		t.Fatalf("readSSEEvent on the error frame failed: %v (frame %q)", err, last)
+	}
+	if ev.Event != "error" {
+		t.Errorf("got event %q, want %q", ev.Event, "error")
+	}
+	if !strings.Contains(ev.Data, AnthropicErrorTypeAPI) {
+		t.Errorf("error payload missing type %q: %s", AnthropicErrorTypeAPI, ev.Data)
+	}
+}
+
+// An active stream keeps resetting the ceiling, so a long but continuously
+// producing stream is never aborted.
+func TestPipeNativeStream_SilenceCeilingResetsOnActivity(t *testing.T) {
+	var chunks []scriptedChunk
+	var want strings.Builder
+	for i := 0; i < 10; i++ {
+		frame := fmt.Sprintf("event: content_block_delta\ndata: {\"index\":%d}\n\n", i)
+		chunks = append(chunks, scriptedChunk{delay: 30 * time.Millisecond, data: frame})
+		want.WriteString(frame)
+	}
+
+	rec := &recorder{}
+	// Total runtime (~300ms) far exceeds the ceiling, but no single gap does.
+	h := &Handler{keepAliveInterval: 0, maxUpstreamIdle: 120 * time.Millisecond}
+	h.pipeNativeStream(context.Background(), rec, rec, &scriptedBody{chunks: chunks})
+
+	got := rec.String()
+	if strings.Contains(got, "event: error") {
+		t.Errorf("silence ceiling fired on a continuously active stream: %q", got)
+	}
+	if got != want.String() {
+		t.Errorf("stream mismatch:\n got: %q\nwant: %q", got, want.String())
+	}
+}
+
+// The ceiling is an independent safety net: it must apply even when keep-alive
+// is switched off.
+func TestPipeNativeStream_SilenceCeilingWithoutKeepAlive(t *testing.T) {
+	body := &scriptedBody{chunks: []scriptedChunk{
+		{delay: 10 * time.Second, data: "event: message_stop\ndata: {}\n\n"},
+	}}
+
+	rec := &recorder{}
+	h := &Handler{keepAliveInterval: 0, maxUpstreamIdle: 150 * time.Millisecond}
+
+	returned := make(chan struct{})
+	go func() {
+		h.pipeNativeStream(context.Background(), rec, rec, body)
+		close(returned)
+	}()
+
+	select {
+	case <-returned:
+	case <-time.After(5 * time.Second):
+		t.Fatal("silence ceiling did not fire with keep-alive disabled")
+	}
+
+	got := rec.String()
+	if countPings(got) != 0 {
+		t.Errorf("keep-alive disabled but pings were injected: %q", got)
+	}
+	if !strings.Contains(got, "event: error") {
+		t.Errorf("expected a terminal error event, got %q", got)
+	}
+}
+
+// Zero disables the ceiling, preserving the previous unbounded behaviour.
+func TestPipeNativeStream_SilenceCeilingDisabled(t *testing.T) {
+	const payload = "event: message_stop\ndata: {}\n\n"
+	body := &scriptedBody{chunks: []scriptedChunk{{delay: 250 * time.Millisecond, data: payload}}}
+
+	rec := &recorder{}
+	h := &Handler{keepAliveInterval: 0, maxUpstreamIdle: 0}
+	h.pipeNativeStream(context.Background(), rec, rec, body)
+
+	if got := rec.String(); got != payload {
+		t.Errorf("stream mismatch: got %q, want %q", got, payload)
+	}
+}
+
+// A stall mid-event must not leave a dangling `event:` line glued to the error
+// frame, which would clobber the error's own event name.
+func TestPipeNativeStream_SilenceCeilingClosesPartialEvent(t *testing.T) {
+	body := &scriptedBody{chunks: []scriptedChunk{
+		{data: "event: content_block_delta\n"},
+		{delay: 10 * time.Second, data: "data: {}\n\n"},
+	}}
+
+	rec := &recorder{}
+	h := &Handler{keepAliveInterval: 0, maxUpstreamIdle: 150 * time.Millisecond}
+
+	returned := make(chan struct{})
+	go func() {
+		h.pipeNativeStream(context.Background(), rec, rec, body)
+		close(returned)
+	}()
+
+	select {
+	case <-returned:
+	case <-time.After(5 * time.Second):
+		t.Fatal("silence ceiling did not fire on a mid-event stall")
+	}
+
+	got := rec.String()
+	// The truncated event is terminated before the error frame begins.
+	if !strings.HasPrefix(got, "event: content_block_delta\n\nevent: error\n") {
+		t.Fatalf("partial event was not closed before the error frame: %q", got)
+	}
+
+	reader := bufio.NewReader(strings.NewReader(got))
+	// First frame: the truncated delta, which has no data and is dropped.
+	if _, err := readSSEEvent(reader); err != nil {
+		t.Fatalf("readSSEEvent on the truncated frame failed: %v", err)
+	}
+	ev, err := readSSEEvent(reader)
+	if err != nil {
+		t.Fatalf("readSSEEvent on the error frame failed: %v", err)
+	}
+	if ev.Event != "error" {
+		t.Errorf("error event name clobbered by the partial event: got %q", ev.Event)
+	}
+}

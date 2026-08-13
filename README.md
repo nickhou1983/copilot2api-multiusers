@@ -302,6 +302,7 @@ Environment variables are used as defaults when flags are not provided:
 | `COPILOT2API_ACCOUNTS_FILE` | Multi-account config file path (see [Multiple GitHub Accounts](#multiple-github-accounts)) | `<token-dir>/accounts.json` |
 | `COPILOT2API_ADMIN_TOKEN` | If set, the `/admin/` UI requires this token (`X-Admin-Token` header or `?admin_token=`) | _(unset, no auth)_ |
 | `COPILOT2API_SSE_KEEPALIVE_SECONDS` | Idle interval after which a `ping` event is injected into native `/v1/messages` streams, keeping long thinking phases from being cut off by NATs, CDNs, or load balancers. `0` disables it | `15` |
+| `COPILOT2API_SSE_MAX_IDLE_SECONDS` | Abort a native `/v1/messages` stream with an `error` event once the upstream has sent no bytes for this long, so a wedged upstream is not kept alive indefinitely by the pings. `0` disables it | `600` |
 | `COPILOT2API_DEBUG` | Enable debug logging (`true`/`false`, `1`/`0`) | `false` |
 
 CLI flags take precedence over environment variables.
