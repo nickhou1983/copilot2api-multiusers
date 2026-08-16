@@ -498,6 +498,39 @@ tr:last-child td { border-bottom: none; }
   white-space: nowrap;
 }
 td.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+/* 提示缓存 cache_control 上游实测页 */
+.cache-probe-slide .sec-lede { font-size: 18px; line-height: 1.4; margin-bottom: 10px; }
+.cache-probe-slide .q7pp-tbl td { padding: 6px 12px; font-size: 15px; line-height: 1.35; vertical-align: top; }
+.cache-probe-slide .q7pp-tbl th { padding: 8px 12px; font-size: 12px; }
+.cache-probe-slide .badge { font-size: 13px; padding: 2px 8px; margin-right: 4px; }
+.cache-probe-slide .q7pp-tbl td.usage { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); }
+.cache-change {
+  display: grid; grid-template-columns: auto 1fr; gap: 18px; align-items: start;
+  margin-top: 12px; padding: 11px 18px;
+  border: 2px solid var(--orange); background: var(--tint-orange);
+  font-size: 15px; line-height: 1.4; color: var(--ink-soft);
+}
+.cache-change .cc-head {
+  font-family: var(--mono); font-size: 13px; font-weight: 600;
+  letter-spacing: .1em; text-transform: uppercase; color: var(--orange-ink);
+  white-space: nowrap; padding-top: 2px;
+}
+.cache-change .cc-list { list-style: none; }
+.cache-change .cc-list li { padding: 3px 0 3px 20px; position: relative; }
+.cache-change .cc-list li::before { content: "▸"; position: absolute; left: 0; color: var(--orange); font-weight: 600; }
+.cache-change strong { color: var(--ink); }
+.cache-proxy {
+  display: grid; grid-template-columns: auto 1fr; gap: 16px; align-items: center;
+  margin-top: 10px; padding: 10px 16px;
+  border: 2px solid var(--pass); background: var(--tint-pass);
+  font-size: 14px; line-height: 1.4; color: var(--ink-soft);
+}
+.cache-proxy .cp-head {
+  font-family: var(--mono); font-size: 13px; font-weight: 600;
+  letter-spacing: .1em; text-transform: uppercase; color: var(--pass);
+  white-space: nowrap;
+}
+.cache-proxy strong { color: var(--ink); }
 
 /* 判定徽章 */
 .badge {
@@ -721,7 +754,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Key Figures — 关键指标</span>
-    <span class="doc-pg">02 / 24</span>
+    <span class="doc-pg">02 / 25</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -778,7 +811,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 01 — Upstream Gaps</span>
-    <span class="doc-pg">03 / 24</span>
+    <span class="doc-pg">03 / 25</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -834,7 +867,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 01 — Upstream Gaps</span>
-    <span class="doc-pg">04 / 24</span>
+    <span class="doc-pg">04 / 25</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -867,7 +900,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 02 — HTTP 413</span>
-    <span class="doc-pg">05 / 24</span>
+    <span class="doc-pg">05 / 25</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -911,7 +944,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 02 — HTTP 413</span>
-    <span class="doc-pg">06 / 24</span>
+    <span class="doc-pg">06 / 25</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -950,7 +983,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 03 — Thinking Signature</span>
-    <span class="doc-pg">07 / 24</span>
+    <span class="doc-pg">07 / 25</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -987,7 +1020,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 04 — Structured Outputs</span>
-    <span class="doc-pg">08 / 24</span>
+    <span class="doc-pg">08 / 25</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1038,7 +1071,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 05 — Auth &amp; Token</span>
-    <span class="doc-pg">09 / 24</span>
+    <span class="doc-pg">09 / 25</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1084,7 +1117,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 06 — SSE Stability</span>
-    <span class="doc-pg">10 / 24</span>
+    <span class="doc-pg">10 / 25</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1121,7 +1154,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 06 延伸 — Three Failure Modes</span>
-    <span class="doc-pg">11 / 24</span>
+    <span class="doc-pg">11 / 25</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1169,7 +1202,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 06 延伸 — Native SSE Ping</span>
-    <span class="doc-pg">12 / 24</span>
+    <span class="doc-pg">12 / 25</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1233,7 +1266,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 07 — Client-ID &amp; Model Visibility</span>
-    <span class="doc-pg">13 / 24</span>
+    <span class="doc-pg">13 / 25</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1280,7 +1313,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 07 · Live Probe — Model Diff &amp; 1M Context</span>
-    <span class="doc-pg">14 / 24</span>
+    <span class="doc-pg">14 / 25</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1339,7 +1372,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 07 · Live Invoke — Direct vs Exchange</span>
-    <span class="doc-pg">15 / 24</span>
+    <span class="doc-pg">15 / 25</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1404,7 +1437,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Extended — Header Filtering</span>
-    <span class="doc-pg">16 / 24</span>
+    <span class="doc-pg">16 / 25</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1470,7 +1503,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Extended — Anthropic Beta Support</span>
-    <span class="doc-pg">17 / 24</span>
+    <span class="doc-pg">17 / 25</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1544,7 +1577,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Extended — General Capability Inventory</span>
-    <span class="doc-pg">18 / 24</span>
+    <span class="doc-pg">18 / 25</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1626,7 +1659,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Extended — General Capability Inventory</span>
-    <span class="doc-pg">19 / 24</span>
+    <span class="doc-pg">19 / 25</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1713,7 +1746,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Extended — Beta Header Blocklist</span>
-    <span class="doc-pg">20 / 24</span>
+    <span class="doc-pg">20 / 25</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1782,7 +1815,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Extended — Backend Routing Re-test</span>
-    <span class="doc-pg">21 / 24</span>
+    <span class="doc-pg">21 / 25</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1847,7 +1880,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Extended — Cache &amp; Multi-Account</span>
-    <span class="doc-pg">22 / 24</span>
+    <span class="doc-pg">22 / 25</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1879,12 +1912,57 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-foot"><span>Extended · Cache &amp; Multi-Account</span><span>2026-07-19</span></div>
 </section>
 
-<!-- ==================== SLIDE 23 · 工程产出索引 ==================== -->
+<!-- ==================== SLIDE 23 · Q7 延伸 提示缓存实测 ==================== -->
+<section class="slide cache-probe-slide" aria-label="提示缓存 cache_control 上游实测">
+  <div class="s-top">
+    <span class="doc-no">TD-2620</span>
+    <span class="doc-sec">Extended — Prompt Cache Probe</span>
+    <span class="doc-pg">23 / 25</span>
+  </div>
+  <div class="s-body">
+    <div class="sec-head reveal">
+      <div class="sec-no">＋＋</div>
+      <div>
+        <div class="sec-label">Extended Topics — cache_control 上游逐项实测（2026-08-14）</div>
+        <h2>提示缓存实测：上游已放开自动缓存与免 beta 的 1h TTL</h2>
+      </div>
+    </div>
+    <p class="sec-lede reveal">直连 <code>api.enterprise.githubcopilot.com</code>（模型 <code>claude-opus-4.8</code>，全程未打印 token），对 <code>cache_control</code> 七项功能逐一发请求，读响应 <code>usage</code> 判定。每项用<strong>唯一 nonce 文本</strong>避免旧缓存污染信号。</p>
+    <div class="panel reveal">
+      <table class="q7pp-tbl">
+        <thead><tr><th style="width:4%">#</th><th style="width:27%">功能</th><th style="width:30%">请求要点</th><th style="width:22%">usage 实测</th><th style="width:17%">判定</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>块级 <code>ephemeral</code> 断点（首发＝写）</td><td>system 块 <code>cache_control:{type:ephemeral}</code>，~2.2k tok</td><td class="usage">write=2203（5m 桶）</td><td><span class="badge ok">✓ 支持</span></td></tr>
+          <tr><td>2</td><td>二次相同请求（命中＝读）</td><td>与 #1 字节完全一致</td><td class="usage">read=2203，write=0</td><td><span class="badge ok">✓ 支持</span></td></tr>
+          <tr><td>3</td><td><code>cache_control.scope:"global"</code></td><td>Claude Code 会发的跨地域字段</td><td class="usage">400 <code>scope: Extra inputs</code></td><td><span class="badge no">✕ 拒绝</span>代理剥离</td></tr>
+          <tr><td>4</td><td><code>ttl:"1h"</code> ＋ beta 头</td><td><code>extended-cache-ttl-2025-04-11</code></td><td class="usage">write=2216（<strong>1h 桶</strong>）</td><td><span class="badge ok">✓ 支持</span></td></tr>
+          <tr><td>5</td><td><code>ttl:"1h"</code> <strong>不带</strong> beta 头</td><td>仅 <code>ttl</code> 字段，无 beta</td><td class="usage">write=2220（<strong>1h 桶</strong>）</td><td><span class="badge diff">变化</span>无需 beta</td></tr>
+          <tr><td>6</td><td>顶层自动 <code>cache_control</code>（非块级）</td><td>请求顶层加 <code>cache_control</code></td><td class="usage">200；二次 read=2225 命中</td><td><span class="badge diff">变化</span>旧为 400</td></tr>
+          <tr><td>7</td><td>块 &lt;1024 token 加 <code>cache_control</code></td><td>system 仅 6 词</td><td class="usage">200，write=read=0</td><td><span class="badge warn">△ 不缓存</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="cache-change reveal">
+      <div class="cc-head">两处与旧结论不一致</div>
+      <ul class="cc-list">
+        <li><strong>顶层自动缓存已放开：</strong>旧结论（<code>auto_prompt_cache</code>）为上游 400「顶层字段非法，只能用块级断点」；现企业端点返回 200，真正建缓存并可被二次命中。</li>
+        <li><strong>1h TTL 免 beta：</strong>旧结论要求必须带 <code>extended-cache-ttl-2025-04-11</code>；现无论带不带，<code>ttl:"1h"</code> 都写入 <strong>1h 桶</strong>。同时验证：<code>scope</code> 仍被上游 400 拒绝、1024 token 最低门槛仍生效。上游行为随端点/时间滚动，结论以复测为准。</li>
+      </ul>
+    </div>
+    <div class="cache-proxy reveal">
+      <div class="cp-head">经代理复测</div>
+      <div>经 <strong>Copilot2API 代理</strong>（<code>127.0.0.1:7777</code>）复跑同 7 项：<strong>6 项与直连逐字节对等</strong>（写/读命中、1h 桶、顶层自动缓存、1024 门槛）。唯一分叉为 #3 —— <code>scope</code> 经代理 <code>stripCacheControlScope()</code> 剥离后返回 <strong>200 并成功建缓存</strong>（直连为 400）。证明代理对 <code>cache_control</code> 透明透传，仅此一处刻意兼容。</div>
+    </div>
+  </div>
+  <div class="s-foot"><span>Extended · Prompt Cache Probe</span><span>2026-08-14</span></div>
+</section>
+
+<!-- ==================== SLIDE 24 · 工程产出索引 ==================== -->
 <section class="slide" aria-label="工程产出索引">
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Deliverables Index</span>
-    <span class="doc-pg">23 / 24</span>
+    <span class="doc-pg">24 / 25</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1925,13 +2003,13 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-foot"><span>Deliverables Index</span><span>2026-07-19</span></div>
 </section>
 
-<!-- ==================== SLIDE 24 · 结论与状态 ==================== -->
+<!-- ==================== SLIDE 25 · 结论与状态 ==================== -->
 <section class="slide" aria-label="结论与状态">
   <div class="crop tl"></div><div class="crop tr"></div><div class="crop bl"></div><div class="crop br"></div>
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Verdict — 结论与状态</span>
-    <span class="doc-pg">24 / 24</span>
+    <span class="doc-pg">25 / 25</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal" style="margin-bottom: 12px;">
@@ -1970,7 +2048,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
 <!-- 页码指示 + 导航按钮(舞台之外的 UI) -->
 <div class="deck-controls" aria-hidden="true">
   <button id="navPrev" title="上一页 (←)">‹</button>
-  <span id="pageIndicator">01 / 24</span>
+  <span id="pageIndicator">01 / 25</span>
   <button id="navNext" title="下一页 (→)">›</button>
 </div>
 
