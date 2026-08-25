@@ -913,7 +913,6 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
         </div>
         <ul class="guide-list">
           <li>基线字段参考 OpenCode / VS Code 当前实际发送值，并随客户端版本更新。</li>
-          <li><code>computer-use-*</code> 仅在真实 Computer Use 工具载荷出现时作为<strong>功能门控例外</strong>转发，不做通配透传。</li>
           <li>客户端提供的其他 beta 默认剥离，避免一个危险 token 打死整次请求。</li>
         </ul>
       </div>
@@ -1115,17 +1114,13 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
       <div class="sec-no">Q1</div>
       <div>
         <div class="sec-label">Issue 01 — 解决方案</div>
-        <h2>可修的都修了：beta 头白名单与转发</h2>
+        <h2>可修的都修了：beta 头重建与三层对照</h2>
       </div>
     </div>
     <div class="note-grid" style="grid-template-columns: 1fr;">
       <div class="note-card reveal">
-        <div class="nc-k">Computer Use — 曾经的「第 3 处差异」,已修复</div>
-        直连可用、经代理 400 —— 根因是代理未转发 <code>computer-use-*</code> beta 头。2026-07-07 落地 <code>feat: forward computer-use beta header</code>(<code>738b8af</code>);07-12 四用例复验通过:新版 <code>computer_20251124</code>(Opus 4.8 / Sonnet 4.6)与旧版 <code>computer_20250124</code> 均返回 <code>tool_use</code>,完整 agent 循环可用。<strong>负向对照(去掉 beta 头 → 400)证明 header 转发正是关键路径。</strong>
-      </div>
-      <div class="note-card reveal">
-        <div class="nc-k">Beta Allowlist — 白名单策略(anthropic/handler.go)</div>
-        放行 <code>computer-use-*</code>(覆盖 <code>/v1/messages</code> 与 <code>/count_tokens</code>);body 含 <code>context_management</code> 时自动注入 <code>context-management</code> beta;原生路由转发 <code>interleaved-thinking</code>(<code>256dd42</code>);自动追加 compaction beta(<code>7983f2f</code>);其余客户端 beta 头一律剥离 —— 因为上游 allowlist 会对未知 beta 直接 400,剥离反而让请求成功。
+        <div class="nc-k">Beta Reconstruction — 重建策略(anthropic/handler.go)</div>
+        body 含 <code>context_management</code> 时自动注入 <code>context-management</code> beta；原生路由固定附加 <code>interleaved-thinking</code>(<code>256dd42</code>)并自动追加 compaction beta(<code>7983f2f</code>)；其余客户端 beta 头默认剥离 —— 因为上游黑名单会让整个请求直接 400。
       </div>
       <div class="note-card reveal">
         <div class="nc-k">方法论沉淀 — 三层对照测试体系</div>
@@ -1685,10 +1680,10 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
       <div class="sec-no">＋</div>
       <div>
         <div class="sec-label">Extended Topics — 代理移除与注入了哪些头（2026-07-27 代码复核 + 回显实测）</div>
-        <h2>Header 默认丢弃：仅窄范围放行 Computer Use beta</h2>
+        <h2>Header 默认丢弃：客户端 beta 不做透明转发</h2>
       </div>
     </div>
-    <p class="sec-lede reveal" style="margin-bottom:16px">代理<strong>不直接复制客户端 header</strong>：上游请求重新构建，身份头整套替换。客户端 <code>anthropic-beta</code> 默认过滤，仅窄范围转发 <code>computer-use-*</code>，恢复 Direct 已验证可用的 Computer Use；其余 beta 由代理按固定策略注入或在本地消费。</p>
+    <p class="sec-lede reveal" style="margin-bottom:16px">代理<strong>不直接复制客户端 header</strong>：上游请求重新构建，身份头整套替换。客户端 <code>anthropic-beta</code> 默认过滤；实际出站 beta 由代理按固定策略注入，或在本地消费后转换为模型选择。</p>
     <div class="reveal" style="display:grid; grid-template-columns: 1.12fr 1fr; gap: 24px; align-items:start;">
       <div>
         <div class="sec-label" style="margin-bottom:8px">① 被移除的客户端 Header（默认全丢）</div>
@@ -1698,19 +1693,19 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
             <tbody>
               <tr><td><code>x-api-key</code> / <code>Authorization</code></td><td>丢弃 → 替换为 <code>Bearer &lt;Copilot token&gt;</code></td></tr>
               <tr><td><code>anthropic-version</code></td><td>丢弃 → 固定发送 <code>2023-06-01</code></td></tr>
-              <tr><td><code>anthropic-beta</code> 客户端 token</td><td>仅转发 <code>computer-use-*</code>（去空格、去重）；<code>fast-mode-*</code> / <code>output-300k</code> 等继续剥除，<code>context-1m*</code> 仅在本地消费</td></tr>
+              <tr><td><code>anthropic-beta</code> 客户端 token</td><td>默认过滤；<code>fast-mode-*</code> / <code>output-300k</code> 等剥除，<code>context-1m*</code> 仅在本地消费</td></tr>
               <tr><td><code>User-Agent</code> · <code>x-stainless-*</code> · Cookie</td><td>全部丢弃，UA 由 profile 重写</td></tr>
             </tbody>
           </table>
         </div>
-        <div class="sec-label" style="margin:14px 0 8px">② 代理注入与允许的 anthropic-beta</div>
+        <div class="sec-label" style="margin:14px 0 8px">② 代理注入与本地消费的 anthropic-beta</div>
         <div class="panel">
           <table class="q7pp-tbl">
             <thead><tr><th style="width:52%">Token</th><th>行为</th></tr></thead>
             <tbody>
               <tr><td><code>interleaved-thinking-2025-05-14</code></td><td><span class="badge ok">固定基线</span> 每个 native 请求必带</td></tr>
               <tr><td><code>context-management-2025-06-27</code><br><code>compact-2026-01-12</code></td><td><span class="badge diff">成对自动注入</span> body 含 <code>context_management</code> 时</td></tr>
-              <tr><td><code>computer-use-*</code><br><code>context-1m*</code>（客户端头）</td><td><span class="badge ok">白名单转发</span> Computer Use<br><span class="badge diff">消费不转发</span> 切换 <code>-1m</code> 变体</td></tr>
+              <tr><td><code>context-1m*</code>（客户端头）</td><td><span class="badge diff">消费不转发</span> 切换 <code>-1m</code> 变体</td></tr>
             </tbody>
           </table>
         </div>
@@ -1731,7 +1726,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
         <ul class="notes" id="hdrfilter-notes" style="margin-top:12px">
           <li><strong>自动 beta 成对注入：</strong>body 含 <code>context_management</code>（任意 edit 类型）→ 同时附 <code>context-management</code> + <code>compact</code> 两个 beta，客户端无需自带头；<code>count_tokens</code> 行为一致（探针实测）。</li>
           <li><strong>请求体仅两处改动：</strong>模型别名重写（dated ID → Copilot ID）与递归删除 <code>cache_control.scope</code>（上游 400 拒收）；tools / thinking 等功能字段原样透传，上限 10MB。</li>
-          <li><strong>设计取向「默认剥离、最小放行」：</strong>只允许前缀严格匹配的 <code>computer-use-*</code>，其余客户端 beta 继续过滤；固定 beta 与 context-management beta 由代理按请求内容确定性注入。</li>
+          <li><strong>设计取向「默认剥离、按需重建」：</strong>客户端 beta 默认过滤；固定 beta 与 context-management beta 由代理按请求内容确定性注入。</li>
         </ul>
       </div>
     </div>
@@ -1751,10 +1746,10 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
       <div class="sec-no">＋</div>
       <div>
         <div class="sec-label">Extended Topics — 当前工作区实现与 2026-08-04 端到端复测</div>
-        <h2>Anthropic Beta 支持清单：5 类有效行为，1 个客户端白名单</h2>
+        <h2>Anthropic Beta 支持清单：4 类有效行为，按需重建</h2>
       </div>
     </div>
-    <p class="sec-lede reveal" style="margin-bottom:16px">Copilot2API 不做 beta 头的透明代理，而是按功能重建出站值：<strong>固定注入 Interleaved Thinking</strong>、按 body 注入 Context Management / Compaction、在本地消费 1M Context，仅将 <strong><code>computer-use-*</code></strong> 作为客户端白名单转发。</p>
+    <p class="sec-lede reveal" style="margin-bottom:16px">Copilot2API 不做 beta 头的透明代理，而是按功能重建出站值：<strong>固定注入 Interleaved Thinking</strong>、按 body 注入 Context Management / Compaction，并在本地消费 1M Context。</p>
     <div class="reveal" style="display:grid; grid-template-columns:1.2fr .9fr; gap:24px; align-items:start;">
       <div>
         <div class="sec-label" style="margin-bottom:8px">① 当前支持的功能与触发方式</div>
@@ -1763,7 +1758,6 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
             <thead><tr><th style="width:25%">功能</th><th style="width:31%">触发条件</th><th>代理行为</th></tr></thead>
             <tbody>
               <tr><td><strong>Interleaved Thinking</strong></td><td>每个 Native 请求</td><td><span class="badge ok">固定注入</span> <code>interleaved-thinking-2025-05-14</code></td></tr>
-              <tr><td><strong>Computer Use</strong></td><td>客户端发送 <code>computer-use-*</code></td><td><span class="badge ok">白名单转发</span> 多 Header / 逗号拆分 / 去空格 / 去重；11 模型双路径 <strong>22/22</strong></td></tr>
               <tr><td><strong>Context Editing</strong></td><td>body 顶层含 <code>context_management</code></td><td><span class="badge diff">自动注入</span> <code>context-management-2025-06-27</code></td></tr>
               <tr><td><strong>Server Compaction</strong></td><td>body 顶层含 <code>context_management</code></td><td><span class="badge diff">成对注入</span> <code>compact-2026-01-12</code></td></tr>
               <tr><td><strong>1M Context</strong></td><td>客户端 beta 含 <code>context-1m</code></td><td><span class="badge warn">本地消费</span> 选择真实存在的 <code>-1m</code> 变体，不转发该 token</td></tr>
@@ -1776,7 +1770,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
             <thead><tr><th style="width:35%">客户端 beta</th><th>结果</th></tr></thead>
             <tbody>
               <tr><td><code>fast-mode-*</code> · <code>output-300k</code> · <code>files-api-*</code></td><td><span class="badge no">不转发</span> 不允许客户端改变代理既定功能面</td></tr>
-              <tr><td>未知 token / 自定义 token</td><td><span class="badge no">不转发</span> 出站仍只保留代理生成值与 Computer Use 白名单</td></tr>
+              <tr><td>未知 token / 自定义 token</td><td><span class="badge no">不转发</span> 出站仅保留代理生成或本地消费的既定值</td></tr>
             </tbody>
           </table>
         </div>
@@ -1800,13 +1794,12 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
             <div><span style="color:var(--orange)">01</span> interleaved-thinking-2025-05-14</div>
             <div><span style="color:var(--orange)">02</span> context-management-2025-06-27 <span style="color:var(--ink-soft)">[按 body]</span></div>
             <div><span style="color:var(--orange)">03</span> compact-2026-01-12 <span style="color:var(--ink-soft)">[按 body]</span></div>
-            <div><span style="color:var(--orange)">04</span> computer-use-* <span style="color:var(--ink-soft)">[按客户端顺序]</span></div>
           </div>
         </div>
         <ul class="notes" style="margin-top:8px">
-          <li><strong>对照结论：</strong>Computer Use 不带 beta 时双路径均 400；混入 <code>files-api-*</code> 后代理仍 200，证明白名单与过滤同时生效。</li>
-          <li><strong>当前边界：</strong>Computer Use 采用前缀匹配；Count Tokens 尚未执行 <code>context-1m</code> 模型切换。</li>
-          <li><strong>2026-08-19 功能级复测已验证该设计为最优解：</strong>官方 A 类 28 个 token 中，上游真正需要且生效的恰好是 <code>computer-use-2025-11-24</code>／<code>context-management</code>／<code>compact</code> 三个 —— 与上表策略完全重合，无需扩大白名单。详见「Beta 头功能级三探针复测」。</li>
+          <li><strong>过滤对照：</strong>混入 <code>files-api-*</code> 后代理仍可通过重建出站头避免上游 400，证明默认过滤能隔离危险客户端 token。</li>
+          <li><strong>当前边界：</strong><code>count_tokens</code> 尚未执行 <code>context-1m</code> 模型切换。</li>
+          <li><strong>2026-08-19 功能级复测：</strong>本页展示的 <code>context-management</code>／<code>compact</code> 均通过带头/不带头负向对照，确认是真正需要且生效的功能头。</li>
         </ul>
       </div>
     </div>
@@ -1968,7 +1961,6 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
             <thead><tr><th style="width:35%">功能</th><th>已验证行为</th></tr></thead>
             <tbody>
               <tr><td>Bash / Text Editor / Memory</td><td><span class="badge ok">支持</span> 对应 server tool 返回工具调用</td></tr>
-              <tr><td>Computer Use</td><td><span class="badge ok">支持</span> 11 模型 Direct / 代理 <strong>22/22</strong></td></tr>
               <tr><td>Token-efficient Tools</td><td><span class="badge warn">兼容</span> 工具调用链路正常，额外节省效果未单独计量</td></tr>
               <tr><td>Code Execution</td><td><span class="badge warn">路由相关</span> 最新矩阵 8/11；Bedrock 路由可能拒绝</td></tr>
               <tr><td>Fast Mode</td><td><span class="badge ok">专属模型</span> <code>claude-opus-4.8-fast</code> 实测约 2.46×</td></tr>
@@ -1998,7 +1990,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
         <h2>网关是黑名单制：只拦 5 个 token，乱造的头也放行</h2>
       </div>
     </div>
-    <p class="sec-lede reveal" style="margin-bottom:16px">取官方 SDK 全集 32 个 + 枚举外 3 个 + 乱造对照 1 个共 36 个 <code>anthropic-beta</code> token，对 <code>/v1/messages</code>（opus-4.8）双模式各发 37 次真实调用（含空白对照，共 74 次）。结论与 api.anthropic.com <strong>正好相反</strong>：官方对未知 token 一律 400，Copilot 网关只<strong>黑名单拦截 5 个</strong>已知不代理的功能，其余全部放行 —— 但<strong>放行 ≠ 生效</strong>。</p>
+    <p class="sec-lede reveal" style="margin-bottom:12px">取官方 SDK 全集 32 个 + 枚举外 3 个 + 乱造对照 1 个共 36 个 <code>anthropic-beta</code> token，对 <code>/v1/messages</code>（opus-4.8）双模式各发 37 次真实调用（含空白对照，共 74 次）。结论与 api.anthropic.com <strong>正好相反</strong>：官方对未知 token 一律 400，Copilot 网关只<strong>黑名单拦截 5 个</strong>已知不代理的功能，其余全部放行 —— 但<strong>放行 ≠ 生效</strong>。</p>
     <div class="reveal" style="display:grid; grid-template-columns: 1fr 1.15fr; gap: 24px; align-items:start;">
       <div>
         <div class="sec-label" style="margin-bottom:8px">① 被拒绝的 5 个 token（400 · 双模式一致）</div>
@@ -2027,12 +2019,12 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
         </div>
       </div>
       <div>
-        <div class="sec-label" style="margin-bottom:8px">③ 放行的 31 个 token（全部 200）</div>
+        <div class="sec-label" style="margin-bottom:8px">③ 其余放行 token（全部 200）</div>
         <div class="panel">
           <table class="q7pp-tbl">
             <thead><tr><th style="width:26%">类别</th><th>Token</th></tr></thead>
             <tbody>
-              <tr><td>工具 / 思维</td><td>computer-use ×3 · token-efficient-tools · code-execution · dev-full-thinking · interleaved-thinking</td></tr>
+              <tr><td>工具 / 思维</td><td>token-efficient-tools · code-execution · dev-full-thinking · interleaved-thinking</td></tr>
               <tr><td>上下文 / 输出</td><td>context-1m · context-management · compact · model-context-window-exceeded · <strong>output-300k</strong> · thinking-token-count</td></tr>
               <tr><td>缓存 / 批处理</td><td>prompt-caching · extended-cache-ttl · cache-diagnosis · message-batches · token-counting · pdfs</td></tr>
               <tr><td>速度 / 回退</td><td><strong>fast-mode</strong> · server-side-fallback ×2 · fallback-credit ×2</td></tr>
@@ -2041,11 +2033,11 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
             </tbody>
           </table>
         </div>
-        <ul class="notes" id="betabl-notes" style="margin-top:12px">
+        <ul class="notes" id="betabl-notes" style="margin-top:8px">
           <li><strong>拦截发生在网关层：</strong>错误格式是 Copilot 自己的 <code>invalid_request_body</code>（非 Anthropic error 格式）；被拦的 5 个都是需要服务端文件 / 状态存储的能力。</li>
           <li><strong>放行 ≠ 生效：</strong><code>fast-mode</code> 放行但 <code>speed</code> 参数无效（专属模型 ID 才提速）；<code>output-300k</code> 放行但 <code>max_tokens</code> 仍卡 128K —— 「200 但静默忽略」是常态。</li>
           <li><strong>双网关策略逐 token 完全一致：</strong>Direct 与 Exchange 74 次调用零分歧。代理自身只注入 3 个 beta（interleaved-thinking / context-management / compact），全在放行名单内 —— 代理剥除是第一道防线，网关黑名单是第二道。</li>
-          <li><strong>本轮只验证「是否被接受」：</strong>要区分「放行」与「真正生效」，需再补一组不带头的负向对照。该功能级复测已于 2026-08-19 完成，结论见下一页 —— 黑名单 5 个 token 三周未变，而被放行的 token 中真正生效的只有 3 个。</li>
+          <li><strong>本轮只验证「是否被接受」：</strong>要区分「放行」与「真正生效」，需再补一组不带头的负向对照。该功能级复测已于 2026-08-19 完成，结论见下一页 —— 黑名单 5 个 token 三周未变。</li>
         </ul>
       </div>
     </div>
@@ -2065,18 +2057,17 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
       <div class="sec-no">＋</div>
       <div>
         <div class="sec-label">Extended Topics — Beta 头功能级三探针复测（2026-08-19）</div>
-        <h2>接受 ≠ 生效：28 个候选 token 只有 3 个真正必需</h2>
+        <h2>接受 ≠ 生效：候选 token 必须做负向对照</h2>
       </div>
     </div>
-    <p class="sec-lede reveal" style="margin-bottom:16px">上一轮（07-26）只测了<strong>头是否被接受</strong>。本轮按 Anthropic 官方 SDK 与文档收敛出 28 个「当前仍需发送」的 A 类 token，对每个跑<strong>三探针</strong>：<code>hdr</code>＝仅带头 · <code>feat+</code>＝带头＋真实功能载荷 · <code>feat−</code>＝同载荷但<strong>不带头</strong>。只有 <code>feat−</code> 失败而 <code>feat+</code> 成功，才证明这个头<strong>确实被上游需要且真实生效</strong>。模型 <code>claude-opus-4.8</code>，直连 <code>api.githubcopilot.com</code>。</p>
+    <p class="sec-lede reveal" style="margin-bottom:16px">上一轮（07-26）只测了<strong>头是否被接受</strong>。本轮按 Anthropic 官方 SDK 与文档筛选候选 token，对每个跑<strong>三探针</strong>：<code>hdr</code>＝仅带头 · <code>feat+</code>＝带头＋真实功能载荷 · <code>feat−</code>＝同载荷但<strong>不带头</strong>。只有 <code>feat−</code> 失败而 <code>feat+</code> 成功，才证明这个头<strong>确实被上游需要且真实生效</strong>。模型 <code>claude-opus-4.8</code>，直连 <code>api.githubcopilot.com</code>。</p>
     <div class="reveal" style="display:grid; grid-template-columns: 1.05fr 1fr; gap: 24px; align-items:start;">
       <div>
-        <div class="sec-label" style="margin-bottom:8px">① 必需且真实生效 —— 必须转发（3 个）</div>
+        <div class="sec-label" style="margin-bottom:8px">① 必需且真实生效 —— 按请求注入（2 个）</div>
         <div class="panel">
           <table class="q7pp-tbl">
             <thead><tr><th style="width:40%">Token</th><th>不带头 <code>feat−</code></th><th>带头 <code>feat+</code></th></tr></thead>
             <tbody>
-              <tr><td><code>computer-use-2025-11-24</code></td><td><span class="badge no">400</span> tag 不合法</td><td><span class="badge ok">200</span> <code>stop_reason=tool_use</code></td></tr>
               <tr><td><code>context-management-2025-06-27</code></td><td><span class="badge no">400</span> <code>Extra inputs</code></td><td><span class="badge ok">200</span></td></tr>
               <tr><td><code>compact-2026-01-12</code></td><td><span class="badge no">400</span> <code>Extra inputs</code></td><td><span class="badge ok">200</span></td></tr>
             </tbody>
@@ -2098,14 +2089,13 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
         </div>
       </div>
       <div>
-        <div class="sec-label" style="margin-bottom:8px">③ 头放行但 Copilot 当前接口不可用（4 个）</div>
+        <div class="sec-label" style="margin-bottom:8px">③ 头放行但 Copilot 当前接口不可用（3 个）</div>
         <div class="panel">
           <table class="q7pp-tbl">
             <thead><tr><th style="width:46%">Token</th><th>上游拒绝原因</th></tr></thead>
             <tbody>
               <tr><td><code>output-300k-2026-03-24</code></td><td>官方仅供 Message Batches API；Copilot 同步 <code>/v1/messages</code> 仍报 <code>300000 &gt; 128000</code></td></tr>
               <tr><td><code>server-side-fallback-2026-07-01</code><br><code>server-side-fallback-2026-06-01</code></td><td><code>fallbacks: Extra inputs are not permitted</code></td></tr>
-              <tr><td><code>computer-use-2025-01-24</code></td><td>Opus 4.8 不支持 <code>computer_20250124</code>，仅 v3</td></tr>
             </tbody>
           </table>
         </div>
@@ -2115,8 +2105,8 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
         </div>
         <ul class="notes" style="margin-top:12px">
           <li><strong>黑名单是硬 400，会打死整个请求：</strong>只要客户端（如 Claude Code）带上 <code>files-api-2025-04-14</code>，盲转就会让请求整体失败。这是「默认剥离」策略最强的正当性证据 —— 过滤不是保守，是<strong>必需的保护</strong>。</li>
-          <li><strong>当前实现已是最优解，无需扩大白名单：</strong>A 类 28 个 token 中真正生效的恰好 3 个，而代理现有策略（<code>computer-use-*</code> 白名单 ＋ 按 body 注入 <code>context-management</code>／<code>compact</code>）正好完整覆盖这 3 个。其余要么 no-op，要么上游无此功能，要么会触发 400。</li>
-          <li><strong>四 token 组合头验证通过：</strong>按代理实际出站形态发送 <code>interleaved-thinking,context-management,compact,computer-use</code> → <span class="badge ok">200</span>，确认组合无冲突。</li>
+          <li><strong>无需扩大通用白名单：</strong>本页可见的真正生效项由代理按 body 注入 <code>context-management</code>／<code>compact</code>；其余要么 no-op，要么当前接口不可用，要么触发 400。</li>
+          <li><strong>组合头验证通过：</strong>按代理实际出站形态发送 <code>interleaved-thinking,context-management,compact</code> → <span class="badge ok">200</span>，确认组合无冲突。</li>
         </ul>
       </div>
     </div>
@@ -2350,7 +2340,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
         <tbody>
           <tr>
             <td>修复 / 功能</td>
-            <td><code>738b8af</code> computer-use beta 头转发 · <code>256dd42</code> interleaved-thinking 转发 · <code>7983f2f</code> compaction beta 自动注入 · <code>b230a88</code> 1M 模型名解析修复(PR #1)· <code>eb1237a</code> search_result 内容块 · <code>ec94ec8</code> Native SSE Ping · count_tokens 代理</td>
+            <td><code>256dd42</code> interleaved-thinking 转发 · <code>7983f2f</code> compaction beta 自动注入 · <code>b230a88</code> 1M 模型名解析修复(PR #1)· <code>eb1237a</code> search_result 内容块 · <code>ec94ec8</code> Native SSE Ping · count_tokens 代理</td>
           </tr>
           <tr>
             <td>认证 / 账户</td>
@@ -2395,7 +2385,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
       <table id="verdict-tbl" style="font-size: 15px;">
         <thead><tr><th style="width:30%">问题</th><th style="width:16%">状态</th><th>处置</th></tr></thead>
         <tbody>
-          <tr><td>Q1 上游能力边界(web_search / web_fetch / 外链图与 PDF / 300K 输出)</td><td><span class="badge warn">△ 上游限制</span></td><td>图片 / PDF 改用 base64,检索由客户端工具替代;300K 仅官方 Message Batches API，Copilot 未暴露;computer use 与 fast mode 已打通</td></tr>
+          <tr><td>Q1 上游能力边界(web_search / web_fetch / 外链图与 PDF / 300K 输出)</td><td><span class="badge warn">△ 上游限制</span></td><td>图片 / PDF 改用 base64,检索由客户端工具替代;300K 仅官方 Message Batches API，Copilot 未暴露;fast mode 已打通</td></tr>
           <tr><td>Q2 413 请求体超限</td><td><span class="badge ok">✓ 已定位</span></td><td>Business 端点网关层 body 大小上限(阈值未验证,预估约 30MB);代理不压缩图片 + 历史重复携带致 body 膨胀</td></tr>
           <tr><td>Q3 Thinking Signature 转换丢失</td><td><span class="badge ok">✓ 已规避</span></td><td>需签名的客户端走原生 <code>/v1/messages</code> 透传(与直连等价)</td></tr>
           <tr><td>Q4 Vertex 不支持 Structured Outputs</td><td><span class="badge no">✕ 上游策略</span></td><td>GCP 组织策略缺口,漂到 Vertex 间歇失败;客户端对该 400 重试</td></tr>
