@@ -870,6 +870,65 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
 .quick-q1 ul.notes { margin-top: 8px !important; }
 .quick-q1 ul.notes li { padding: 6px 0 6px 30px; font-size: 15px; line-height: 1.4; }
 .quick-q1 ul.notes li::before { left: 5px; top: 5px; font-size: 16px; }
+
+/* OpenCode / VS Code 身份验证与 token 获取流程。 */
+.auth-flow-slide .sec-head { margin-bottom: 10px; }
+.auth-flow-slide .sec-lede { font-size: 17px; line-height: 1.4; margin-bottom: 12px; }
+.auth-shared {
+  display: grid; grid-template-columns: 1fr 58px 1.1fr 58px 1fr;
+  gap: 10px; align-items: stretch; margin-bottom: 14px;
+}
+.auth-shared .auth-step {
+  border: 1.5px solid var(--rule); background: var(--paper-raise);
+  padding: 12px 14px; min-height: 98px;
+}
+.auth-step .as-k {
+  font-family: var(--mono); font-size: 11px; font-weight: 600;
+  letter-spacing: .1em; text-transform: uppercase; color: var(--orange-ink);
+  margin-bottom: 6px;
+}
+.auth-step .as-v { font-size: 14px; line-height: 1.35; color: var(--ink-soft); }
+.auth-step .as-v strong { color: var(--ink); }
+.auth-arrow {
+  align-self: center; text-align: center; color: var(--orange);
+  font-family: var(--mono); font-size: 11px; line-height: 1.2;
+}
+.auth-arrow::after { content: "→"; display: block; font-size: 34px; line-height: 1; }
+.auth-branches { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.auth-branch {
+  border: 2px solid var(--rule); background: var(--paper-raise);
+  box-shadow: 7px 7px 0 rgba(26,25,19,.08); overflow: hidden;
+}
+.auth-branch-head {
+  display: grid; grid-template-columns: auto 1fr; gap: 14px; align-items: center;
+  padding: 13px 16px; background: var(--ink); color: var(--paper);
+}
+.auth-branch-head .ab-mode {
+  font-family: var(--mono); font-size: 11px; font-weight: 600;
+  letter-spacing: .1em; text-transform: uppercase; color: var(--orange);
+}
+.auth-branch-head h3 { font-size: 22px; line-height: 1.15; }
+.auth-branch-body { padding: 13px 16px; }
+.auth-token-flow { display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: center; }
+.auth-token-box {
+  min-height: 78px; padding: 10px 12px;
+  border: 1px solid var(--hairline); background: var(--paper);
+  font-size: 13px; line-height: 1.35; color: var(--ink-soft);
+}
+.auth-token-box strong { display: block; color: var(--ink); margin-bottom: 4px; }
+.auth-token-arrow { color: var(--orange); font-size: 26px; }
+.auth-branch .guide-list { margin-top: 10px; }
+.auth-branch .guide-list li { font-size: 13px; line-height: 1.35; padding: 6px 0 6px 20px; }
+.auth-summary {
+  display: grid; grid-template-columns: auto 1fr; gap: 14px; align-items: center;
+  margin-top: 14px; padding: 10px 14px;
+  border: 2px solid var(--pass); background: var(--tint-pass);
+  font-size: 13px; line-height: 1.35; color: var(--ink-soft);
+}
+.auth-summary .sum-k {
+  font-family: var(--mono); font-size: 11px; font-weight: 600;
+  letter-spacing: .1em; text-transform: uppercase; color: var(--pass); white-space: nowrap;
+}
 </style>
 </head>
 <body>
@@ -1120,61 +1179,82 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-foot"><span>Operating Guide · Integration Topology</span><span>2026-08-24</span></div>
 </section>
 
-<!-- ==================== SLIDE 06 · KPI ==================== -->
-<section class="slide" aria-label="关键指标">
+<!-- ==================== SLIDE 06 · OpenCode 与 VS Code 认证流程 ==================== -->
+<section class="slide auth-flow-slide" aria-label="OpenCode 与 VS Code 身份验证和 Copilot Token 获取逻辑">
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
-    <span class="doc-sec">Key Figures — 关键指标</span>
+    <span class="doc-sec">Operating Guide — Authentication &amp; Token Flow</span>
     <span class="doc-pg">06 / 7</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
-      <div class="sec-no">FIG</div>
+      <div class="sec-no">00</div>
       <div>
-        <div class="sec-label">Instrument Panel</div>
-        <h2>复盘全景：七大问题域</h2>
+        <div class="sec-label">Before You Start — 身份验证与上游凭据</div>
+        <h2>OpenCode 直用 GitHub Token；VS Code 再交换 Copilot Token</h2>
       </div>
     </div>
-    <div class="kpi-strip reveal" role="list" aria-label="关键指标">
-      <div class="kpi" role="listitem">
-        <span class="k-idx">FIG.01</span>
-        <div class="k-label">核心问题域</div>
-        <div class="k-value">7</div>
-        <div class="k-note">上游缺口 / 413 / Thinking Signature / Structured Outputs / 认证 / SSE 流式 / Client-ID 模型</div>
+    <p class="sec-lede reveal">两种模式都先通过 GitHub OAuth Device Flow 获取 GitHub OAuth token；差异发生在<strong>如何获得 Copilot API Bearer</strong>。认证模式、OAuth Client-ID、Token 用法、Base URL 与请求头 Profile 必须整套匹配。</p>
+    <div class="auth-shared reveal">
+      <div class="auth-step">
+        <div class="as-k">Step 01 · Device Code</div>
+        <div class="as-v"><strong>POST /login/device/code</strong><br><code>scope=read:user</code><br>返回 user_code 与验证地址</div>
       </div>
-      <div class="kpi" role="listitem">
-        <span class="k-idx">FIG.02</span>
-        <div class="k-label">复盘会话</div>
-        <div class="k-value">60<span class="unit">+</span></div>
-        <div class="k-note">2026-06-10 ~ 08-13,CLI + VS Code Chat</div>
+      <div class="auth-arrow">用户授权</div>
+      <div class="auth-step">
+        <div class="as-k">Step 02 · Browser Approval</div>
+        <div class="as-v">用户访问 <strong>verification_uri</strong>，输入 user_code 并批准对应 GitHub OAuth App。</div>
       </div>
-      <div class="kpi" role="listitem">
-        <span class="k-idx">FIG.03</span>
-        <div class="k-label">能力矩阵用例</div>
-        <div class="k-value">95</div>
-        <div class="k-note">三层对照:Opus 4.8 × 47 + Sonnet 4.6 × 48(TD-2607)</div>
+      <div class="auth-arrow">轮询</div>
+      <div class="auth-step">
+        <div class="as-k">Step 03 · GitHub OAuth Token</div>
+        <div class="as-v"><strong>POST /login/oauth/access_token</strong><br>处理 pending / slow_down，成功后持久化 GitHub token。</div>
       </div>
-      <div class="kpi" role="listitem">
-        <span class="k-idx">FIG.04</span>
-        <div class="k-label">修复/功能落地</div>
-        <div class="k-value">10<span class="unit">+</span></div>
-        <div class="k-note">beta 头转发 · 1M 修复 · ModeDirect · SSE Ping · 账户池 …</div>
-      </div>
-      <div class="kpi" role="listitem">
-        <span class="k-idx">FIG.05</span>
-        <div class="k-label">问题闭环</div>
-        <div class="k-value">6/7</div>
-        <div class="k-note">唯一悬置:SO 落 Vertex 为上游组织策略,只能重试</div>
-      </div>
-      <div class="kpi" role="listitem">
-        <span class="k-idx">FIG.06</span>
-        <div class="k-label">专用探测脚本</div>
-        <div class="k-value">5<span class="unit">套</span></div>
-        <div class="k-note">capability / structured_outputs / TTFT / 2M payload / SSE keep-alive</div>
-      </div>
+    </div>
+    <div class="auth-branches reveal">
+      <article class="auth-branch">
+        <div class="auth-branch-head">
+          <div class="ab-mode">OpenCode · Direct</div>
+          <h3>不交换 Copilot Token</h3>
+        </div>
+        <div class="auth-branch-body">
+          <div class="auth-token-flow">
+            <div class="auth-token-box"><strong>OAuth Client-ID</strong><code>Ov23li8tweQw6odWQebz</code></div>
+            <div class="auth-token-arrow">→</div>
+            <div class="auth-token-box"><strong>Copilot Bearer</strong>直接使用 GitHub OAuth token</div>
+          </div>
+          <ul class="guide-list">
+            <li>不调用 <code>api.github.com/copilot_internal/v2/token</code></li>
+            <li>静态 Base URL：<code>https://api.githubcopilot.com</code></li>
+            <li>无短时 Copilot token 刷新；使用 <strong>ProfileOpenCode</strong></li>
+          </ul>
+        </div>
+      </article>
+      <article class="auth-branch">
+        <div class="auth-branch-head">
+          <div class="ab-mode">VS Code · Exchange</div>
+          <h3>GitHub Token → 短时 Copilot Token</h3>
+        </div>
+        <div class="auth-branch-body">
+          <div class="auth-token-flow">
+            <div class="auth-token-box"><strong>OAuth Client-ID</strong><code>Iv1.b507a08c87ecfe98</code></div>
+            <div class="auth-token-arrow">→</div>
+            <div class="auth-token-box"><strong>Token Exchange</strong><code>GET copilot_internal/v2/token</code></div>
+          </div>
+          <ul class="guide-list">
+            <li>返回短时 Copilot token、<code>expires_at</code> 与 <code>proxy-ep</code></li>
+            <li>由 <code>proxy-ep</code> 推导动态 Copilot API Base URL</li>
+            <li>剩余可用期 ≤5 分钟时惰性刷新；并发刷新串行化；使用 <strong>ProfileEditor</strong></li>
+          </ul>
+        </div>
+      </article>
+    </div>
+    <div class="auth-summary reveal">
+      <div class="sum-k">Persistence Rule</div>
+      <div>两种模式都保存 GitHub OAuth token 到账号独立的 <code>credentials.json</code>（0600）。重启后 Direct 可直接复用；Exchange 可重新铸造 Copilot token，通常无需再次 Device Flow。</div>
     </div>
   </div>
-  <div class="s-foot"><span>Issues Retrospective</span><span>2026-07-19</span></div>
+  <div class="s-foot"><span>Operating Guide · Authentication &amp; Token Flow</span><span>2026-08-26</span></div>
 </section>
 
 <!-- ==================== SLIDE 07 · Q1 现象 ==================== -->
