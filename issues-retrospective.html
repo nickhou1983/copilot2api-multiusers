@@ -925,13 +925,13 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
         </ul>
       </article>
       <article class="guide-card">
-        <div class="g-index">Guardrail 03 · Direct Profile</div>
-        <h3>Direct 模式模拟 OpenCode</h3>
-        <p>Direct 身份验证使用 OpenCode 风格的 OAuth Client-ID 与请求头画像，避免混用 VS Code / Exchange 身份。</p>
+        <div class="g-index">Guardrail 03 · Auth Method</div>
+        <h3>身份验证方式建议采用 OpenCode 方式</h3>
+        <p>建议优先采用 OpenCode 的 OAuth Device Flow：使用 OpenCode Client-ID 获取 GitHub OAuth token，并直接作为 Copilot API Bearer，减少短时 Copilot token 的交换与刷新环节。</p>
         <ul class="guide-list">
-          <li><strong>Direct → ProfileOpenCode</strong></li>
-          <li><strong>Exchange → ProfileEditor</strong></li>
-          <li>认证模式、Client-ID 与请求头 profile 必须成套匹配</li>
+          <li><strong>OpenCode Client-ID → GitHub OAuth token</strong></li>
+          <li><strong>GitHub OAuth token → Copilot Bearer（无需二次交换）</strong></li>
+          <li>Client-ID、token 用法与 <strong>ProfileOpenCode</strong> 必须成套匹配</li>
         </ul>
       </article>
     </div>
