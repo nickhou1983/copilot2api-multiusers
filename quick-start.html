@@ -1013,178 +1013,12 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-foot"><span>Operating Guide · Global Guardrails</span><span>2026-08-24</span></div>
 </section>
 
-<!-- ==================== SLIDE 03 · 使用前须知 请求头 Profile ==================== -->
-<section class="slide usage-guide-slide" aria-label="OpenCode 与 VS Code Copilot 请求头 Profile">
-  <div class="s-top">
-    <span class="doc-no">TD-2620</span>
-    <span class="doc-sec">Operating Guide — Client Header Profiles</span>
-    <span class="doc-pg">03 / 7</span>
-  </div>
-  <div class="s-body">
-    <div class="sec-head reveal">
-      <div class="sec-no">00</div>
-      <div>
-        <div class="sec-label">Before You Start — 客户端请求画像（2 of 4）</div>
-        <h2>OpenCode 与 VS Code：身份和请求头必须成套匹配</h2>
-      </div>
-    </div>
-    <p class="sec-lede reveal" style="margin-bottom:14px">以下是 Copilot2API 当前实现的请求头快照，分别模拟 OpenCode 的 Direct 模式与 VS Code Copilot Chat 的 Exchange 模式。<strong>版本号不是永久常量</strong>；升级代理时应回看客户端源码，再跑 <code>/models</code> 与真实调用回归。</p>
-    <div class="header-profile-grid reveal">
-      <article class="header-profile-card">
-        <div class="header-profile-head">
-          <div class="hp-mode">Direct · ProfileOpenCode</div>
-          <h3>OpenCode 画像</h3>
-          <div class="hp-auth">GitHub OAuth token</div>
-        </div>
-        <div class="header-lines">
-          <div class="header-line"><span class="hk">Authorization</span><span class="hv">Bearer &lt;github-oauth-token&gt;</span></div>
-          <div class="header-line"><span class="hk">User-Agent</span><span class="hv">opencode/&lt;current-version&gt;</span></div>
-          <div class="header-line"><span class="hk">Openai-Intent</span><span class="hv">conversation-edits</span></div>
-          <div class="header-line"><span class="hk">X-Github-Api-Version</span><span class="hv">2026-06-01</span></div>
-          <div class="header-line"><span class="hk">X-Initiator</span><span class="hv">user | agent</span></div>
-          <div class="header-line"><span class="hk">Content-Type</span><span class="hv">application/json</span></div>
-        </div>
-        <div class="header-profile-note"><strong>按载荷动态追加：</strong>图片输入时 OpenCode 会发送 <code>Copilot-Vision-Request: true</code>。不要混入 Editor-Version、Plugin-Version、Integration-Id 或生成式 X-Request-Id。</div>
-      </article>
-      <article class="header-profile-card">
-        <div class="header-profile-head">
-          <div class="hp-mode">Exchange · ProfileEditor</div>
-          <h3>VS Code 画像</h3>
-          <div class="hp-auth">short-lived Copilot token</div>
-        </div>
-        <div class="header-lines">
-          <div class="header-line"><span class="hk">Authorization</span><span class="hv">Bearer &lt;copilot-token&gt;</span></div>
-          <div class="header-line"><span class="hk">User-Agent</span><span class="hv">GitHubCopilotChat/&lt;extension-version&gt;</span></div>
-          <div class="header-line"><span class="hk">Editor-Version</span><span class="hv">vscode/&lt;current-version&gt;</span></div>
-          <div class="header-line"><span class="hk">Editor-Plugin-Version</span><span class="hv">copilot-chat/&lt;extension-version&gt;</span></div>
-          <div class="header-line"><span class="hk">Copilot-Integration-Id</span><span class="hv">vscode-chat</span></div>
-          <div class="header-line"><span class="hk">Openai-Intent</span><span class="hv">conversation-agent</span></div>
-          <div class="header-line"><span class="hk">X-Github-Api-Version</span><span class="hv">2026-06-01</span></div>
-          <div class="header-line"><span class="hk">X-Request-Id</span><span class="hv">每请求唯一 ID</span></div>
-        </div>
-      </article>
-    </div>
-    <div class="native-header-bar reveal">
-      <div class="nh-k">Native Anthropic</div>
-      <div>调用原生 <code>/v1/messages</code> 时，在上述身份画像之外再发送 <code>anthropic-version: 2023-06-01</code>；<code>anthropic-beta</code> 由代理按功能白名单重建，不应复制客户端任意值。</div>
-    </div>
-    <div class="source-reference reveal">
-      <div class="source-ref"><div class="sr-k">OpenCode 源码</div><code>packages/opencode/src/plugin/github-copilot/copilot.ts</code><br>重点检查 fetch headers、<code>x-initiator</code> 与视觉载荷判断。</div>
-      <div class="source-ref"><div class="sr-k">VS Code 源码</div><code>microsoft/vscode-copilot-chat</code><br>搜索 <code>GitHubCopilotChat</code>、<code>Copilot-Integration-Id</code>、<code>Openai-Intent</code> 的请求构造逻辑。</div>
-      <div class="source-ref"><div class="sr-k">本项目映射</div><code>internal/copilot/headers.go</code><br>更新常量与 profile 后，同步回归模型列表、真实调用和身份头缺失项。</div>
-    </div>
-  </div>
-  <div class="s-foot"><span>Operating Guide · Client Header Profiles</span><span>2026-08-26</span></div>
-</section>
-
-<!-- ==================== SLIDE 04 · 使用前须知 Beta 防火墙 ==================== -->
-<section class="slide usage-guide-slide" aria-label="Anthropic beta 头白名单与 Copilot 黑名单">
-  <div class="s-top">
-    <span class="doc-no">TD-2620</span>
-    <span class="doc-sec">Operating Guide — Anthropic Beta Firewall</span>
-    <span class="doc-pg">04 / 7</span>
-  </div>
-  <div class="s-body">
-    <div class="sec-head reveal">
-      <div class="sec-no">00</div>
-      <div>
-        <div class="sec-label">Before You Start — 全局使用注意事项（3 of 4）</div>
-        <h2>代理侧用白名单；Copilot 网关却是黑名单</h2>
-      </div>
-    </div>
-    <p class="sec-lede reveal">GitHub Copilot 不会完整校验每个 <code>anthropic-beta</code> token：未知甚至伪造的 token 往往仍返回 <strong>200</strong>，但这不代表功能生效；命中其明确黑名单时，整个请求会直接 <strong>400</strong>。因此代理出站必须采用<strong>最小白名单</strong>。</p>
-    <div class="beta-guard-grid reveal">
-      <div class="panel">
-        <div class="guard-title">建议的基线白名单 · 只按真实载荷注入</div>
-        <div class="token-stack">
-          <div class="token-row"><code>interleaved-thinking-2025-05-14</code><span>Native Messages 基线；由代理统一生成，不接受客户端任意透传。</span></div>
-          <div class="token-row"><code>context-management-2025-06-27</code><span>仅当 body 含 <code>context_management</code> 时注入。</span></div>
-          <div class="token-row"><code>compact-2026-01-12</code><span>仅在 compaction / compact 相关请求中注入。</span></div>
-        </div>
-        <ul class="guide-list">
-          <li>基线字段参考 OpenCode / VS Code 当前实际发送值，并随客户端版本更新。</li>
-          <li>客户端提供的其他 beta 默认剥离，避免一个危险 token 打死整次请求。</li>
-        </ul>
-      </div>
-      <div class="panel">
-        <div class="guard-title">Copilot 明确拒绝的 5 个 token · 400</div>
-        <div class="blocklist-grid">
-          <div class="block-token">files-api-2025-04-14</div>
-          <div class="block-token">mcp-client-2025-11-20</div>
-          <div class="block-token">skills-2025-10-02</div>
-          <div class="block-token">advisor-tool-2026-03-01</div>
-          <div class="block-token">output-128k-2025-02-19</div>
-        </div>
-        <ul class="guide-list">
-          <li><strong>200 只表示网关接受：</strong>伪造 token、<code>output-300k</code> 等都可能被静默忽略。</li>
-          <li><strong>400 表示硬拒绝：</strong>黑名单 token 会让整个请求失败，不能依赖上游自动忽略。</li>
-          <li><strong>策略：</strong>客户端 beta → 代理解析 → 按功能白名单重建出站头，而不是原样转发。</li>
-        </ul>
-      </div>
-    </div>
-    <div class="guide-strip reveal">
-      <div class="gs-k">Decision Rule</div>
-      <div><strong>接受 ≠ 生效。</strong>判断 beta 功能必须做三探针：仅带头、带头＋真实载荷、同载荷不带头；只有负向对照失败才证明该头确实必需。</div>
-    </div>
-  </div>
-  <div class="s-foot"><span>Operating Guide · Anthropic Beta Firewall</span><span>2026-08-24</span></div>
-</section>
-
-<!-- ==================== SLIDE 05 · 使用前须知 接入场景 ==================== -->
-<section class="slide usage-guide-slide" aria-label="开发者与应用接入场景">
-  <div class="s-top">
-    <span class="doc-no">TD-2620</span>
-    <span class="doc-sec">Operating Guide — Integration Topology</span>
-    <span class="doc-pg">05 / 7</span>
-  </div>
-  <div class="s-body">
-    <div class="sec-head reveal">
-      <div class="sec-no">00</div>
-      <div>
-        <div class="sec-label">Before You Start — 场景化接入注意事项（4 of 4）</div>
-        <h2>开发者隔离身份；应用侧保持 Session 粘性</h2>
-      </div>
-    </div>
-    <p class="sec-lede reveal">开发者工具和后端应用的风险模型不同：前者重点是<strong>个人身份隔离与隐私边界</strong>，后者重点是<strong>账户池负载、会话连续性和故障转移</strong>。不要用同一套轮询规则覆盖两种场景。</p>
-    <div class="scenario-grid reveal">
-      <article class="scenario-card">
-        <div class="scenario-k">Developer Scenario · Claude Code / OpenCode</div>
-        <h3>一人 · 一 Key · 一 GitHub 账户</h3>
-        <ul class="guide-list">
-          <li>每位开发者使用独立 Copilot2API Key，并固定映射到<strong>唯一 GitHub 账户</strong>。</li>
-          <li>禁止多人共享 Key / 账户；确保用量归属、撤销、限额和审计都能落到个人。</li>
-          <li>优先评估 OpenCode：实现可审计，Direct 模式也以其请求头 profile 为参考。</li>
-          <li>Claude Code 可能携带客户端环境或遥测相关信息；接入前核对配置、数据政策与组织隐私要求。</li>
-        </ul>
-      </article>
-      <article class="scenario-card">
-        <div class="scenario-k">Application Scenario · Account Pool</div>
-        <h3>按 Session 负载，而非逐请求乱跳</h3>
-        <ul class="guide-list">
-          <li>建立稳定的 <strong>Session → GitHub 账户</strong>映射，同一会话优先保持账户粘性。</li>
-          <li>综合账户健康、并发、限额和缓存状态分配新 Session，避免简单无状态轮询。</li>
-          <li>故障转移尽量发生在请求/轮次边界，并记录切换原因；避免破坏上下文、缓存与工具连续性。</li>
-          <li>监控每账户成功率、429/5xx、token 用量与活跃 Session，及时隔离异常账户。</li>
-        </ul>
-      </article>
-    </div>
-    <div class="session-ribbon reveal">
-      <div><strong>API Key</strong><br>个人/应用身份</div>
-      <div class="arrow">→</div>
-      <div><strong>Session Router</strong><br>粘性 + 健康感知</div>
-      <div class="arrow">→</div>
-      <div><strong>GitHub Account</strong><br>独立配额与审计</div>
-    </div>
-  </div>
-  <div class="s-foot"><span>Operating Guide · Integration Topology</span><span>2026-08-24</span></div>
-</section>
-
-<!-- ==================== SLIDE 06 · OpenCode 与 VS Code 认证流程 ==================== -->
+<!-- ==================== SLIDE 03 · OpenCode 与 VS Code 认证流程 ==================== -->
 <section class="slide auth-flow-slide" aria-label="OpenCode 与 VS Code 身份验证和 Copilot Token 获取逻辑">
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Operating Guide — Authentication &amp; Token Flow</span>
-    <span class="doc-pg">06 / 7</span>
+    <span class="doc-pg">03 / 7</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1255,6 +1089,172 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
     </div>
   </div>
   <div class="s-foot"><span>Operating Guide · Authentication &amp; Token Flow</span><span>2026-08-26</span></div>
+</section>
+
+<!-- ==================== SLIDE 04 · 使用前须知 请求头 Profile ==================== -->
+<section class="slide usage-guide-slide" aria-label="OpenCode 与 VS Code Copilot 请求头 Profile">
+  <div class="s-top">
+    <span class="doc-no">TD-2620</span>
+    <span class="doc-sec">Operating Guide — Client Header Profiles</span>
+    <span class="doc-pg">04 / 7</span>
+  </div>
+  <div class="s-body">
+    <div class="sec-head reveal">
+      <div class="sec-no">00</div>
+      <div>
+        <div class="sec-label">Before You Start — 客户端请求画像（3 of 4）</div>
+        <h2>OpenCode 与 VS Code：身份和请求头必须成套匹配</h2>
+      </div>
+    </div>
+    <p class="sec-lede reveal" style="margin-bottom:14px">以下是 Copilot2API 当前实现的请求头快照，分别模拟 OpenCode 的 Direct 模式与 VS Code Copilot Chat 的 Exchange 模式。<strong>版本号不是永久常量</strong>；升级代理时应回看客户端源码，再跑 <code>/models</code> 与真实调用回归。</p>
+    <div class="header-profile-grid reveal">
+      <article class="header-profile-card">
+        <div class="header-profile-head">
+          <div class="hp-mode">Direct · ProfileOpenCode</div>
+          <h3>OpenCode 画像</h3>
+          <div class="hp-auth">GitHub OAuth token</div>
+        </div>
+        <div class="header-lines">
+          <div class="header-line"><span class="hk">Authorization</span><span class="hv">Bearer &lt;github-oauth-token&gt;</span></div>
+          <div class="header-line"><span class="hk">User-Agent</span><span class="hv">opencode/&lt;current-version&gt;</span></div>
+          <div class="header-line"><span class="hk">Openai-Intent</span><span class="hv">conversation-edits</span></div>
+          <div class="header-line"><span class="hk">X-Github-Api-Version</span><span class="hv">2026-06-01</span></div>
+          <div class="header-line"><span class="hk">X-Initiator</span><span class="hv">user | agent</span></div>
+          <div class="header-line"><span class="hk">Content-Type</span><span class="hv">application/json</span></div>
+        </div>
+        <div class="header-profile-note"><strong>按载荷动态追加：</strong>图片输入时 OpenCode 会发送 <code>Copilot-Vision-Request: true</code>。不要混入 Editor-Version、Plugin-Version、Integration-Id 或生成式 X-Request-Id。</div>
+      </article>
+      <article class="header-profile-card">
+        <div class="header-profile-head">
+          <div class="hp-mode">Exchange · ProfileEditor</div>
+          <h3>VS Code 画像</h3>
+          <div class="hp-auth">short-lived Copilot token</div>
+        </div>
+        <div class="header-lines">
+          <div class="header-line"><span class="hk">Authorization</span><span class="hv">Bearer &lt;copilot-token&gt;</span></div>
+          <div class="header-line"><span class="hk">User-Agent</span><span class="hv">GitHubCopilotChat/&lt;extension-version&gt;</span></div>
+          <div class="header-line"><span class="hk">Editor-Version</span><span class="hv">vscode/&lt;current-version&gt;</span></div>
+          <div class="header-line"><span class="hk">Editor-Plugin-Version</span><span class="hv">copilot-chat/&lt;extension-version&gt;</span></div>
+          <div class="header-line"><span class="hk">Copilot-Integration-Id</span><span class="hv">vscode-chat</span></div>
+          <div class="header-line"><span class="hk">Openai-Intent</span><span class="hv">conversation-agent</span></div>
+          <div class="header-line"><span class="hk">X-Github-Api-Version</span><span class="hv">2026-06-01</span></div>
+          <div class="header-line"><span class="hk">X-Request-Id</span><span class="hv">每请求唯一 ID</span></div>
+        </div>
+      </article>
+    </div>
+    <div class="native-header-bar reveal">
+      <div class="nh-k">Native Anthropic</div>
+      <div>调用原生 <code>/v1/messages</code> 时，在上述身份画像之外再发送 <code>anthropic-version: 2023-06-01</code>；<code>anthropic-beta</code> 由代理按功能白名单重建，不应复制客户端任意值。</div>
+    </div>
+    <div class="source-reference reveal">
+      <div class="source-ref"><div class="sr-k">OpenCode 源码</div><code>packages/opencode/src/plugin/github-copilot/copilot.ts</code><br>重点检查 fetch headers、<code>x-initiator</code> 与视觉载荷判断。</div>
+      <div class="source-ref"><div class="sr-k">VS Code 源码</div><code>microsoft/vscode-copilot-chat</code><br>搜索 <code>GitHubCopilotChat</code>、<code>Copilot-Integration-Id</code>、<code>Openai-Intent</code> 的请求构造逻辑。</div>
+      <div class="source-ref"><div class="sr-k">本项目映射</div><code>internal/copilot/headers.go</code><br>更新常量与 profile 后，同步回归模型列表、真实调用和身份头缺失项。</div>
+    </div>
+  </div>
+  <div class="s-foot"><span>Operating Guide · Client Header Profiles</span><span>2026-08-26</span></div>
+</section>
+
+<!-- ==================== SLIDE 05 · 使用前须知 Beta 防火墙 ==================== -->
+<section class="slide usage-guide-slide" aria-label="Anthropic beta 头白名单与 Copilot 黑名单">
+  <div class="s-top">
+    <span class="doc-no">TD-2620</span>
+    <span class="doc-sec">Operating Guide — Anthropic Beta Firewall</span>
+    <span class="doc-pg">05 / 7</span>
+  </div>
+  <div class="s-body">
+    <div class="sec-head reveal">
+      <div class="sec-no">00</div>
+      <div>
+        <div class="sec-label">Before You Start — 全局使用注意事项（4 of 4）</div>
+        <h2>代理侧用白名单；Copilot 网关却是黑名单</h2>
+      </div>
+    </div>
+    <p class="sec-lede reveal">GitHub Copilot 不会完整校验每个 <code>anthropic-beta</code> token：未知甚至伪造的 token 往往仍返回 <strong>200</strong>，但这不代表功能生效；命中其明确黑名单时，整个请求会直接 <strong>400</strong>。因此代理出站必须采用<strong>最小白名单</strong>。</p>
+    <div class="beta-guard-grid reveal">
+      <div class="panel">
+        <div class="guard-title">建议的基线白名单 · 只按真实载荷注入</div>
+        <div class="token-stack">
+          <div class="token-row"><code>interleaved-thinking-2025-05-14</code><span>Native Messages 基线；由代理统一生成，不接受客户端任意透传。</span></div>
+          <div class="token-row"><code>context-management-2025-06-27</code><span>仅当 body 含 <code>context_management</code> 时注入。</span></div>
+          <div class="token-row"><code>compact-2026-01-12</code><span>仅在 compaction / compact 相关请求中注入。</span></div>
+        </div>
+        <ul class="guide-list">
+          <li>基线字段参考 OpenCode / VS Code 当前实际发送值，并随客户端版本更新。</li>
+          <li>客户端提供的其他 beta 默认剥离，避免一个危险 token 打死整次请求。</li>
+        </ul>
+      </div>
+      <div class="panel">
+        <div class="guard-title">Copilot 明确拒绝的 5 个 token · 400</div>
+        <div class="blocklist-grid">
+          <div class="block-token">files-api-2025-04-14</div>
+          <div class="block-token">mcp-client-2025-11-20</div>
+          <div class="block-token">skills-2025-10-02</div>
+          <div class="block-token">advisor-tool-2026-03-01</div>
+          <div class="block-token">output-128k-2025-02-19</div>
+        </div>
+        <ul class="guide-list">
+          <li><strong>200 只表示网关接受：</strong>伪造 token、<code>output-300k</code> 等都可能被静默忽略。</li>
+          <li><strong>400 表示硬拒绝：</strong>黑名单 token 会让整个请求失败，不能依赖上游自动忽略。</li>
+          <li><strong>策略：</strong>客户端 beta → 代理解析 → 按功能白名单重建出站头，而不是原样转发。</li>
+        </ul>
+      </div>
+    </div>
+    <div class="guide-strip reveal">
+      <div class="gs-k">Decision Rule</div>
+      <div><strong>接受 ≠ 生效。</strong>判断 beta 功能必须做三探针：仅带头、带头＋真实载荷、同载荷不带头；只有负向对照失败才证明该头确实必需。</div>
+    </div>
+  </div>
+  <div class="s-foot"><span>Operating Guide · Anthropic Beta Firewall</span><span>2026-08-24</span></div>
+</section>
+
+<!-- ==================== SLIDE 06 · 使用前须知 接入场景 ==================== -->
+<section class="slide usage-guide-slide" aria-label="开发者与应用接入场景">
+  <div class="s-top">
+    <span class="doc-no">TD-2620</span>
+    <span class="doc-sec">Operating Guide — Integration Topology</span>
+    <span class="doc-pg">06 / 7</span>
+  </div>
+  <div class="s-body">
+    <div class="sec-head reveal">
+      <div class="sec-no">00</div>
+      <div>
+        <div class="sec-label">Before You Start — 场景化接入注意事项</div>
+        <h2>开发者隔离身份；应用侧保持 Session 粘性</h2>
+      </div>
+    </div>
+    <p class="sec-lede reveal">开发者工具和后端应用的风险模型不同：前者重点是<strong>个人身份隔离与隐私边界</strong>，后者重点是<strong>账户池负载、会话连续性和故障转移</strong>。不要用同一套轮询规则覆盖两种场景。</p>
+    <div class="scenario-grid reveal">
+      <article class="scenario-card">
+        <div class="scenario-k">Developer Scenario · Claude Code / OpenCode</div>
+        <h3>一人 · 一 Key · 一 GitHub 账户</h3>
+        <ul class="guide-list">
+          <li>每位开发者使用独立 Copilot2API Key，并固定映射到<strong>唯一 GitHub 账户</strong>。</li>
+          <li>禁止多人共享 Key / 账户；确保用量归属、撤销、限额和审计都能落到个人。</li>
+          <li>优先评估 OpenCode：实现可审计，Direct 模式也以其请求头 profile 为参考。</li>
+          <li>Claude Code 可能携带客户端环境或遥测相关信息；接入前核对配置、数据政策与组织隐私要求。</li>
+        </ul>
+      </article>
+      <article class="scenario-card">
+        <div class="scenario-k">Application Scenario · Account Pool</div>
+        <h3>按 Session 负载，而非逐请求乱跳</h3>
+        <ul class="guide-list">
+          <li>建立稳定的 <strong>Session → GitHub 账户</strong>映射，同一会话优先保持账户粘性。</li>
+          <li>综合账户健康、并发、限额和缓存状态分配新 Session，避免简单无状态轮询。</li>
+          <li>故障转移尽量发生在请求/轮次边界，并记录切换原因；避免破坏上下文、缓存与工具连续性。</li>
+          <li>监控每账户成功率、429/5xx、token 用量与活跃 Session，及时隔离异常账户。</li>
+        </ul>
+      </article>
+    </div>
+    <div class="session-ribbon reveal">
+      <div><strong>API Key</strong><br>个人/应用身份</div>
+      <div class="arrow">→</div>
+      <div><strong>Session Router</strong><br>粘性 + 健康感知</div>
+      <div class="arrow">→</div>
+      <div><strong>GitHub Account</strong><br>独立配额与审计</div>
+    </div>
+  </div>
+  <div class="s-foot"><span>Operating Guide · Integration Topology</span><span>2026-08-24</span></div>
 </section>
 
 <!-- ==================== SLIDE 07 · Q1 现象 ==================== -->
