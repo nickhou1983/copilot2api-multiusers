@@ -692,6 +692,62 @@ ul.notes strong { color: var(--ink); }
 }
 .session-ribbon .arrow { color: var(--orange); font-size: 28px; }
 .session-ribbon strong { color: var(--ink); }
+.header-profile-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: stretch; }
+.header-profile-card {
+  border: 2px solid var(--rule); background: var(--paper-raise);
+  box-shadow: 8px 8px 0 rgba(26,25,19,.08); overflow: hidden;
+}
+.header-profile-head {
+  display: grid; grid-template-columns: auto 1fr auto; gap: 16px; align-items: center;
+  padding: 16px 20px; background: var(--ink); color: var(--paper);
+}
+.header-profile-head .hp-mode {
+  font-family: var(--mono); font-size: 13px; font-weight: 600;
+  letter-spacing: .13em; text-transform: uppercase; color: var(--orange);
+}
+.header-profile-head h3 { font-size: 25px; line-height: 1.15; }
+.header-profile-head .hp-auth {
+  font-family: var(--mono); font-size: 12px; color: var(--paper-sink);
+  border: 1px solid rgba(255,255,255,.3); padding: 5px 8px; white-space: nowrap;
+}
+.header-lines { padding: 14px 18px; display: grid; gap: 7px; }
+.header-line {
+  display: grid; grid-template-columns: 205px 1fr; gap: 14px;
+  padding-bottom: 7px; border-bottom: 1px dashed var(--hairline);
+  font-size: 14px; line-height: 1.35;
+}
+.header-line:last-child { border-bottom: none; padding-bottom: 0; }
+.header-line .hk { font-family: var(--mono); color: var(--orange-ink); }
+.header-line .hv { font-family: var(--mono); color: var(--ink); word-break: break-word; }
+.header-profile-note {
+  margin: 0 18px 16px; padding: 10px 13px;
+  border-left: 4px solid var(--orange); background: var(--tint-orange);
+  font-size: 14px; line-height: 1.4; color: var(--ink-soft);
+}
+.source-reference {
+  display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px;
+  margin-top: 16px;
+}
+.source-ref {
+  border: 1.5px solid var(--rule); background: var(--paper);
+  padding: 12px 14px; font-size: 14px; line-height: 1.4; color: var(--ink-soft);
+}
+.source-ref .sr-k {
+  font-family: var(--mono); font-size: 12px; font-weight: 600;
+  letter-spacing: .1em; text-transform: uppercase; color: var(--orange-ink);
+  margin-bottom: 5px;
+}
+.source-ref code { font-size: 12px; word-break: break-word; }
+.native-header-bar {
+  display: grid; grid-template-columns: auto 1fr; gap: 16px; align-items: center;
+  margin-top: 14px; padding: 11px 16px;
+  border: 2px solid var(--pass); background: var(--tint-pass);
+  font-size: 14px; line-height: 1.4; color: var(--ink-soft);
+}
+.native-header-bar .nh-k {
+  font-family: var(--mono); font-size: 12px; font-weight: 600;
+  letter-spacing: .1em; text-transform: uppercase; color: var(--pass); white-space: nowrap;
+}
 
 /* ===========================================
    FIG.07 条形图
@@ -820,12 +876,12 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="title-body">
     <p class="kicker reveal">问题复盘 · Issues &amp; Resolutions</p>
     <h1 class="reveal">测试与咨询问题<br><span class="amp">×</span> 解决方案复盘</h1>
-    <p class="title-sub reveal">汇总 2026-06-10 ~ 08-24 期间在 copilot2api 项目中的全部测试与咨询：先给出身份、请求头、Beta 防火墙与账户池的使用前须知，再复盘上游能力缺口 · 413 请求体超限 · Thinking Signature · Structured Outputs(Vertex) · Token 与认证 · SSE 流式稳定性与 Ping 保活 · Client-ID 模型可见性 · 缓存与多账户。</p>
+    <p class="title-sub reveal">汇总 2026-06-10 ~ 08-26 期间在 copilot2api 项目中的全部测试与咨询：先给出身份、请求头、Beta 防火墙与账户池的使用前须知，再复盘上游能力缺口 · 413 请求体超限 · Thinking Signature · Structured Outputs(Vertex) · Token 与认证 · SSE 流式稳定性与 Ping 保活 · Client-ID 模型可见性 · 缓存与多账户。</p>
   </div>
-  <div class="stamp">Compiled<small>2026-08-24 · 会话复盘</small></div>
+  <div class="stamp">Compiled<small>2026-08-26 · 会话复盘</small></div>
   <div class="title-block reveal">
-    <div class="tb"><div class="tb-k">Report Date / 报告日期</div><div class="tb-v">2026-08-24</div></div>
-    <div class="tb"><div class="tb-k">Scope / 范围</div><div class="tb-v">60+ 会话 · 76 天</div></div>
+    <div class="tb"><div class="tb-k">Report Date / 报告日期</div><div class="tb-v">2026-08-26</div></div>
+    <div class="tb"><div class="tb-k">Scope / 范围</div><div class="tb-v">60+ 会话 · 78 天</div></div>
     <div class="tb"><div class="tb-k">Method / 方法</div><div class="tb-v">会话记录 + git 提交复盘</div></div>
     <div class="tb"><div class="tb-k">Companion / 姊妹文档</div><div class="tb-v"><code>copilot-capability-report.html</code></div></div>
   </div>
@@ -836,13 +892,13 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Operating Guide — Global Guardrails</span>
-    <span class="doc-pg">02 / 30</span>
+    <span class="doc-pg">02 / 31</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
       <div class="sec-no">00</div>
       <div>
-        <div class="sec-label">Before You Start — 全局使用注意事项（1 of 3）</div>
+        <div class="sec-label">Before You Start — 全局使用注意事项（1 of 4）</div>
         <h2>上线前先把身份、命名与请求画像管住</h2>
       </div>
     </div>
@@ -887,18 +943,82 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-foot"><span>Operating Guide · Global Guardrails</span><span>2026-08-24</span></div>
 </section>
 
-<!-- ==================== SLIDE 03 · 使用前须知 Beta 防火墙 ==================== -->
-<section class="slide usage-guide-slide" aria-label="Anthropic beta 头白名单与 Copilot 黑名单">
+<!-- ==================== SLIDE 03 · 使用前须知 请求头 Profile ==================== -->
+<section class="slide usage-guide-slide" aria-label="OpenCode 与 VS Code Copilot 请求头 Profile">
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
-    <span class="doc-sec">Operating Guide — Anthropic Beta Firewall</span>
-    <span class="doc-pg">03 / 30</span>
+    <span class="doc-sec">Operating Guide — Client Header Profiles</span>
+    <span class="doc-pg">03 / 31</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
       <div class="sec-no">00</div>
       <div>
-        <div class="sec-label">Before You Start — 全局使用注意事项（2 of 3）</div>
+        <div class="sec-label">Before You Start — 客户端请求画像（2 of 4）</div>
+        <h2>OpenCode 与 VS Code：身份和请求头必须成套匹配</h2>
+      </div>
+    </div>
+    <p class="sec-lede reveal" style="margin-bottom:14px">以下是 Copilot2API 当前实现的请求头快照，分别模拟 OpenCode 的 Direct 模式与 VS Code Copilot Chat 的 Exchange 模式。<strong>版本号不是永久常量</strong>；升级代理时应回看客户端源码，再跑 <code>/models</code> 与真实调用回归。</p>
+    <div class="header-profile-grid reveal">
+      <article class="header-profile-card">
+        <div class="header-profile-head">
+          <div class="hp-mode">Direct · ProfileOpenCode</div>
+          <h3>OpenCode 画像</h3>
+          <div class="hp-auth">GitHub OAuth token</div>
+        </div>
+        <div class="header-lines">
+          <div class="header-line"><span class="hk">Authorization</span><span class="hv">Bearer &lt;github-oauth-token&gt;</span></div>
+          <div class="header-line"><span class="hk">User-Agent</span><span class="hv">opencode/&lt;current-version&gt;</span></div>
+          <div class="header-line"><span class="hk">Openai-Intent</span><span class="hv">conversation-edits</span></div>
+          <div class="header-line"><span class="hk">X-Github-Api-Version</span><span class="hv">2026-06-01</span></div>
+          <div class="header-line"><span class="hk">X-Initiator</span><span class="hv">user | agent</span></div>
+          <div class="header-line"><span class="hk">Content-Type</span><span class="hv">application/json</span></div>
+        </div>
+        <div class="header-profile-note"><strong>按载荷动态追加：</strong>图片输入时 OpenCode 会发送 <code>Copilot-Vision-Request: true</code>。不要混入 Editor-Version、Plugin-Version、Integration-Id 或生成式 X-Request-Id。</div>
+      </article>
+      <article class="header-profile-card">
+        <div class="header-profile-head">
+          <div class="hp-mode">Exchange · ProfileEditor</div>
+          <h3>VS Code 画像</h3>
+          <div class="hp-auth">short-lived Copilot token</div>
+        </div>
+        <div class="header-lines">
+          <div class="header-line"><span class="hk">Authorization</span><span class="hv">Bearer &lt;copilot-token&gt;</span></div>
+          <div class="header-line"><span class="hk">User-Agent</span><span class="hv">GitHubCopilotChat/&lt;extension-version&gt;</span></div>
+          <div class="header-line"><span class="hk">Editor-Version</span><span class="hv">vscode/&lt;current-version&gt;</span></div>
+          <div class="header-line"><span class="hk">Editor-Plugin-Version</span><span class="hv">copilot-chat/&lt;extension-version&gt;</span></div>
+          <div class="header-line"><span class="hk">Copilot-Integration-Id</span><span class="hv">vscode-chat</span></div>
+          <div class="header-line"><span class="hk">Openai-Intent</span><span class="hv">conversation-agent</span></div>
+          <div class="header-line"><span class="hk">X-Github-Api-Version</span><span class="hv">2026-06-01</span></div>
+          <div class="header-line"><span class="hk">X-Request-Id</span><span class="hv">每请求唯一 ID</span></div>
+        </div>
+      </article>
+    </div>
+    <div class="native-header-bar reveal">
+      <div class="nh-k">Native Anthropic</div>
+      <div>调用原生 <code>/v1/messages</code> 时，在上述身份画像之外再发送 <code>anthropic-version: 2023-06-01</code>；<code>anthropic-beta</code> 由代理按功能白名单重建，不应复制客户端任意值。</div>
+    </div>
+    <div class="source-reference reveal">
+      <div class="source-ref"><div class="sr-k">OpenCode 源码</div><code>packages/opencode/src/plugin/github-copilot/copilot.ts</code><br>重点检查 fetch headers、<code>x-initiator</code> 与视觉载荷判断。</div>
+      <div class="source-ref"><div class="sr-k">VS Code 源码</div><code>microsoft/vscode-copilot-chat</code><br>搜索 <code>GitHubCopilotChat</code>、<code>Copilot-Integration-Id</code>、<code>Openai-Intent</code> 的请求构造逻辑。</div>
+      <div class="source-ref"><div class="sr-k">本项目映射</div><code>internal/copilot/headers.go</code><br>更新常量与 profile 后，同步回归模型列表、真实调用和身份头缺失项。</div>
+    </div>
+  </div>
+  <div class="s-foot"><span>Operating Guide · Client Header Profiles</span><span>2026-08-26</span></div>
+</section>
+
+<!-- ==================== SLIDE 04 · 使用前须知 Beta 防火墙 ==================== -->
+<section class="slide usage-guide-slide" aria-label="Anthropic beta 头白名单与 Copilot 黑名单">
+  <div class="s-top">
+    <span class="doc-no">TD-2620</span>
+    <span class="doc-sec">Operating Guide — Anthropic Beta Firewall</span>
+    <span class="doc-pg">04 / 31</span>
+  </div>
+  <div class="s-body">
+    <div class="sec-head reveal">
+      <div class="sec-no">00</div>
+      <div>
+        <div class="sec-label">Before You Start — 全局使用注意事项（3 of 4）</div>
         <h2>代理侧用白名单；Copilot 网关却是黑名单</h2>
       </div>
     </div>
@@ -940,18 +1060,18 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-foot"><span>Operating Guide · Anthropic Beta Firewall</span><span>2026-08-24</span></div>
 </section>
 
-<!-- ==================== SLIDE 04 · 使用前须知 接入场景 ==================== -->
+<!-- ==================== SLIDE 05 · 使用前须知 接入场景 ==================== -->
 <section class="slide usage-guide-slide" aria-label="开发者与应用接入场景">
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Operating Guide — Integration Topology</span>
-    <span class="doc-pg">04 / 30</span>
+    <span class="doc-pg">05 / 31</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
       <div class="sec-no">00</div>
       <div>
-        <div class="sec-label">Before You Start — 场景化接入注意事项（3 of 3）</div>
+        <div class="sec-label">Before You Start — 场景化接入注意事项（4 of 4）</div>
         <h2>开发者隔离身份；应用侧保持 Session 粘性</h2>
       </div>
     </div>
@@ -989,12 +1109,12 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-foot"><span>Operating Guide · Integration Topology</span><span>2026-08-24</span></div>
 </section>
 
-<!-- ==================== SLIDE 05 · KPI ==================== -->
+<!-- ==================== SLIDE 06 · KPI ==================== -->
 <section class="slide" aria-label="关键指标">
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Key Figures — 关键指标</span>
-    <span class="doc-pg">05 / 30</span>
+    <span class="doc-pg">06 / 31</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1046,12 +1166,12 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-foot"><span>Issues Retrospective</span><span>2026-07-19</span></div>
 </section>
 
-<!-- ==================== SLIDE 06 · Q1 现象 ==================== -->
+<!-- ==================== SLIDE 07 · Q1 现象 ==================== -->
 <section class="slide" aria-label="Q1 上游硬性不支持">
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 01 — Upstream Gaps</span>
-    <span class="doc-pg">06 / 30</span>
+    <span class="doc-pg">07 / 31</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1102,12 +1222,12 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-foot"><span>Issue 01 · Upstream Gaps (1 of 2)</span><span>2026-08-04</span></div>
 </section>
 
-<!-- ==================== SLIDE 07 · Q1 解法 ==================== -->
+<!-- ==================== SLIDE 08 · Q1 解法 ==================== -->
 <section class="slide" aria-label="Q1 解法 beta 头转发">
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 01 — Upstream Gaps</span>
-    <span class="doc-pg">07 / 30</span>
+    <span class="doc-pg">08 / 31</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1131,12 +1251,12 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-foot"><span>Issue 01 · Upstream Gaps (2 of 2)</span><span>2026-07-19</span></div>
 </section>
 
-<!-- ==================== SLIDE 08 · Q2 413 ==================== -->
+<!-- ==================== SLIDE 09 · Q2 413 ==================== -->
 <section class="slide" aria-label="Q2 413 请求体超限">
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 02 — HTTP 413</span>
-    <span class="doc-pg">08 / 30</span>
+    <span class="doc-pg">09 / 31</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1175,12 +1295,12 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-foot"><span>Issue 02 · HTTP 413 (1 of 2)</span><span>2026-07-19</span></div>
 </section>
 
-<!-- ==================== SLIDE 09 · Q2 延伸 超长上下文 ==================== -->
+<!-- ==================== SLIDE 10 · Q2 延伸 超长上下文 ==================== -->
 <section class="slide" aria-label="Q2 延伸 超长上下文">
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 02 — HTTP 413</span>
-    <span class="doc-pg">09 / 30</span>
+    <span class="doc-pg">10 / 31</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1214,12 +1334,12 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-foot"><span>Issue 02 · HTTP 413 (2 of 2)</span><span>2026-07-19</span></div>
 </section>
 
-<!-- ==================== SLIDE 10 · Q3 Thinking Signature ==================== -->
+<!-- ==================== SLIDE 11 · Q3 Thinking Signature ==================== -->
 <section class="slide" aria-label="Q3 Thinking Signature">
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 03 — Thinking Signature</span>
-    <span class="doc-pg">10 / 30</span>
+    <span class="doc-pg">11 / 31</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1251,12 +1371,12 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-foot"><span>Issue 03 · Thinking Signature</span><span>2026-07-19</span></div>
 </section>
 
-<!-- ==================== SLIDE 11 · Q4 Structured Outputs ==================== -->
+<!-- ==================== SLIDE 12 · Q4 Structured Outputs ==================== -->
 <section class="slide" aria-label="Q4 Structured Outputs">
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 04 — Structured Outputs</span>
-    <span class="doc-pg">11 / 30</span>
+    <span class="doc-pg">12 / 31</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1302,12 +1422,12 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-foot"><span>Issue 04 · Structured Outputs</span><span>2026-07-25</span></div>
 </section>
 
-<!-- ==================== SLIDE 12 · Q5 Token 与认证 ==================== -->
+<!-- ==================== SLIDE 13 · Q5 Token 与认证 ==================== -->
 <section class="slide" aria-label="Q5 Token 与认证">
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 05 — Auth &amp; Token</span>
-    <span class="doc-pg">12 / 30</span>
+    <span class="doc-pg">13 / 31</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1348,12 +1468,12 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-foot"><span>Issue 05 · Auth &amp; Token</span><span>2026-07-19</span></div>
 </section>
 
-<!-- ==================== SLIDE 13 · Q6 SSE 流式 ==================== -->
+<!-- ==================== SLIDE 14 · Q6 SSE 流式 ==================== -->
 <section class="slide" aria-label="Q6 SSE 流式稳定性">
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 06 — SSE Stability</span>
-    <span class="doc-pg">13 / 30</span>
+    <span class="doc-pg">14 / 31</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1385,12 +1505,12 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-foot"><span>Issue 06 · SSE Stability</span><span>2026-07-22</span></div>
 </section>
 
-<!-- ==================== SLIDE 14 · Q6 延伸 断连三种死法 ==================== -->
+<!-- ==================== SLIDE 15 · Q6 延伸 断连三种死法 ==================== -->
 <section class="slide" aria-label="Q6 延伸 断连三种死法与官方缺口">
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 06 延伸 — Three Failure Modes</span>
-    <span class="doc-pg">14 / 30</span>
+    <span class="doc-pg">15 / 31</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1433,12 +1553,12 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-foot"><span>Issue 06 延伸 · Three Failure Modes</span><span>2026-07-17</span></div>
 </section>
 
-<!-- ==================== SLIDE 15 · Q6 延伸 SSE Ping ==================== -->
+<!-- ==================== SLIDE 16 · Q6 延伸 SSE Ping ==================== -->
 <section class="slide sse-ping-slide" aria-label="Q6 延伸 SSE Ping 实现">
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 06 延伸 — Native SSE Ping</span>
-    <span class="doc-pg">15 / 30</span>
+    <span class="doc-pg">16 / 31</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1497,12 +1617,12 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-foot"><span>Issue 06 延伸 · Native SSE Ping</span><span>2026-08-13</span></div>
 </section>
 
-<!-- ==================== SLIDE 16 · Q7 OpenCode 模型不全 ==================== -->
+<!-- ==================== SLIDE 17 · Q7 OpenCode 模型不全 ==================== -->
 <section class="slide" aria-label="Q7 OpenCode 方案模型不全">
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 07 — Client-ID &amp; Model Visibility</span>
-    <span class="doc-pg">16 / 30</span>
+    <span class="doc-pg">17 / 31</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1544,12 +1664,12 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-foot"><span>Issue 07 · Client-ID &amp; Model Visibility</span><span>2026-07-20</span></div>
 </section>
 
-<!-- ==================== SLIDE 17 · Q7 实测 模型差异 & 1M 上下文 ==================== -->
+<!-- ==================== SLIDE 18 · Q7 实测 模型差异 & 1M 上下文 ==================== -->
 <section class="slide" aria-label="实测 两种方式模型差异与 1M 上下文">
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 07 · Live Probe — Model Diff &amp; 1M Context</span>
-    <span class="doc-pg">17 / 30</span>
+    <span class="doc-pg">18 / 31</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1603,12 +1723,12 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-foot"><span>Issue 07 · Live Probe</span><span>2026-07-22</span></div>
 </section>
 
-<!-- ==================== SLIDE 18 · Q7 实测 双模式调用与 Claude 地域过滤 ==================== -->
+<!-- ==================== SLIDE 19 · Q7 实测 双模式调用与 Claude 地域过滤 ==================== -->
 <section class="slide" aria-label="实测 双模式真实调用与 Claude 地域过滤">
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Issue 07 · Live Invoke — Direct vs Exchange</span>
-    <span class="doc-pg">18 / 30</span>
+    <span class="doc-pg">19 / 31</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1668,12 +1788,12 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-foot"><span>Issue 07 · Live Invoke</span><span>2026-07-26</span></div>
 </section>
 
-<!-- ==================== SLIDE 19 · Header 过滤与请求体处理 ==================== -->
+<!-- ==================== SLIDE 20 · Header 过滤与请求体处理 ==================== -->
 <section class="slide" aria-label="代理 Header 过滤与请求体处理">
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Extended — Header Filtering</span>
-    <span class="doc-pg">19 / 30</span>
+    <span class="doc-pg">20 / 31</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1734,12 +1854,12 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-foot"><span>Extended · Header Filtering</span><span>2026-07-27</span></div>
 </section>
 
-<!-- ==================== SLIDE 20 · Anthropic Beta 支持清单 ==================== -->
+<!-- ==================== SLIDE 21 · Anthropic Beta 支持清单 ==================== -->
 <section class="slide beta-support-slide" aria-label="Anthropic Beta 支持清单">
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Extended — Anthropic Beta Support</span>
-    <span class="doc-pg">20 / 30</span>
+    <span class="doc-pg">21 / 31</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1807,12 +1927,12 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-foot"><span>Extended · Anthropic Beta Support</span><span>2026-08-04</span></div>
 </section>
 
-<!-- ==================== SLIDE 21 · 通用功能清单（基础能力） ==================== -->
+<!-- ==================== SLIDE 22 · 通用功能清单（基础能力） ==================== -->
 <section class="slide general-support-slide" aria-label="通用功能清单基础能力">
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Extended — General Capability Inventory</span>
-    <span class="doc-pg">21 / 30</span>
+    <span class="doc-pg">22 / 31</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1889,12 +2009,12 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-foot"><span>Extended · General Capability Inventory I</span><span>2026-08-04</span></div>
 </section>
 
-<!-- ==================== SLIDE 22 · 通用功能清单（高级能力） ==================== -->
+<!-- ==================== SLIDE 23 · 通用功能清单（高级能力） ==================== -->
 <section class="slide general-support-slide" aria-label="通用功能清单高级能力">
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Extended — General Capability Inventory</span>
-    <span class="doc-pg">22 / 30</span>
+    <span class="doc-pg">23 / 31</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1975,12 +2095,12 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-foot"><span>Extended · General Capability Inventory II</span><span>2026-08-04</span></div>
 </section>
 
-<!-- ==================== SLIDE 23 · Beta 头黑名单实测 ==================== -->
+<!-- ==================== SLIDE 24 · Beta 头黑名单实测 ==================== -->
 <section class="slide" aria-label="Beta 头接受度实测">
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Extended — Beta Header Blocklist</span>
-    <span class="doc-pg">23 / 30</span>
+    <span class="doc-pg">24 / 31</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -2045,12 +2165,12 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-foot"><span>Extended · Beta Header Blocklist</span><span>2026-07-26</span></div>
 </section>
 
-<!-- ==================== SLIDE 24 · Beta 头功能级复测 ==================== -->
+<!-- ==================== SLIDE 25 · Beta 头功能级复测 ==================== -->
 <section class="slide beta-support-slide" aria-label="Beta 头功能级复测">
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Extended — Beta Header Functional Re-test</span>
-    <span class="doc-pg">24 / 30</span>
+    <span class="doc-pg">25 / 31</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -2114,12 +2234,12 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-foot"><span>Extended · Beta Header Functional Probe</span><span>2026-08-19</span></div>
 </section>
 
-<!-- ==================== SLIDE 25 · Anthropic 300K Output ==================== -->
+<!-- ==================== SLIDE 26 · Anthropic 300K Output ==================== -->
 <section class="slide" aria-label="Anthropic 300K Output Message Batches API">
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Extended — 300K Output Boundary</span>
-    <span class="doc-pg">25 / 30</span>
+    <span class="doc-pg">26 / 31</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -2172,12 +2292,12 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-foot"><span>Extended · 300K Output Boundary</span><span>2026-08-24</span></div>
 </section>
 
-<!-- ==================== SLIDE 26 · 后端路由复测 ==================== -->
+<!-- ==================== SLIDE 27 · 后端路由复测 ==================== -->
 <section class="slide" aria-label="后端路由复测">
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Extended — Backend Routing Re-test</span>
-    <span class="doc-pg">26 / 30</span>
+    <span class="doc-pg">27 / 31</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -2237,12 +2357,12 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-foot"><span>Extended · Backend Routing Re-test</span><span>2026-08-02</span></div>
 </section>
 
-<!-- ==================== SLIDE 27 · 缓存与多账户 ==================== -->
+<!-- ==================== SLIDE 28 · 缓存与多账户 ==================== -->
 <section class="slide" aria-label="缓存与多账户">
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Extended — Cache &amp; Multi-Account</span>
-    <span class="doc-pg">27 / 30</span>
+    <span class="doc-pg">28 / 31</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -2274,12 +2394,12 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-foot"><span>Extended · Cache &amp; Multi-Account</span><span>2026-07-19</span></div>
 </section>
 
-<!-- ==================== SLIDE 28 · Q7 延伸 提示缓存实测 ==================== -->
+<!-- ==================== SLIDE 29 · Q7 延伸 提示缓存实测 ==================== -->
 <section class="slide cache-probe-slide" aria-label="提示缓存 cache_control 上游实测">
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Extended — Prompt Cache Probe</span>
-    <span class="doc-pg">28 / 30</span>
+    <span class="doc-pg">29 / 31</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -2319,12 +2439,12 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-foot"><span>Extended · Prompt Cache Probe</span><span>2026-08-14</span></div>
 </section>
 
-<!-- ==================== SLIDE 29 · 工程产出索引 ==================== -->
+<!-- ==================== SLIDE 30 · 工程产出索引 ==================== -->
 <section class="slide" aria-label="工程产出索引">
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Deliverables Index</span>
-    <span class="doc-pg">29 / 30</span>
+    <span class="doc-pg">30 / 31</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -2365,13 +2485,13 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-foot"><span>Deliverables Index</span><span>2026-07-19</span></div>
 </section>
 
-<!-- ==================== SLIDE 30 · 结论与状态 ==================== -->
+<!-- ==================== SLIDE 31 · 结论与状态 ==================== -->
 <section class="slide" aria-label="结论与状态">
   <div class="crop tl"></div><div class="crop tr"></div><div class="crop bl"></div><div class="crop br"></div>
   <div class="s-top">
     <span class="doc-no">TD-2620</span>
     <span class="doc-sec">Verdict — 结论与状态</span>
-    <span class="doc-pg">30 / 30</span>
+    <span class="doc-pg">31 / 31</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal" style="margin-bottom: 12px;">
@@ -2397,9 +2517,9 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
     </div>
     <div class="colophon-label reveal" style="margin-top: 12px;">Sources / 数据来源</div>
     <ul class="sources reveal">
-      <li>会话记录 60+ 场(2026-06-10 ~ 08-24,Copilot CLI + VS Code Chat)· git 提交历史 · TD-2607 能力矩阵报告 · <code>scripts/</code> 三层实测报告与 SSE 探测脚本输出</li>
+      <li>会话记录 60+ 场(2026-06-10 ~ 08-26,Copilot CLI + VS Code Chat)· git 提交历史 · TD-2607 能力矩阵报告 · <code>scripts/</code> 三层实测报告与 SSE 探测脚本输出</li>
     </ul>
-    <div class="end-mark reveal">End of Dossier · TD-2620 · 2026-08-24</div>
+    <div class="end-mark reveal">End of Dossier · TD-2620 · 2026-08-26</div>
   </div>
 </section>
 
@@ -2410,7 +2530,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
 <!-- 页码指示 + 导航按钮(舞台之外的 UI) -->
 <div class="deck-controls" aria-hidden="true">
   <button id="navPrev" title="上一页 (←)">‹</button>
-  <span id="pageIndicator">01 / 30</span>
+  <span id="pageIndicator">01 / 31</span>
   <button id="navNext" title="下一页 (→)">›</button>
 </div>
 
