@@ -1,0 +1,1514 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Copilot2API — 访问 GitHub 模型注意事项 · TD-2620</title>
+
+<!-- ============================================================
+     FONTS — Archivo(展示)+ IBM Plex Mono(数据/表头)+ Noto Sans SC(中文)
+     ============================================================ -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet">
+
+<style>
+/* ============================================================
+   TECHNICAL DOSSIER · TD-2607 — SLIDE EDITION
+   1970s 航天工程手册风格:暖纸、国际橙、绘图网格、
+   mono 数据、盖章判定。固定 1920×1080 舞台,整体缩放。
+   ============================================================ */
+
+/* ===========================================
+   CSS CUSTOM PROPERTIES (THEME)
+   改这里即可整体换肤
+   =========================================== */
+:root {
+  --paper:        #f2efe4;
+  --paper-raise:  #f7f5ec;
+  --paper-sink:   #eae6d7;
+  --ink:          #1a1913;
+  --ink-soft:     #4c4a3f;
+  --ink-faint:    #8b8878;
+  --rule:         #1a1913;
+  --hairline:     #c9c5b2;
+  --orange:       #e03e00;
+  --orange-ink:   #b83300;
+  --pass:         #1d6e38;
+  --fail:         #b3261e;
+  --warn:         #8f6400;
+  --anthropic:    #2b52b8;
+  --bedrock:      #0e7f6b;
+  --vertex:       #b57a00;
+  --tint-pass:    rgba(29,110,56,.09);
+  --tint-fail:    rgba(179,38,30,.08);
+  --tint-warn:    rgba(143,100,0,.10);
+  --tint-orange:  rgba(224,62,0,.08);
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --disp: "Archivo", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --stage-bg: #14130e;
+  --slide-bg: var(--paper);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+/* ===========================================
+   FIXED 16:9 STAGE: MANDATORY BASE STYLES
+   (viewport-base.css 全量内嵌)
+   =========================================== */
+html,
+body {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+    background: var(--stage-bg, #000);
+}
+
+.deck-viewport {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+    background: var(--stage-bg, #000);
+}
+
+.deck-stage {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 1920px;
+    height: 1080px;
+    overflow: hidden;
+    transform-origin: 0 0;
+    background: var(--slide-bg, #fff);
+}
+
+.slide {
+    position: absolute;
+    inset: 0;
+    width: 1920px;
+    height: 1080px;
+    overflow: hidden;
+    display: block;
+    visibility: hidden;
+    opacity: 0;
+    pointer-events: none;
+    background: var(--slide-bg, #fff);
+}
+
+.slide.active,
+.slide.visible {
+    visibility: visible;
+    opacity: 1;
+    pointer-events: auto;
+    z-index: 1;
+}
+
+img,
+video,
+canvas,
+svg {
+    max-width: 100%;
+    max-height: 100%;
+}
+
+.deck-controls {
+    position: fixed;
+    left: 50%;
+    bottom: 22px;
+    transform: translateX(-50%);
+    z-index: 1000;
+}
+
+@media print {
+    html,
+    body {
+        width: 1920px;
+        height: auto;
+        overflow: visible;
+        background: #fff;
+    }
+
+    .deck-viewport {
+        position: static;
+        overflow: visible;
+        background: #fff;
+    }
+
+    .deck-stage {
+        position: static;
+        width: auto;
+        height: auto;
+        transform: none !important;
+        background: none;
+    }
+
+    .slide {
+        position: relative;
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        pointer-events: auto !important;
+        width: 1920px;
+        height: 1080px;
+        break-after: page;
+        page-break-after: always;
+    }
+
+    .slide:last-child {
+        break-after: auto;
+        page-break-after: auto;
+    }
+
+    .deck-controls {
+        display: none !important;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.2s !important;
+    }
+}
+
+/* ===========================================
+   SLIDE SURFACE — 绘图网格 + 纸张颗粒
+   =========================================== */
+.slide {
+  font-family: var(--disp);
+  color: var(--ink);
+  transition: opacity .45s ease;
+}
+.slide::before {
+  content: "";
+  position: absolute; inset: 0;
+  pointer-events: none;
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='linear' slope='0.045'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E"),
+    linear-gradient(rgba(26,25,19,.032) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(26,25,19,.032) 1px, transparent 1px);
+  background-size: 160px 160px, 40px 40px, 40px 40px;
+  z-index: 0;
+}
+.slide > * { position: relative; z-index: 1; }
+
+::selection { background: var(--orange); color: var(--paper); }
+
+code {
+  font-family: var(--mono);
+  font-size: .92em;
+  background: var(--tint-orange);
+  padding: 1px 7px;
+}
+
+/* ===========================================
+   SLIDE CHROME — 每页顶部档案栏 / 底部页脚
+   =========================================== */
+.s-top {
+  position: absolute; top: 44px; left: 88px; right: 88px;
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-family: var(--mono);
+  font-size: 17px; letter-spacing: .14em; text-transform: uppercase;
+  padding-bottom: 14px;
+  border-bottom: 4px solid var(--rule);
+}
+.s-top .doc-no { color: var(--orange); font-weight: 600; }
+.s-top .doc-sec { color: var(--ink-faint); }
+.s-top .doc-pg { color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+
+.s-foot {
+  position: absolute; bottom: 40px; left: 88px; right: 88px;
+  display: flex; justify-content: space-between;
+  font-family: var(--mono);
+  font-size: 14px; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--ink-faint);
+  border-top: 1px solid var(--hairline);
+  padding-top: 12px;
+}
+
+.s-body { position: absolute; top: 130px; left: 88px; right: 88px; bottom: 96px; }
+
+/* ===========================================
+   SECTION HEADER — 大号 mono 章节号
+   =========================================== */
+.sec-head {
+  display: grid; grid-template-columns: auto 1fr; gap: 26px;
+  align-items: start;
+  padding-top: 22px;
+  margin-bottom: 30px;
+}
+.sec-head .sec-no {
+  font-family: var(--mono); font-weight: 600;
+  font-size: 64px; line-height: 1;
+  color: var(--orange); letter-spacing: -0.02em;
+}
+.sec-head .sec-label {
+  font-family: var(--mono); font-size: 15px; font-weight: 600;
+  letter-spacing: .2em; text-transform: uppercase; color: var(--ink-faint);
+  margin-bottom: 6px;
+}
+.sec-head h2 {
+  font-size: 42px; font-weight: 800; font-stretch: 108%;
+  letter-spacing: -0.01em; line-height: 1.2;
+}
+.sub-head {
+  font-size: 26px; font-weight: 700;
+  display: flex; align-items: baseline; gap: 16px;
+  margin-bottom: 20px;
+}
+.sub-head .h3-no {
+  font-family: var(--mono); font-weight: 600; font-size: 19px;
+  color: var(--orange); letter-spacing: .06em;
+}
+.sec-lede { font-size: 22px; line-height: 1.65; color: var(--ink-soft); margin-bottom: 26px; max-width: 76em; }
+
+/* ===========================================
+   REVEAL — 进场动画(由 .visible 触发,交错延迟)
+   =========================================== */
+.reveal {
+  opacity: 0; transform: translateY(28px);
+  transition: opacity .6s var(--ease-out-expo), transform .6s var(--ease-out-expo);
+}
+.slide.visible .reveal { opacity: 1; transform: translateY(0); }
+.reveal:nth-child(1) { transition-delay: .05s; }
+.reveal:nth-child(2) { transition-delay: .15s; }
+.reveal:nth-child(3) { transition-delay: .25s; }
+.reveal:nth-child(4) { transition-delay: .35s; }
+.reveal:nth-child(5) { transition-delay: .45s; }
+.reveal:nth-child(6) { transition-delay: .55s; }
+
+/* ===========================================
+   TITLE SLIDE — 封面
+   =========================================== */
+.crop { position: absolute; width: 34px; height: 34px; border-color: var(--ink); border-style: solid; border-width: 0; opacity: .55; z-index: 2; }
+.crop.tl { top: 20px; left: 20px; border-top-width: 2px; border-left-width: 2px; }
+.crop.tr { top: 20px; right: 20px; border-top-width: 2px; border-right-width: 2px; }
+.crop.bl { bottom: 20px; left: 20px; border-bottom-width: 2px; border-left-width: 2px; }
+.crop.br { bottom: 20px; right: 20px; border-bottom-width: 2px; border-right-width: 2px; }
+
+.title-body { position: absolute; left: 88px; top: 236px; width: 1280px; }
+.kicker {
+  font-family: var(--mono); font-size: 21px; font-weight: 600;
+  letter-spacing: .22em; text-transform: uppercase; color: var(--orange);
+  display: flex; align-items: center; gap: 20px;
+  margin-bottom: 38px;
+}
+.kicker::after { content: ""; flex: 1; height: 1px; background: var(--hairline); }
+.title-body h1 {
+  font-size: 100px; font-weight: 800; font-stretch: 112%;
+  line-height: 1.12; letter-spacing: -0.015em;
+}
+.title-body h1 .amp { color: var(--orange); }
+.title-sub {
+  margin-top: 40px; font-size: 26px; line-height: 1.65;
+  color: var(--ink-soft); max-width: 42em;
+}
+.stamp {
+  position: absolute; top: 296px; right: 100px;
+  transform: rotate(7deg);
+  border: 5px solid var(--pass); color: var(--pass);
+  font-family: var(--mono); font-weight: 600;
+  font-size: 30px; letter-spacing: .18em; text-transform: uppercase;
+  padding: 18px 30px; opacity: 0;
+}
+.slide.visible .stamp { animation: stamp .5s .9s cubic-bezier(.2,2.4,.4,1) both; }
+.stamp small { display: block; font-size: 15px; letter-spacing: .12em; margin-top: 6px; }
+@keyframes stamp {
+  from { opacity: 0; transform: rotate(7deg) scale(1.6); }
+  to   { opacity: .85; transform: rotate(7deg) scale(1); }
+}
+.title-block {
+  position: absolute; left: 88px; right: 88px; bottom: 92px;
+  border-top: 5px solid var(--rule);
+  border-bottom: 1.5px solid var(--rule);
+  display: grid; grid-template-columns: repeat(4, 1fr);
+}
+.title-block .tb {
+  padding: 18px 24px 20px 0;
+  border-right: 1px solid var(--hairline); margin-right: 24px;
+}
+.title-block .tb:last-child { border-right: none; margin-right: 0; }
+.tb .tb-k {
+  font-family: var(--mono); font-size: 14px; font-weight: 600;
+  letter-spacing: .16em; text-transform: uppercase; color: var(--ink-faint);
+}
+.tb .tb-v { font-size: 22px; font-weight: 700; margin-top: 8px; }
+.tb .tb-v code { font-size: 17px; font-weight: 500; }
+
+/* ===========================================
+   KPI 仪表条
+   =========================================== */
+.kpi-strip {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  border: 2px solid var(--rule);
+  background: var(--paper-raise);
+  box-shadow: 8px 8px 0 rgba(26,25,19,.08);
+}
+.kpi {
+  padding: 30px 34px 28px;
+  border-right: 1px solid var(--hairline);
+  border-bottom: 1px solid var(--hairline);
+  position: relative;
+}
+.kpi:nth-child(3n) { border-right: none; }
+.kpi:nth-child(n+4) { border-bottom: none; }
+.kpi .k-idx {
+  position: absolute; top: 18px; right: 22px;
+  font-family: var(--mono); font-size: 14px; color: var(--ink-faint);
+  letter-spacing: .1em;
+}
+.kpi .k-label {
+  font-family: var(--mono); font-size: 16px; font-weight: 600;
+  letter-spacing: .14em; text-transform: uppercase; color: var(--ink-soft);
+}
+.kpi .k-value {
+  font-family: var(--mono); font-weight: 600;
+  font-size: 72px; line-height: 1.1; margin-top: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.kpi .k-value .unit { font-size: 24px; font-weight: 500; color: var(--orange); margin-left: 6px; }
+.kpi .k-note { font-size: 18px; color: var(--ink-faint); margin-top: 8px; line-height: 1.5; }
+
+/* ===========================================
+   结论编号列表
+   =========================================== */
+ol.conclusions { list-style: none; counter-reset: c; }
+ol.conclusions li {
+  counter-increment: c;
+  position: relative;
+  padding: 24px 28px 24px 96px;
+  font-size: 23px; line-height: 1.62;
+  border-bottom: 1px solid var(--hairline);
+  background: var(--paper-raise);
+}
+ol.conclusions li:first-child { border-top: 2px solid var(--rule); }
+ol.conclusions li:last-child { border-bottom: 2px solid var(--rule); }
+ol.conclusions li::before {
+  content: counter(c, decimal-leading-zero);
+  position: absolute; left: 26px; top: 26px;
+  font-family: var(--mono); font-weight: 600; font-size: 30px;
+  color: var(--orange);
+}
+ol.conclusions strong { font-weight: 700; }
+
+/* ===========================================
+   数据表格
+   =========================================== */
+.panel {
+  border: 2px solid var(--rule);
+  background: var(--paper-raise);
+  box-shadow: 8px 8px 0 rgba(26,25,19,.08);
+}
+table { width: 100%; border-collapse: collapse; }
+th {
+  font-family: var(--mono); font-size: 15px; font-weight: 600;
+  letter-spacing: .14em; text-transform: uppercase;
+  text-align: left; color: var(--paper);
+  background: var(--ink);
+  padding: 14px 22px;
+}
+td {
+  padding: 16px 22px;
+  font-size: 21px; line-height: 1.55;
+  border-bottom: 1px solid var(--hairline);
+  vertical-align: top;
+}
+tr:last-child td { border-bottom: none; }
+#verdict-tbl td { padding: 9px 22px; line-height: 1.4; }
+#q6-notes li { padding-top: 8px; padding-bottom: 8px; font-size: 18px; line-height: 1.5; }
+#q4-notes li { padding-top: 8px; padding-bottom: 8px; font-size: 18px; line-height: 1.5; }
+#q7pp-notes li, #hdrfilter-notes li, #betabl-notes li, #routing-notes li { padding-top: 6px; padding-bottom: 6px; font-size: 16px; line-height: 1.5; }
+.q7pp-tbl td { padding: 10px 16px; font-size: 16px; line-height: 1.45; }
+.q7pp-tbl th { padding: 10px 16px; }
+.beta-support-slide .sec-lede { font-size: 18px; line-height: 1.45; margin-bottom: 12px !important; }
+.beta-support-slide .q7pp-tbl td { padding: 7px 12px; font-size: 15px; line-height: 1.35; }
+.beta-support-slide .q7pp-tbl th { padding: 7px 12px; font-size: 13px; }
+.beta-support-slide .badge { font-size: 13px; padding: 2px 8px; margin-right: 5px; }
+.beta-support-slide ul.notes li { padding: 7px 0 7px 32px; font-size: 15px; line-height: 1.45; }
+.beta-support-slide ul.notes li::before { left: 6px; top: 6px; font-size: 16px; }
+.general-support-slide .sec-head { margin-bottom: 14px; }
+.general-support-slide .sec-lede { font-size: 18px; line-height: 1.45; margin-bottom: 12px !important; }
+.general-support-slide .support-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 22px; align-items: start; }
+.general-support-slide .support-title {
+  font-family: var(--mono); font-size: 14px; font-weight: 600;
+  letter-spacing: .12em; text-transform: uppercase; color: var(--orange-ink);
+  margin: 0 0 6px 2px;
+}
+.general-support-slide .q7pp-tbl td { padding: 7px 12px; font-size: 15px; line-height: 1.35; }
+.general-support-slide .q7pp-tbl th { padding: 7px 12px; font-size: 13px; }
+.general-support-slide .badge { font-size: 13px; padding: 2px 8px; margin-right: 5px; }
+.general-support-slide .support-note { font-size: 14px; line-height: 1.45; color: var(--ink-soft); margin-top: 8px; }
+.sse-ping-slide .sec-head { margin-bottom: 12px; }
+.sse-ping-slide .sec-lede { font-size: 18px; line-height: 1.45; margin-bottom: 14px; }
+.sse-flow {
+  display: grid; grid-template-columns: 1fr 86px 1.18fr 86px 1fr;
+  gap: 12px; align-items: stretch; margin-bottom: 16px;
+}
+.sse-node {
+  min-height: 190px; padding: 18px 20px;
+  border: 2px solid var(--rule); background: var(--paper-raise);
+  box-shadow: 7px 7px 0 rgba(26,25,19,.08);
+}
+.sse-node.proxy { border-color: var(--orange); background: var(--tint-orange); }
+.sse-node .node-k {
+  font-family: var(--mono); font-size: 13px; font-weight: 600;
+  letter-spacing: .14em; text-transform: uppercase; color: var(--orange-ink);
+  margin-bottom: 10px;
+}
+.sse-node .node-v { font-size: 17px; line-height: 1.45; color: var(--ink-soft); }
+.sse-node .node-v strong { color: var(--ink); }
+.sse-wire {
+  align-self: center; text-align: center; color: var(--orange);
+  font-family: var(--mono); font-size: 13px; line-height: 1.35;
+}
+.sse-wire::after { content: "→"; display: block; font-size: 48px; line-height: 1; }
+.sse-detail-grid { display: grid; grid-template-columns: 1fr 1.08fr; gap: 20px; align-items: stretch; }
+.sse-detail-grid .panel { padding: 14px 18px; }
+.sse-detail-title {
+  font-family: var(--mono); font-size: 14px; font-weight: 600;
+  letter-spacing: .12em; text-transform: uppercase; color: var(--orange-ink);
+  margin-bottom: 8px;
+}
+.sse-mini-list { list-style: none; }
+.sse-mini-list li {
+  position: relative; padding: 5px 0 5px 24px;
+  font-size: 15px; line-height: 1.4; color: var(--ink-soft);
+  border-bottom: 1px dashed var(--hairline);
+}
+.sse-mini-list li:last-child { border-bottom: none; }
+.sse-mini-list li::before { position: absolute; left: 0; top: 5px; font-family: var(--mono); font-weight: 600; }
+.sse-mini-list li.yes::before { content: "✓"; color: var(--pass); }
+.sse-mini-list li.no::before { content: "×"; color: var(--fail); }
+.sse-mini-list strong { color: var(--ink); }
+.sse-ping-slide .q7pp-tbl td { padding: 7px 11px; font-size: 14px; line-height: 1.35; }
+.sse-ping-slide .q7pp-tbl th { padding: 7px 11px; font-size: 12px; }
+.sse-watchdog {
+  display: grid; grid-template-columns: auto 1fr auto;
+  gap: 16px; align-items: center; margin-top: 14px; padding: 11px 16px;
+  border: 2px solid var(--pass); background: var(--tint-pass);
+  font-size: 15px; line-height: 1.4; color: var(--ink-soft);
+}
+.sse-watchdog strong { color: var(--ink); }
+.sse-watchdog .watchdog-config {
+  font-family: var(--mono); font-size: 13px; color: var(--pass);
+  white-space: nowrap;
+}
+td.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+/* 提示缓存 cache_control 上游实测页 */
+.cache-probe-slide .sec-lede { font-size: 18px; line-height: 1.4; margin-bottom: 10px; }
+.cache-probe-slide .q7pp-tbl td { padding: 6px 12px; font-size: 15px; line-height: 1.35; vertical-align: top; }
+.cache-probe-slide .q7pp-tbl th { padding: 8px 12px; font-size: 12px; }
+.cache-probe-slide .badge { font-size: 13px; padding: 2px 8px; margin-right: 4px; }
+.cache-probe-slide .q7pp-tbl td.usage { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); }
+.cache-change {
+  display: grid; grid-template-columns: auto 1fr; gap: 18px; align-items: start;
+  margin-top: 12px; padding: 11px 18px;
+  border: 2px solid var(--orange); background: var(--tint-orange);
+  font-size: 15px; line-height: 1.4; color: var(--ink-soft);
+}
+.cache-change .cc-head {
+  font-family: var(--mono); font-size: 13px; font-weight: 600;
+  letter-spacing: .1em; text-transform: uppercase; color: var(--orange-ink);
+  white-space: nowrap; padding-top: 2px;
+}
+.cache-change .cc-list { list-style: none; }
+.cache-change .cc-list li { padding: 3px 0 3px 20px; position: relative; }
+.cache-change .cc-list li::before { content: "▸"; position: absolute; left: 0; color: var(--orange); font-weight: 600; }
+.cache-change strong { color: var(--ink); }
+.cache-proxy {
+  display: grid; grid-template-columns: auto 1fr; gap: 16px; align-items: center;
+  margin-top: 10px; padding: 10px 16px;
+  border: 2px solid var(--pass); background: var(--tint-pass);
+  font-size: 14px; line-height: 1.4; color: var(--ink-soft);
+}
+.cache-proxy .cp-head {
+  font-family: var(--mono); font-size: 13px; font-weight: 600;
+  letter-spacing: .1em; text-transform: uppercase; color: var(--pass);
+  white-space: nowrap;
+}
+.cache-proxy strong { color: var(--ink); }
+
+/* 判定徽章 */
+.badge {
+  display: inline-block;
+  font-family: var(--mono); font-size: 16px; font-weight: 600;
+  letter-spacing: .04em;
+  padding: 3px 12px;
+  border: 1.5px solid currentColor;
+  white-space: nowrap;
+  margin-right: 8px;
+}
+.badge.ok   { color: var(--pass); background: var(--tint-pass); }
+.badge.no   { color: var(--fail); background: var(--tint-fail); }
+.badge.warn { color: var(--warn); background: var(--tint-warn); }
+.badge.diff { color: var(--orange-ink); background: var(--tint-orange); }
+.err-quote {
+  display: block; margin-top: 6px;
+  font-family: var(--mono); font-size: 16px; font-style: italic;
+  color: var(--ink-faint);
+}
+
+/* 托管落点标识 */
+.host {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-family: var(--mono); font-size: 18px;
+  margin-right: 16px; white-space: nowrap;
+}
+.dot { width: 13px; height: 13px; border-radius: 50%; display: inline-block; }
+.dot.anthropic { background: var(--anthropic); }
+.dot.bedrock   { background: var(--bedrock); }
+.dot.vertex    { background: var(--vertex); }
+
+/* ===========================================
+   能力 chips
+   =========================================== */
+.chips { display: flex; flex-wrap: wrap; gap: 14px; }
+.chip {
+  font-family: var(--mono); font-size: 19px;
+  padding: 9px 18px;
+  border: 1.5px solid var(--pass);
+  color: var(--pass); background: var(--tint-pass);
+  white-space: nowrap;
+}
+
+/* ===========================================
+   备注列表
+   =========================================== */
+ul.notes { list-style: none; }
+ul.notes li {
+  position: relative;
+  padding: 14px 0 14px 40px;
+  font-size: 21px; line-height: 1.6;
+  color: var(--ink-soft);
+  border-bottom: 1px dashed var(--hairline);
+}
+ul.notes li:last-child { border-bottom: none; }
+ul.notes li::before {
+  content: "▸";
+  position: absolute; left: 8px; top: 13px;
+  color: var(--orange); font-size: 20px;
+}
+ul.notes strong { color: var(--ink); }
+
+/* 备注卡片(2×2) */
+.note-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.note-card {
+  border: 1.5px solid var(--rule);
+  background: var(--paper-raise);
+  padding: 24px 28px;
+  font-size: 20px; line-height: 1.6; color: var(--ink-soft);
+}
+.note-card .nc-k {
+  font-family: var(--mono); font-size: 15px; font-weight: 600;
+  letter-spacing: .16em; text-transform: uppercase; color: var(--orange);
+  margin-bottom: 12px;
+  display: flex; align-items: center; gap: 12px;
+}
+.note-card .nc-k::after { content: ""; flex: 1; height: 1px; background: var(--hairline); }
+.note-card strong { color: var(--ink); }
+
+/* ===========================================
+   使用前须知 — 身份、Beta 防火墙与接入拓扑
+   =========================================== */
+.usage-guide-slide .sec-head { margin-bottom: 12px; }
+.usage-guide-slide .sec-lede { font-size: 20px; line-height: 1.5; margin-bottom: 18px; }
+.guide-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; }
+.guide-card {
+  position: relative; min-height: 456px;
+  border: 2px solid var(--rule); border-top: 8px solid var(--orange);
+  background: var(--paper-raise); padding: 26px 28px;
+  box-shadow: 8px 8px 0 rgba(26,25,19,.08);
+}
+.guide-card .g-index {
+  font-family: var(--mono); font-size: 14px; font-weight: 600;
+  letter-spacing: .15em; text-transform: uppercase; color: var(--orange-ink);
+}
+.guide-card h3 { margin: 14px 0 14px; font-size: 30px; line-height: 1.2; }
+.guide-card p { font-size: 18px; line-height: 1.55; color: var(--ink-soft); }
+.guide-list { list-style: none; margin-top: 14px; }
+.guide-list li {
+  position: relative; padding: 8px 0 8px 24px;
+  font-size: 17px; line-height: 1.45; color: var(--ink-soft);
+  border-bottom: 1px dashed var(--hairline);
+}
+.guide-list li:last-child { border-bottom: none; }
+.guide-list li::before { content: "▸"; position: absolute; left: 0; color: var(--orange); }
+.guide-list strong { color: var(--ink); }
+.guide-strip {
+  display: grid; grid-template-columns: auto 1fr; gap: 18px; align-items: center;
+  margin-top: 18px; padding: 14px 20px;
+  border: 2px solid var(--pass); background: var(--tint-pass);
+  font-size: 17px; line-height: 1.45; color: var(--ink-soft);
+}
+.guide-strip .gs-k {
+  font-family: var(--mono); font-size: 13px; font-weight: 600;
+  letter-spacing: .12em; text-transform: uppercase; color: var(--pass);
+  white-space: nowrap;
+}
+.guide-strip strong { color: var(--ink); }
+.beta-guard-grid { display: grid; grid-template-columns: .92fr 1.08fr; gap: 24px; align-items: stretch; }
+.beta-guard-grid .panel { padding: 22px 24px; }
+.guard-title {
+  font-family: var(--mono); font-size: 14px; font-weight: 600;
+  letter-spacing: .13em; text-transform: uppercase; color: var(--orange-ink);
+  margin-bottom: 12px;
+}
+.token-stack { display: grid; gap: 10px; }
+.token-row {
+  display: grid; grid-template-columns: 210px 1fr; gap: 18px; align-items: start;
+  padding: 12px 14px; border: 1px solid var(--hairline); background: var(--paper);
+  font-size: 16px; line-height: 1.4; color: var(--ink-soft);
+}
+.token-row code { color: var(--ink); font-size: 14px; }
+.blocklist-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.block-token {
+  min-height: 74px; padding: 12px 14px;
+  border: 1.5px solid var(--fail); background: var(--tint-fail);
+  font-family: var(--mono); font-size: 13px; line-height: 1.35; color: var(--fail);
+  word-break: break-word;
+}
+.block-token:last-child { grid-column: 1 / -1; min-height: auto; }
+.scenario-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: stretch; }
+.scenario-card {
+  border: 2px solid var(--rule); background: var(--paper-raise);
+  padding: 26px 30px; box-shadow: 8px 8px 0 rgba(26,25,19,.08);
+}
+.scenario-card .scenario-k {
+  font-family: var(--mono); font-size: 14px; font-weight: 600;
+  letter-spacing: .14em; text-transform: uppercase; color: var(--orange-ink);
+}
+.scenario-card h3 { font-size: 34px; line-height: 1.2; margin: 12px 0 14px; }
+.scenario-card .guide-list { margin-top: 0; }
+.scenario-card .guide-list li { font-size: 18px; padding-top: 10px; padding-bottom: 10px; }
+.session-ribbon {
+  display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; gap: 14px; align-items: center;
+  margin-top: 20px; padding: 16px 20px;
+  border: 2px solid var(--orange); background: var(--tint-orange);
+  font-family: var(--mono); font-size: 14px; text-align: center; color: var(--ink-soft);
+}
+.session-ribbon .arrow { color: var(--orange); font-size: 28px; }
+.session-ribbon strong { color: var(--ink); }
+.header-profile-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: stretch; }
+.header-profile-card {
+  border: 2px solid var(--rule); background: var(--paper-raise);
+  box-shadow: 8px 8px 0 rgba(26,25,19,.08); overflow: hidden;
+}
+.header-profile-head {
+  display: grid; grid-template-columns: auto 1fr auto; gap: 16px; align-items: center;
+  padding: 16px 20px; background: var(--ink); color: var(--paper);
+}
+.header-profile-head .hp-mode {
+  font-family: var(--mono); font-size: 13px; font-weight: 600;
+  letter-spacing: .13em; text-transform: uppercase; color: var(--orange);
+}
+.header-profile-head h3 { font-size: 25px; line-height: 1.15; }
+.header-profile-head .hp-auth {
+  font-family: var(--mono); font-size: 12px; color: var(--paper-sink);
+  border: 1px solid rgba(255,255,255,.3); padding: 5px 8px; white-space: nowrap;
+}
+.header-lines { padding: 14px 18px; display: grid; gap: 7px; }
+.header-line {
+  display: grid; grid-template-columns: 205px 1fr; gap: 14px;
+  padding-bottom: 7px; border-bottom: 1px dashed var(--hairline);
+  font-size: 14px; line-height: 1.35;
+}
+.header-line:last-child { border-bottom: none; padding-bottom: 0; }
+.header-line .hk { font-family: var(--mono); color: var(--orange-ink); }
+.header-line .hv { font-family: var(--mono); color: var(--ink); word-break: break-word; }
+.header-profile-note {
+  margin: 0 18px 16px; padding: 10px 13px;
+  border-left: 4px solid var(--orange); background: var(--tint-orange);
+  font-size: 14px; line-height: 1.4; color: var(--ink-soft);
+}
+.source-reference {
+  display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px;
+  margin-top: 16px;
+}
+.source-ref {
+  border: 1.5px solid var(--rule); background: var(--paper);
+  padding: 12px 14px; font-size: 14px; line-height: 1.4; color: var(--ink-soft);
+}
+.source-ref .sr-k {
+  font-family: var(--mono); font-size: 12px; font-weight: 600;
+  letter-spacing: .1em; text-transform: uppercase; color: var(--orange-ink);
+  margin-bottom: 5px;
+}
+.source-ref code { font-size: 12px; word-break: break-word; }
+.native-header-bar {
+  display: grid; grid-template-columns: auto 1fr; gap: 16px; align-items: center;
+  margin-top: 14px; padding: 11px 16px;
+  border: 2px solid var(--pass); background: var(--tint-pass);
+  font-size: 14px; line-height: 1.4; color: var(--ink-soft);
+}
+.native-header-bar .nh-k {
+  font-family: var(--mono); font-size: 12px; font-weight: 600;
+  letter-spacing: .1em; text-transform: uppercase; color: var(--pass); white-space: nowrap;
+}
+
+/* ===========================================
+   FIG.07 条形图
+   =========================================== */
+.mini-chart { padding: 40px 44px; }
+.mini-chart .row {
+  display: grid; grid-template-columns: 380px 1fr; gap: 26px;
+  align-items: center; margin-bottom: 34px;
+}
+.mini-chart .cat {
+  font-family: var(--mono); font-size: 20px; text-align: right; color: var(--ink-soft);
+}
+.mini-chart .track { position: relative; height: 52px; background: var(--paper-sink); border: 1px solid var(--hairline); }
+.mini-chart .bar {
+  position: absolute; inset: 0 auto 0 0;
+  background: var(--orange); width: 0;
+  transition: width 1s .5s var(--ease-out-expo);
+}
+.mini-chart .bar.hatch {
+  background: repeating-linear-gradient(45deg, var(--ink) 0 7px, transparent 7px 14px);
+}
+.slide.visible .mini-chart .bar[data-w] { }
+.mini-chart .bar-label {
+  position: absolute; top: 50%; transform: translate(14px, -50%);
+  font-family: var(--mono); font-weight: 600; font-size: 26px;
+}
+.mini-chart .axis-note {
+  font-size: 19px; color: var(--ink-faint);
+  padding-left: 406px; margin-top: 4px;
+}
+.mult-callout {
+  font-family: var(--mono); font-weight: 600; color: var(--orange); font-size: 22px;
+}
+
+/* ===========================================
+   代理功能面卡片
+   =========================================== */
+.feat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+.feat {
+  border: 1.5px solid var(--rule);
+  background: var(--paper-raise);
+  padding: 26px 28px;
+}
+.feat .f-no {
+  font-family: var(--mono); font-size: 15px; font-weight: 600;
+  color: var(--orange); letter-spacing: .12em; margin-bottom: 12px;
+}
+.feat .f-t { font-size: 23px; font-weight: 700; margin-bottom: 10px; }
+.feat .f-d { font-size: 19px; line-height: 1.6; color: var(--ink-soft); }
+
+/* ===========================================
+   尾页
+   =========================================== */
+.colophon-label {
+  font-family: var(--mono); font-size: 16px; font-weight: 600;
+  letter-spacing: .2em; text-transform: uppercase; color: var(--orange);
+  margin-bottom: 22px;
+}
+ul.sources { list-style: none; }
+ul.sources li {
+  padding: 14px 0 14px 36px; position: relative;
+  font-size: 20px; line-height: 1.6; color: var(--ink-soft);
+  border-bottom: 1px dashed var(--hairline);
+}
+ul.sources li::before { content: "▸"; position: absolute; left: 4px; color: var(--orange); }
+.method-note { margin-top: 30px; font-size: 19px; line-height: 1.65; color: var(--ink-faint); max-width: 78em; }
+.end-mark {
+  margin-top: 44px;
+  font-family: var(--mono); font-size: 18px; letter-spacing: .2em;
+  text-transform: uppercase; color: var(--ink);
+  display: flex; align-items: center; gap: 20px;
+}
+.end-mark::before, .end-mark::after { content: ""; flex: 1; height: 3px; background: var(--rule); }
+
+/* ===========================================
+   DECK CONTROLS — 页码指示(舞台之外)
+   =========================================== */
+.deck-controls {
+  font-family: var(--mono); font-size: 13px; letter-spacing: .18em;
+  color: rgba(242,239,228,.55);
+  user-select: none;
+  display: flex; gap: 18px; align-items: center;
+}
+.deck-controls button {
+  background: none; border: 1px solid rgba(242,239,228,.35);
+  color: rgba(242,239,228,.7); font-family: var(--mono); font-size: 13px;
+  width: 34px; height: 30px; cursor: pointer;
+}
+.deck-controls button:hover { border-color: var(--orange); color: var(--orange); }
+
+/* ===========================================
+   INLINE EDITING — 左上角热区 + E 键
+   =========================================== */
+.edit-hotzone {
+  position: fixed; top: 0; left: 0;
+  width: 80px; height: 80px;
+  z-index: 10000; cursor: pointer;
+}
+.edit-toggle {
+  position: fixed; top: 18px; left: 18px;
+  z-index: 10001;
+  width: 46px; height: 46px;
+  font-size: 20px;
+  background: var(--paper); border: 2px solid var(--ink);
+  cursor: pointer;
+  opacity: 0; pointer-events: none;
+  transition: opacity .3s ease;
+}
+.edit-toggle.show, .edit-toggle.active { opacity: 1; pointer-events: auto; }
+.edit-toggle.active { border-color: var(--orange); background: var(--tint-orange); }
+body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); outline-offset: 3px; }
+
+/* 独立 7 页版本：压缩最后一页的高密度能力表，避免固定舞台溢出。 */
+.quick-q1 .sec-head { margin-bottom: 10px; }
+.quick-q1 .sec-lede { font-size: 17px; line-height: 1.4; margin-bottom: 10px; }
+.quick-q1 th { padding: 8px 14px; font-size: 13px; }
+.quick-q1 td { padding: 8px 14px; font-size: 16px; line-height: 1.35; }
+.quick-q1 .badge { font-size: 13px; padding: 2px 8px; }
+.quick-q1 .err-quote { font-size: 13px; }
+.quick-q1 ul.notes { margin-top: 8px !important; }
+.quick-q1 ul.notes li { padding: 6px 0 6px 30px; font-size: 15px; line-height: 1.4; }
+.quick-q1 ul.notes li::before { left: 5px; top: 5px; font-size: 16px; }
+
+/* OpenCode / VS Code 身份验证与 token 获取流程。 */
+.auth-flow-slide .sec-head { margin-bottom: 10px; }
+.auth-flow-slide .sec-lede { font-size: 17px; line-height: 1.4; margin-bottom: 12px; }
+.auth-shared {
+  display: grid; grid-template-columns: 1fr 58px 1.1fr 58px 1fr;
+  gap: 10px; align-items: stretch; margin-bottom: 14px;
+}
+.auth-shared .auth-step {
+  border: 1.5px solid var(--rule); background: var(--paper-raise);
+  padding: 12px 14px; min-height: 98px;
+}
+.auth-step .as-k {
+  font-family: var(--mono); font-size: 11px; font-weight: 600;
+  letter-spacing: .1em; text-transform: uppercase; color: var(--orange-ink);
+  margin-bottom: 6px;
+}
+.auth-step .as-v { font-size: 14px; line-height: 1.35; color: var(--ink-soft); }
+.auth-step .as-v strong { color: var(--ink); }
+.auth-arrow {
+  align-self: center; text-align: center; color: var(--orange);
+  font-family: var(--mono); font-size: 11px; line-height: 1.2;
+}
+.auth-arrow::after { content: "→"; display: block; font-size: 34px; line-height: 1; }
+.auth-branches { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.auth-branch {
+  border: 2px solid var(--rule); background: var(--paper-raise);
+  box-shadow: 7px 7px 0 rgba(26,25,19,.08); overflow: hidden;
+}
+.auth-branch-head {
+  display: grid; grid-template-columns: auto 1fr; gap: 14px; align-items: center;
+  padding: 13px 16px; background: var(--ink); color: var(--paper);
+}
+.auth-branch-head .ab-mode {
+  font-family: var(--mono); font-size: 11px; font-weight: 600;
+  letter-spacing: .1em; text-transform: uppercase; color: var(--orange);
+}
+.auth-branch-head h3 { font-size: 22px; line-height: 1.15; }
+.auth-branch-body { padding: 13px 16px; }
+.auth-token-flow { display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: center; }
+.auth-token-box {
+  min-height: 78px; padding: 10px 12px;
+  border: 1px solid var(--hairline); background: var(--paper);
+  font-size: 13px; line-height: 1.35; color: var(--ink-soft);
+}
+.auth-token-box strong { display: block; color: var(--ink); margin-bottom: 4px; }
+.auth-token-arrow { color: var(--orange); font-size: 26px; }
+.auth-branch .guide-list { margin-top: 10px; }
+.auth-branch .guide-list li { font-size: 13px; line-height: 1.35; padding: 6px 0 6px 20px; }
+.auth-summary {
+  display: grid; grid-template-columns: auto 1fr; gap: 14px; align-items: center;
+  margin-top: 14px; padding: 10px 14px;
+  border: 2px solid var(--pass); background: var(--tint-pass);
+  font-size: 13px; line-height: 1.35; color: var(--ink-soft);
+}
+.auth-summary .sum-k {
+  font-family: var(--mono); font-size: 11px; font-weight: 600;
+  letter-spacing: .1em; text-transform: uppercase; color: var(--pass); white-space: nowrap;
+}
+</style>
+</head>
+<body>
+
+<div class="deck-viewport">
+<main class="deck-stage" id="deckStage">
+
+<!-- ==================== SLIDE 01 · 封面 ==================== -->
+<section class="slide active" aria-label="封面">
+  <div class="crop tl"></div><div class="crop tr"></div><div class="crop bl"></div><div class="crop br"></div>
+  <div class="s-top">
+    <span class="doc-no">Technical Dossier · TD-2620</span>
+    <span class="doc-sec">Copilot2API — GitHub Model Access Guide</span>
+  </div>
+  <div class="title-body">
+    <p class="kicker reveal">访问指南 · Access Guidelines</p>
+    <h1 class="reveal">访问 GitHub 模型<br>注意事项</h1>
+    <p class="title-sub reveal">面向 Copilot2API 部署与接入，汇总访问 GitHub Copilot 模型前必须确认的账户命名、OpenCode / VS Code 身份验证、Token 获取、请求头画像、Anthropic Beta 过滤、API Key 隔离、Session 粘性与上游能力边界。</p>
+  </div>
+  <div class="stamp">Access Guide<small>2026-08-26 · 部署与接入</small></div>
+  <div class="title-block reveal">
+    <div class="tb"><div class="tb-k">Report Date / 报告日期</div><div class="tb-v">2026-08-26</div></div>
+    <div class="tb"><div class="tb-k">Scope / 范围</div><div class="tb-v">7 页 · 部署与接入</div></div>
+    <div class="tb"><div class="tb-k">Method / 方法</div><div class="tb-v">源码核对 + 上游实测</div></div>
+    <div class="tb"><div class="tb-k">Companion / 姊妹文档</div><div class="tb-v"><code>issues-retrospective.html</code></div></div>
+  </div>
+</section>
+
+<!-- ==================== SLIDE 02 · 使用前须知 全局治理 ==================== -->
+<section class="slide usage-guide-slide" aria-label="使用 Copilot2API 前的全局治理要点">
+  <div class="s-top">
+    <span class="doc-no">TD-2620</span>
+    <span class="doc-sec">Operating Guide — Global Guardrails</span>
+    <span class="doc-pg">02 / 7</span>
+  </div>
+  <div class="s-body">
+    <div class="sec-head reveal">
+      <div class="sec-no">00</div>
+      <div>
+        <div class="sec-label">Before You Start — 全局使用注意事项（1 of 4）</div>
+        <h2>上线前先把身份、命名与请求画像管住</h2>
+      </div>
+    </div>
+    <p class="sec-lede reveal">Copilot2API 能把客户端协议统一起来，但<strong>账户身份、命名方式和上游请求头画像</strong>仍由运营方负责。建议把下面三项作为部署基线，而不是发生封禁、模型缺失或兼容错误后再补救。</p>
+    <div class="guide-grid reveal">
+      <article class="guide-card">
+        <div class="g-index">Guardrail 01 · Account Naming</div>
+        <h3>账户名不要模式化</h3>
+        <p>避免使用“固定前缀＋连续编号”的批量命名，也不要把基础设施角色直接写进名称。</p>
+        <ul class="guide-list">
+          <li>不建议：<code>gateway-01</code>、<code>route-02</code>、<code>proxy-03</code></li>
+          <li>采用<strong>自然、稳定、可审计</strong>的账户名称</li>
+          <li>账户与路由关系保存在管理配置中，不编码进名称</li>
+        </ul>
+      </article>
+      <article class="guide-card">
+        <div class="g-index">Guardrail 02 · Header Lifecycle</div>
+        <h3>请求头要定期更新</h3>
+        <p>上游会根据客户端版本与集成身份决定模型可见性和行为；长期冻结请求头会逐渐偏离真实客户端。</p>
+        <ul class="guide-list">
+          <li>跟踪 OpenCode 与 VS Code Copilot Chat 的源代码/版本变化</li>
+          <li>版本化维护 <code>User-Agent</code>、Editor/Plugin Version、Intent 等 profile</li>
+          <li>每次升级先跑模型列表与真实调用回归</li>
+        </ul>
+      </article>
+      <article class="guide-card">
+        <div class="g-index">Guardrail 03 · Auth Method</div>
+        <h3>身份验证方式建议采用 OpenCode 方式</h3>
+        <p>建议优先采用 OpenCode 的 OAuth Device Flow：使用 OpenCode Client-ID 获取 GitHub OAuth token，并直接作为 Copilot API Bearer，减少短时 Copilot token 的交换与刷新环节。</p>
+        <ul class="guide-list">
+          <li><strong>OpenCode Client-ID → GitHub OAuth token</strong></li>
+          <li><strong>GitHub OAuth token → Copilot Bearer（无需二次交换）</strong></li>
+          <li>Client-ID、token 用法与 <strong>ProfileOpenCode</strong> 必须成套匹配</li>
+        </ul>
+      </article>
+    </div>
+    <div class="guide-strip reveal">
+      <div class="gs-k">Operational Rule</div>
+      <div>不要通过伪造任意客户端画像来“试出”能力；以<strong>真实开源客户端当前实现</strong>为基线，记录版本并定期复验。</div>
+    </div>
+  </div>
+  <div class="s-foot"><span>Operating Guide · Global Guardrails</span><span>2026-08-24</span></div>
+</section>
+
+<!-- ==================== SLIDE 03 · OpenCode 与 VS Code 认证流程 ==================== -->
+<section class="slide auth-flow-slide" aria-label="OpenCode 与 VS Code 身份验证和 Copilot Token 获取逻辑">
+  <div class="s-top">
+    <span class="doc-no">TD-2620</span>
+    <span class="doc-sec">Operating Guide — Authentication &amp; Token Flow</span>
+    <span class="doc-pg">03 / 7</span>
+  </div>
+  <div class="s-body">
+    <div class="sec-head reveal">
+      <div class="sec-no">00</div>
+      <div>
+        <div class="sec-label">Before You Start — 身份验证与上游凭据</div>
+        <h2>OpenCode 直用 GitHub Token；VS Code 再交换 Copilot Token</h2>
+      </div>
+    </div>
+    <p class="sec-lede reveal">两种模式都先通过 GitHub OAuth Device Flow 获取 GitHub OAuth token；差异发生在<strong>如何获得 Copilot API Bearer</strong>。认证模式、OAuth Client-ID、Token 用法、Base URL 与请求头 Profile 必须整套匹配。</p>
+    <div class="auth-shared reveal">
+      <div class="auth-step">
+        <div class="as-k">Step 01 · Device Code</div>
+        <div class="as-v"><strong>POST /login/device/code</strong><br><code>scope=read:user</code><br>返回 user_code 与验证地址</div>
+      </div>
+      <div class="auth-arrow">用户授权</div>
+      <div class="auth-step">
+        <div class="as-k">Step 02 · Browser Approval</div>
+        <div class="as-v">用户访问 <strong>verification_uri</strong>，输入 user_code 并批准对应 GitHub OAuth App。</div>
+      </div>
+      <div class="auth-arrow">轮询</div>
+      <div class="auth-step">
+        <div class="as-k">Step 03 · GitHub OAuth Token</div>
+        <div class="as-v"><strong>POST /login/oauth/access_token</strong><br>处理 pending / slow_down，成功后持久化 GitHub token。</div>
+      </div>
+    </div>
+    <div class="auth-branches reveal">
+      <article class="auth-branch">
+        <div class="auth-branch-head">
+          <div class="ab-mode">OpenCode · Direct</div>
+          <h3>不交换 Copilot Token</h3>
+        </div>
+        <div class="auth-branch-body">
+          <div class="auth-token-flow">
+            <div class="auth-token-box"><strong>OAuth Client-ID</strong><code>Ov23li8tweQw6odWQebz</code></div>
+            <div class="auth-token-arrow">→</div>
+            <div class="auth-token-box"><strong>Copilot Bearer</strong>直接使用 GitHub OAuth token</div>
+          </div>
+          <ul class="guide-list">
+            <li>不调用 <code>api.github.com/copilot_internal/v2/token</code></li>
+            <li>静态 Base URL：<code>https://api.githubcopilot.com</code></li>
+            <li>无短时 Copilot token 刷新；使用 <strong>ProfileOpenCode</strong></li>
+          </ul>
+        </div>
+      </article>
+      <article class="auth-branch">
+        <div class="auth-branch-head">
+          <div class="ab-mode">VS Code · Exchange</div>
+          <h3>GitHub Token → 短时 Copilot Token</h3>
+        </div>
+        <div class="auth-branch-body">
+          <div class="auth-token-flow">
+            <div class="auth-token-box"><strong>OAuth Client-ID</strong><code>Iv1.b507a08c87ecfe98</code></div>
+            <div class="auth-token-arrow">→</div>
+            <div class="auth-token-box"><strong>Token Exchange</strong><code>GET copilot_internal/v2/token</code></div>
+          </div>
+          <ul class="guide-list">
+            <li>返回短时 Copilot token、<code>expires_at</code> 与 <code>proxy-ep</code></li>
+            <li>由 <code>proxy-ep</code> 推导动态 Copilot API Base URL</li>
+            <li>剩余可用期 ≤5 分钟时惰性刷新；并发刷新串行化；使用 <strong>ProfileEditor</strong></li>
+          </ul>
+        </div>
+      </article>
+    </div>
+    <div class="auth-summary reveal">
+      <div class="sum-k">Persistence Rule</div>
+      <div>两种模式都保存 GitHub OAuth token 到账号独立的 <code>credentials.json</code>（0600）。重启后 Direct 可直接复用；Exchange 可重新铸造 Copilot token，通常无需再次 Device Flow。</div>
+    </div>
+  </div>
+  <div class="s-foot"><span>Operating Guide · Authentication &amp; Token Flow</span><span>2026-08-26</span></div>
+</section>
+
+<!-- ==================== SLIDE 04 · 使用前须知 请求头 Profile ==================== -->
+<section class="slide usage-guide-slide" aria-label="OpenCode 与 VS Code Copilot 请求头 Profile">
+  <div class="s-top">
+    <span class="doc-no">TD-2620</span>
+    <span class="doc-sec">Operating Guide — Client Header Profiles</span>
+    <span class="doc-pg">04 / 7</span>
+  </div>
+  <div class="s-body">
+    <div class="sec-head reveal">
+      <div class="sec-no">00</div>
+      <div>
+        <div class="sec-label">Before You Start — 客户端请求画像（3 of 4）</div>
+        <h2>OpenCode 与 VS Code：身份和请求头必须成套匹配</h2>
+      </div>
+    </div>
+    <p class="sec-lede reveal" style="margin-bottom:14px">以下是 Copilot2API 当前实现的请求头快照，分别模拟 OpenCode 的 Direct 模式与 VS Code Copilot Chat 的 Exchange 模式。<strong>版本号不是永久常量</strong>；升级代理时应回看客户端源码，再跑 <code>/models</code> 与真实调用回归。</p>
+    <div class="header-profile-grid reveal">
+      <article class="header-profile-card">
+        <div class="header-profile-head">
+          <div class="hp-mode">Direct · ProfileOpenCode</div>
+          <h3>OpenCode 画像</h3>
+          <div class="hp-auth">GitHub OAuth token</div>
+        </div>
+        <div class="header-lines">
+          <div class="header-line"><span class="hk">Authorization</span><span class="hv">Bearer &lt;github-oauth-token&gt;</span></div>
+          <div class="header-line"><span class="hk">User-Agent</span><span class="hv">opencode/&lt;current-version&gt;</span></div>
+          <div class="header-line"><span class="hk">Openai-Intent</span><span class="hv">conversation-edits</span></div>
+          <div class="header-line"><span class="hk">X-Github-Api-Version</span><span class="hv">2026-06-01</span></div>
+          <div class="header-line"><span class="hk">X-Initiator</span><span class="hv">user | agent</span></div>
+          <div class="header-line"><span class="hk">Content-Type</span><span class="hv">application/json</span></div>
+        </div>
+        <div class="header-profile-note"><strong>按载荷动态追加：</strong>图片输入时 OpenCode 会发送 <code>Copilot-Vision-Request: true</code>。不要混入 Editor-Version、Plugin-Version、Integration-Id 或生成式 X-Request-Id。</div>
+      </article>
+      <article class="header-profile-card">
+        <div class="header-profile-head">
+          <div class="hp-mode">Exchange · ProfileEditor</div>
+          <h3>VS Code 画像</h3>
+          <div class="hp-auth">short-lived Copilot token</div>
+        </div>
+        <div class="header-lines">
+          <div class="header-line"><span class="hk">Authorization</span><span class="hv">Bearer &lt;copilot-token&gt;</span></div>
+          <div class="header-line"><span class="hk">User-Agent</span><span class="hv">GitHubCopilotChat/&lt;extension-version&gt;</span></div>
+          <div class="header-line"><span class="hk">Editor-Version</span><span class="hv">vscode/&lt;current-version&gt;</span></div>
+          <div class="header-line"><span class="hk">Editor-Plugin-Version</span><span class="hv">copilot-chat/&lt;extension-version&gt;</span></div>
+          <div class="header-line"><span class="hk">Copilot-Integration-Id</span><span class="hv">vscode-chat</span></div>
+          <div class="header-line"><span class="hk">Openai-Intent</span><span class="hv">conversation-agent</span></div>
+          <div class="header-line"><span class="hk">X-Github-Api-Version</span><span class="hv">2026-06-01</span></div>
+          <div class="header-line"><span class="hk">X-Request-Id</span><span class="hv">每请求唯一 ID</span></div>
+        </div>
+      </article>
+    </div>
+    <div class="native-header-bar reveal">
+      <div class="nh-k">Native Anthropic</div>
+      <div>调用原生 <code>/v1/messages</code> 时，在上述身份画像之外再发送 <code>anthropic-version: 2023-06-01</code>；<code>anthropic-beta</code> 由代理按功能白名单重建，不应复制客户端任意值。</div>
+    </div>
+    <div class="source-reference reveal">
+      <div class="source-ref"><div class="sr-k">OpenCode 源码</div><code>packages/opencode/src/plugin/github-copilot/copilot.ts</code><br>重点检查 fetch headers、<code>x-initiator</code> 与视觉载荷判断。</div>
+      <div class="source-ref"><div class="sr-k">VS Code 源码</div><code>microsoft/vscode-copilot-chat</code><br>搜索 <code>GitHubCopilotChat</code>、<code>Copilot-Integration-Id</code>、<code>Openai-Intent</code> 的请求构造逻辑。</div>
+      <div class="source-ref"><div class="sr-k">本项目映射</div><code>internal/copilot/headers.go</code><br>更新常量与 profile 后，同步回归模型列表、真实调用和身份头缺失项。</div>
+    </div>
+  </div>
+  <div class="s-foot"><span>Operating Guide · Client Header Profiles</span><span>2026-08-26</span></div>
+</section>
+
+<!-- ==================== SLIDE 05 · 使用前须知 Beta 防火墙 ==================== -->
+<section class="slide usage-guide-slide" aria-label="Anthropic beta 头白名单与 Copilot 黑名单">
+  <div class="s-top">
+    <span class="doc-no">TD-2620</span>
+    <span class="doc-sec">Operating Guide — Anthropic Beta Firewall</span>
+    <span class="doc-pg">05 / 7</span>
+  </div>
+  <div class="s-body">
+    <div class="sec-head reveal">
+      <div class="sec-no">00</div>
+      <div>
+        <div class="sec-label">Before You Start — 全局使用注意事项（4 of 4）</div>
+        <h2>代理侧用白名单；Copilot 网关却是黑名单</h2>
+      </div>
+    </div>
+    <p class="sec-lede reveal">GitHub Copilot 不会完整校验每个 <code>anthropic-beta</code> token：未知甚至伪造的 token 往往仍返回 <strong>200</strong>，但这不代表功能生效；命中其明确黑名单时，整个请求会直接 <strong>400</strong>。因此代理出站必须采用<strong>最小白名单</strong>。</p>
+    <div class="beta-guard-grid reveal">
+      <div class="panel">
+        <div class="guard-title">建议的基线白名单 · 只按真实载荷注入</div>
+        <div class="token-stack">
+          <div class="token-row"><code>interleaved-thinking-2025-05-14</code><span>Native Messages 基线；由代理统一生成，不接受客户端任意透传。</span></div>
+          <div class="token-row"><code>context-management-2025-06-27</code><span>仅当 body 含 <code>context_management</code> 时注入。</span></div>
+          <div class="token-row"><code>compact-2026-01-12</code><span>仅在 compaction / compact 相关请求中注入。</span></div>
+        </div>
+        <ul class="guide-list">
+          <li>基线字段参考 OpenCode / VS Code 当前实际发送值，并随客户端版本更新。</li>
+          <li>客户端提供的其他 beta 默认剥离，避免一个危险 token 打死整次请求。</li>
+        </ul>
+      </div>
+      <div class="panel">
+        <div class="guard-title">Copilot 明确拒绝的 5 个 token · 400</div>
+        <div class="blocklist-grid">
+          <div class="block-token">files-api-2025-04-14</div>
+          <div class="block-token">mcp-client-2025-11-20</div>
+          <div class="block-token">skills-2025-10-02</div>
+          <div class="block-token">advisor-tool-2026-03-01</div>
+          <div class="block-token">output-128k-2025-02-19</div>
+        </div>
+        <ul class="guide-list">
+          <li><strong>200 只表示网关接受：</strong>伪造 token、<code>output-300k</code> 等都可能被静默忽略。</li>
+          <li><strong>400 表示硬拒绝：</strong>黑名单 token 会让整个请求失败，不能依赖上游自动忽略。</li>
+          <li><strong>策略：</strong>客户端 beta → 代理解析 → 按功能白名单重建出站头，而不是原样转发。</li>
+        </ul>
+      </div>
+    </div>
+    <div class="guide-strip reveal">
+      <div class="gs-k">Decision Rule</div>
+      <div><strong>接受 ≠ 生效。</strong>判断 beta 功能必须做三探针：仅带头、带头＋真实载荷、同载荷不带头；只有负向对照失败才证明该头确实必需。</div>
+    </div>
+  </div>
+  <div class="s-foot"><span>Operating Guide · Anthropic Beta Firewall</span><span>2026-08-24</span></div>
+</section>
+
+<!-- ==================== SLIDE 06 · 使用前须知 接入场景 ==================== -->
+<section class="slide usage-guide-slide" aria-label="开发者与应用接入场景">
+  <div class="s-top">
+    <span class="doc-no">TD-2620</span>
+    <span class="doc-sec">Operating Guide — Integration Topology</span>
+    <span class="doc-pg">06 / 7</span>
+  </div>
+  <div class="s-body">
+    <div class="sec-head reveal">
+      <div class="sec-no">00</div>
+      <div>
+        <div class="sec-label">Before You Start — 场景化接入注意事项</div>
+        <h2>开发者隔离身份；应用侧保持 Session 粘性</h2>
+      </div>
+    </div>
+    <p class="sec-lede reveal">开发者工具和后端应用的风险模型不同：前者重点是<strong>个人身份隔离与隐私边界</strong>，后者重点是<strong>账户池负载、会话连续性和故障转移</strong>。不要用同一套轮询规则覆盖两种场景。</p>
+    <div class="scenario-grid reveal">
+      <article class="scenario-card">
+        <div class="scenario-k">Developer Scenario · Claude Code / OpenCode</div>
+        <h3>一人 · 一 Key · 一 GitHub 账户</h3>
+        <ul class="guide-list">
+          <li>每位开发者使用独立 Copilot2API Key，并固定映射到<strong>唯一 GitHub 账户</strong>。</li>
+          <li>禁止多人共享 Key / 账户；确保用量归属、撤销、限额和审计都能落到个人。</li>
+          <li>优先评估 OpenCode：实现可审计，Direct 模式也以其请求头 profile 为参考。</li>
+          <li>Claude Code 可能携带客户端环境或遥测相关信息；接入前核对配置、数据政策与组织隐私要求。</li>
+        </ul>
+      </article>
+      <article class="scenario-card">
+        <div class="scenario-k">Application Scenario · Account Pool</div>
+        <h3>按 Session 负载，而非逐请求乱跳</h3>
+        <ul class="guide-list">
+          <li>建立稳定的 <strong>Session → GitHub 账户</strong>映射，同一会话优先保持账户粘性。</li>
+          <li>综合账户健康、并发、限额和缓存状态分配新 Session，避免简单无状态轮询。</li>
+          <li>故障转移尽量发生在请求/轮次边界，并记录切换原因；避免破坏上下文、缓存与工具连续性。</li>
+          <li>监控每账户成功率、429/5xx、token 用量与活跃 Session，及时隔离异常账户。</li>
+        </ul>
+      </article>
+    </div>
+    <div class="session-ribbon reveal">
+      <div><strong>API Key</strong><br>个人/应用身份</div>
+      <div class="arrow">→</div>
+      <div><strong>Session Router</strong><br>粘性 + 健康感知</div>
+      <div class="arrow">→</div>
+      <div><strong>GitHub Account</strong><br>独立配额与审计</div>
+    </div>
+  </div>
+  <div class="s-foot"><span>Operating Guide · Integration Topology</span><span>2026-08-24</span></div>
+</section>
+
+<!-- ==================== SLIDE 07 · Q1 现象 ==================== -->
+<section class="slide quick-q1" aria-label="Q1 上游硬性不支持">
+  <div class="s-top">
+    <span class="doc-no">TD-2620</span>
+    <span class="doc-sec">Issue 01 — Upstream Gaps</span>
+    <span class="doc-pg">07 / 7</span>
+  </div>
+  <div class="s-body">
+    <div class="sec-head reveal">
+      <div class="sec-no">Q1</div>
+      <div>
+        <div class="sec-label">Issue 01 — 上游模型硬性不支持的功能</div>
+        <h2>现象与判定：不是代理丢功能，是上游不放行</h2>
+      </div>
+    </div>
+    <p class="sec-lede reveal">早期怀疑「代理把功能弄丢了」。用<strong>三层对照法</strong>(① Anthropic 官方文档 → ② 直连上游 → ③ 经代理)复测后判定:以下能力在 Copilot 当前暴露的同步接口上被拒,换 beta 头 / 工具版本也打不通(fast mode 例外 —— 07-26 复测已翻转为支持):</p>
+    <div class="panel reveal">
+      <table>
+        <thead><tr><th style="width:38%">能力</th><th style="width:15%">实测</th><th>上游报错 / 结论</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><code>web_search</code>(任何版本 / beta 组合)</td>
+            <td><span class="badge no">✕ 400</span></td>
+            <td><span class="err-quote" style="margin-top:0;">The use of the web search tool is not supported.</span></td>
+          </tr>
+          <tr>
+            <td><code>web_fetch</code>(工具与 beta 头双白名单均堵)</td>
+            <td><span class="badge no">✕ 400</span></td>
+            <td><span class="err-quote" style="margin-top:0;">rejected tool(s): web_fetch / unsupported beta header(s)</span></td>
+          </tr>
+          <tr>
+            <td>外链图片 / PDF<br><code>source.type=url</code></td>
+            <td><span class="badge no">✕ 400</span></td>
+            <td><code>external image / document URLs are not supported</code> —— 两者仅接受 base64</td>
+          </tr>
+          <tr>
+            <td>300K 扩展输出<br><span style="color:var(--ink-soft);font-size:14px">官方仅 Message Batches API</span></td>
+            <td><span class="badge warn">△ 当前路径不可用</span></td>
+            <td>同步 <code>/v1/messages</code> 仍为 128K；直连 Copilot 边界实测 <code>128000</code> ✓ / <code>128001</code> ✕，详见 Extended 专页</td>
+          </tr>
+          <tr>
+            <td>fast mode 真实加速<br><span style="color:var(--ink-soft);font-size:14px">07-26 复测状态翻转</span></td>
+            <td><span class="badge ok">✓ 已支持</span></td>
+            <td>专属 ID <code>claude-opus-4.8-fast</code> 生效:回报 <code>usage.speed:"fast"</code>,实测 <strong>2.46×</strong>(54.3→133.4 tok/s);官方 <code>speed</code> 参数 + beta 头仍被静默忽略</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <ul class="notes" style="margin-top: 18px;">
+      <li><strong>处置:</strong>图片 / PDF 走 base64;web 检索由客户端自带工具替代。300K 不是同步 SSE 扩容，而是 Anthropic 异步 Message Batches 能力；Copilot 未暴露对应 batch 端点，代理无法仅靠转发 beta 头实现。</li>
+      <li><strong>上游能力会翻转,须定期复测:</strong>fast mode 早期探测为「容忍但不实现」,2026-07-26 复测确认上游已真实部署(双模式一致) —— 加速比与官方宣称的 2.5× 精确吻合;差异在开启方式:官方是 <code>speed:"fast"</code> ＋ beta 头,Copilot 是换 <code>-fast</code> 模型 ID。</li>
+    </ul>
+  </div>
+  <div class="s-foot"><span>Issue 01 · Upstream Gaps (1 of 2)</span><span>2026-08-04</span></div>
+</section>
+</main>
+</div>
+
+<!-- 页码指示 + 导航按钮(舞台之外的 UI) -->
+<div class="deck-controls" aria-hidden="true">
+  <button id="navPrev" title="上一页 (←)">‹</button>
+  <span id="pageIndicator">01 / 7</span>
+  <button id="navNext" title="下一页 (→)">›</button>
+</div>
+
+<!-- 内联编辑热区与开关 -->
+<div class="edit-hotzone"></div>
+<button class="edit-toggle" id="editToggle" title="编辑模式 (E)">✎</button>
+
+<script>
+/* ===========================================
+   SLIDE PRESENTATION CONTROLLER
+   键盘 / 滚轮 / 触摸导航 + 整体缩放
+   =========================================== */
+class SlidePresentation {
+  constructor() {
+    this.slides = document.querySelectorAll('.slide');
+    this.currentSlide = 0;
+    this.stage = document.getElementById('deckStage');
+    this.indicator = document.getElementById('pageIndicator');
+    this.wheelLock = false;
+    this.setupStageScale();
+    this.setupKeyboardNav();
+    this.setupWheelNav();
+    this.setupTouchNav();
+    this.setupButtons();
+    this.showSlide(0);
+  }
+
+  /* 固定 1920×1080 舞台整体缩放,居中留黑边 */
+  setupStageScale() {
+    const scale = () => {
+      const factor = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+      const x = (window.innerWidth - 1920 * factor) / 2;
+      const y = (window.innerHeight - 1080 * factor) / 2;
+      this.stage.style.transform = `translate(${x}px, ${y}px) scale(${factor})`;
+    };
+    scale();
+    window.addEventListener('resize', scale);
+  }
+
+  setupKeyboardNav() {
+    document.addEventListener('keydown', (e) => {
+      if (e.target.getAttribute && e.target.getAttribute('contenteditable')) return;
+      switch (e.key) {
+        case 'ArrowRight': case 'ArrowDown': case ' ': case 'PageDown':
+          e.preventDefault(); this.next(); break;
+        case 'ArrowLeft': case 'ArrowUp': case 'PageUp':
+          e.preventDefault(); this.prev(); break;
+        case 'Home': e.preventDefault(); this.showSlide(0); break;
+        case 'End':  e.preventDefault(); this.showSlide(this.slides.length - 1); break;
+      }
+    });
+  }
+
+  setupWheelNav() {
+    window.addEventListener('wheel', (e) => {
+      if (document.body.classList.contains('editing')) return;
+      if (this.wheelLock) return;
+      if (Math.abs(e.deltaY) < 24) return;
+      this.wheelLock = true;
+      setTimeout(() => { this.wheelLock = false; }, 650);
+      e.deltaY > 0 ? this.next() : this.prev();
+    }, { passive: true });
+  }
+
+  setupTouchNav() {
+    let startX = 0, startY = 0;
+    window.addEventListener('touchstart', (e) => {
+      startX = e.touches[0].clientX; startY = e.touches[0].clientY;
+    }, { passive: true });
+    window.addEventListener('touchend', (e) => {
+      const dx = e.changedTouches[0].clientX - startX;
+      const dy = e.changedTouches[0].clientY - startY;
+      if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy)) return;
+      dx < 0 ? this.next() : this.prev();
+    }, { passive: true });
+  }
+
+  setupButtons() {
+    document.getElementById('navPrev').addEventListener('click', () => this.prev());
+    document.getElementById('navNext').addEventListener('click', () => this.next());
+  }
+
+  next() { this.showSlide(this.currentSlide + 1); }
+  prev() { this.showSlide(this.currentSlide - 1); }
+
+  showSlide(index) {
+    this.currentSlide = Math.max(0, Math.min(index, this.slides.length - 1));
+    this.slides.forEach((slide, i) => {
+      slide.classList.toggle('active', i === this.currentSlide);
+      slide.classList.toggle('visible', i === this.currentSlide);
+    });
+    const pad = (n) => String(n).padStart(2, '0');
+    this.indicator.textContent = `${pad(this.currentSlide + 1)} / ${pad(this.slides.length)}`;
+    this.animateBars(this.slides[this.currentSlide]);
+  }
+
+  /* FIG.07 条形图:进入该页时按 data-w 展开 */
+  animateBars(slide) {
+    slide.querySelectorAll('.mini-chart .bar[data-w]').forEach((bar) => {
+      bar.style.width = '0';
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => { bar.style.width = bar.dataset.w; });
+      });
+    });
+  }
+}
+
+const deck = new SlidePresentation();
+
+/* ===========================================
+   INLINE EDITOR — 悬停热区 / E 键切换,Ctrl+S 保存
+   =========================================== */
+class InlineEditor {
+  constructor() {
+    this.isActive = false;
+    this.toggle = document.getElementById('editToggle');
+    this.storageKey = 'td2607-slide-edits';
+    this.editableSelector = 'h1, h2, h3, p, li, td, th, .chip, .k-label, .k-value, .k-note, .f-t, .f-d, .tb-v, .cat, .axis-note';
+    this.restore();
+    this.bind();
+  }
+
+  bind() {
+    const hotzone = document.querySelector('.edit-hotzone');
+    let hideTimeout = null;
+    // 热区悬停显示按钮,400ms 宽限期
+    hotzone.addEventListener('mouseenter', () => {
+      clearTimeout(hideTimeout);
+      this.toggle.classList.add('show');
+    });
+    hotzone.addEventListener('mouseleave', () => {
+      hideTimeout = setTimeout(() => {
+        if (!this.isActive) this.toggle.classList.remove('show');
+      }, 400);
+    });
+    this.toggle.addEventListener('mouseenter', () => clearTimeout(hideTimeout));
+    this.toggle.addEventListener('mouseleave', () => {
+      hideTimeout = setTimeout(() => {
+        if (!this.isActive) this.toggle.classList.remove('show');
+      }, 400);
+    });
+    this.toggle.addEventListener('click', () => this.toggleEditMode());
+    hotzone.addEventListener('click', () => this.toggleEditMode());
+    document.addEventListener('keydown', (e) => {
+      if ((e.key === 'e' || e.key === 'E') && !(e.target.getAttribute && e.target.getAttribute('contenteditable'))) {
+        this.toggleEditMode();
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === 's' && this.isActive) {
+        e.preventDefault(); this.save();
+      }
+    });
+  }
+
+  toggleEditMode() {
+    this.isActive = !this.isActive;
+    document.body.classList.toggle('editing', this.isActive);
+    this.toggle.classList.toggle('active', this.isActive);
+    if (this.isActive) this.toggle.classList.add('show');
+    document.querySelectorAll(this.editableSelector).forEach((el) => {
+      if (this.isActive) el.setAttribute('contenteditable', 'true');
+      else el.removeAttribute('contenteditable');
+    });
+    if (!this.isActive) this.save();
+  }
+
+  /* 以「页索引 + 页内可编辑序号」作为键,存 localStorage */
+  save() {
+    const data = {};
+    document.querySelectorAll('.slide').forEach((slide, si) => {
+      slide.querySelectorAll(this.editableSelector).forEach((el, ei) => {
+        data[`${si}:${ei}`] = el.innerHTML;
+      });
+    });
+    try { localStorage.setItem(this.storageKey, JSON.stringify(data)); } catch (e) {}
+  }
+
+  restore() {
+    let data = null;
+    try { data = JSON.parse(localStorage.getItem(this.storageKey) || 'null'); } catch (e) {}
+    if (!data) return;
+    document.querySelectorAll('.slide').forEach((slide, si) => {
+      slide.querySelectorAll(this.editableSelector).forEach((el, ei) => {
+        const k = `${si}:${ei}`;
+        if (data[k] !== undefined && data[k] !== el.innerHTML) el.innerHTML = data[k];
+      });
+    });
+  }
+}
+
+const editor = new InlineEditor();
+</script>
+</body>
+</html>
