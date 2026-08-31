@@ -13,6 +13,7 @@ import (
 	"github.com/whtsky/copilot2api/auth"
 	"github.com/whtsky/copilot2api/gemini"
 	"github.com/whtsky/copilot2api/internal/accounts"
+	"github.com/whtsky/copilot2api/internal/loginagent"
 	"github.com/whtsky/copilot2api/internal/models"
 	"github.com/whtsky/copilot2api/internal/stats"
 	"github.com/whtsky/copilot2api/internal/upstream"
@@ -132,5 +133,23 @@ func buildRegistry(ctx context.Context, baseTokenDir string, transport *http.Tra
 		return newAccountHandlers(c, baseTokenDir, transport, statsStore.Recorder(c.ID))
 	}
 	mgr := accounts.NewManager(reg, factory, cfgPath, os.Getenv("COPILOT2API_ADMIN_TOKEN"), statsStore)
+
+	// Optional automated device-flow authorization. A missing credential store
+	// or agent URL simply leaves the manual flow as the only option.
+	loginsPath := accounts.ResolveLoginsPath(baseTokenDir)
+	logins, err := accounts.NewLoginStore(loginsPath)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to load github logins: %w", err)
+	}
+	agent := loginagent.NewClientFromEnv()
+	mgr.WithAutoLogin(logins, agent)
+	if agent != nil {
+		// Never log the shared token, only the endpoint.
+		slog.Info("automated device-flow login enabled",
+			"agent_url", agent.BaseURL(), "timeout", agent.Timeout())
+	} else {
+		slog.Debug("automated device-flow login disabled", "hint", loginagent.EnvURL+" is not set")
+	}
+
 	return reg, mgr, statsStore, nil
 }

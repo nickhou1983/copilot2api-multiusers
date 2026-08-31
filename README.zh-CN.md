@@ -119,6 +119,21 @@ docker compose up --build
 
 ⚠️ 管理界面可以读取 API Key 并触发 GitHub 认证，请仅在本地使用。若需鉴权，可设置 `COPILOT2API_ADMIN_TOKEN`；此时界面会要求以 `X-Admin-Token` 请求头或 `?admin_token=<token>` 查询参数提供（访问 `http://127.0.0.1:7777/admin/?admin_token=<token>`）。
 
+### 自动化 Device Flow 登录（可选）
+
+认证账户时通常仍需人工打开 GitHub、粘贴 code、点击 **Authorize**。账户一多就很烦。
+
+可选的 **login agent** 容器（Node + Playwright）能替你完成：存好每个账户的 GitHub 用户名和密码，点击 **Auto authenticate**，agent 会自动登录、填入 User Code 并点击授权——代理原有的轮询逻辑照常把 token 保存下来。
+
+```bash
+cp .env.example .env    # 设置 COPILOT2API_ADMIN_TOKEN 和 LOGIN_AGENT_TOKEN
+docker compose up -d --build
+```
+
+**不设置 `COPILOT2API_LOGIN_AGENT_URL` 时该功能完全关闭**，且自动化一旦失败会回退到手动流程。它要求账户**未开启 2FA**，并且会以明文（权限 `0600`）存储密码——请先阅读安全说明。
+
+配置、安全须知与排查方法详见 **[docs/auto-login.zh-CN.md](docs/auto-login.zh-CN.md)**。
+
 ## 配合 Claude Code 使用
 
 添加到 `~/.claude/settings.json`：
@@ -301,6 +316,10 @@ message = client.messages.create(
 | `COPILOT2API_TOKEN_DIR` | Token 存储目录 | `~/.config/copilot2api` |
 | `COPILOT2API_ACCOUNTS_FILE` | 多账号配置文件路径（参见 [多 GitHub 账号](#多-github-账号)） | `<token-dir>/accounts.json` |
 | `COPILOT2API_ADMIN_TOKEN` | 若设置，`/admin/` 界面将要求此 Token（`X-Admin-Token` 请求头或 `?admin_token=`） | _（未设置，无鉴权）_ |
+| `COPILOT2API_LOGIN_AGENT_URL` | 自动化 Device Flow 的 login agent 地址。不设置则关闭自动化（见 [自动化 Device Flow 登录](docs/auto-login.zh-CN.md)） | _（未设置，已关闭）_ |
+| `COPILOT2API_LOGIN_AGENT_TOKEN` | 以 `X-Agent-Token` 发送给 login agent 的共享密钥 | _（未设置，无鉴权）_ |
+| `COPILOT2API_LOGIN_AGENT_TIMEOUT_SECONDS` | login agent 单次登录超时（秒） | `180` |
+| `COPILOT2API_LOGINS_FILE` | 自动化登录所用 GitHub 凭证的存储路径 | `<token-dir>/github_logins.json` |
 | `COPILOT2API_SSE_KEEPALIVE_SECONDS` | 原生 `/v1/messages` 流式响应的空闲保活间隔（秒），超过该时长未收到上游字节时注入 `ping` 事件，避免长推理静默期被 NAT、CDN 或负载均衡器切断。设为 `0` 关闭 | `15` |
 | `COPILOT2API_SSE_MAX_IDLE_SECONDS` | 原生 `/v1/messages` 流式响应的上游静默上限（秒），超过该时长仍未收到上游字节时以 `error` 事件中止流，避免保活 `ping` 无限维持已卡死的上游连接。设为 `0` 关闭 | `600` |
 | `COPILOT2API_DEBUG` | 开启调试日志（`true`/`false`、`1`/`0`） | `false` |

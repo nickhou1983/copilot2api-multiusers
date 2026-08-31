@@ -1,0 +1,50 @@
+services:
+  copilot2api:
+    build: .
+    image: copilot2api:local
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${COPILOT2API_HOST_PORT:-7777}:7777"
+    volumes:
+      - copilot2api-tokens:/root/.config/copilot2api
+    environment:
+      COPILOT2API_HOST: 0.0.0.0
+      COPILOT2API_PORT: "7777"
+      # Protect the admin UI: anyone who can reach it can trigger a login with
+      # the stored GitHub credentials.
+      COPILOT2API_ADMIN_TOKEN: ${COPILOT2API_ADMIN_TOKEN:?set COPILOT2API_ADMIN_TOKEN in .env}
+      # Reachable only over the compose network, never from the host.
+      COPILOT2API_LOGIN_AGENT_URL: http://login-agent:8080
+      COPILOT2API_LOGIN_AGENT_TOKEN: ${LOGIN_AGENT_TOKEN:?set LOGIN_AGENT_TOKEN in .env}
+      COPILOT2API_LOGIN_AGENT_TIMEOUT_SECONDS: "240"
+    depends_on:
+      login-agent:
+        condition: service_healthy
+    networks:
+      - internal
+
+  login-agent:
+    build: ./login-agent
+    image: copilot2api-login-agent:local
+    restart: unless-stopped
+    # Deliberately no `ports:` — the agent handles plaintext GitHub passwords
+    # and must stay unreachable from the host and the internet.
+    environment:
+      LOGIN_AGENT_TOKEN: ${LOGIN_AGENT_TOKEN:?set LOGIN_AGENT_TOKEN in .env}
+      PORT: "8080"
+    volumes:
+      # Persisted browser profiles let GitHub recognise the container as a
+      # known device, which avoids repeated e-mail verification challenges.
+      - login-agent-profiles:/data
+    # Chromium needs more than the default 64MB of shared memory.
+    shm_size: "1gb"
+    networks:
+      - internal
+
+volumes:
+  copilot2api-tokens:
+  login-agent-profiles:
+
+networks:
+  internal:
+    driver: bridge

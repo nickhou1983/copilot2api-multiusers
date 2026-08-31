@@ -1,0 +1,1279 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>copilot2api · 自动化登录方案说明书</title>
+
+<!-- Typography: Archivo (latin display) + IBM Plex Mono (data/labels)
+     + Noto Sans SC (Chinese). Latin faces are listed first in every stack so
+     the browser falls through per-glyph to Noto Sans SC for Chinese. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&family=IBM+Plex+Mono:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet">
+
+<style>
+/* ===========================================================
+   THEME TOKENS — “规格书 / SPEC SHEET”
+   Light industrial documentation aesthetic: warm paper, hard
+   ink rules, a single signal red for anything that demands
+   attention. Change these six values to re-skin the deck.
+   =========================================================== */
+:root{
+  --paper:#F4F2ED;         /* slide background */
+  --stage-bg:#DEDAD1;      /* letterbox area around the stage */
+  --ink:#14161A;           /* primary text + heavy rules */
+  --red:#E8452C;           /* signal colour: warnings, numbers, accents */
+  --grey:#5A6470;          /* secondary text */
+  --rule:#C9C4B8;          /* hairline dividers */
+
+  --disp:'Archivo','Noto Sans SC',sans-serif;                  /* latin display */
+  --sc:'Noto Sans SC','Archivo',sans-serif;                    /* chinese display + body */
+  --mono:'IBM Plex Mono','Noto Sans SC',ui-monospace,monospace;/* data, labels, code */
+
+  --ease:cubic-bezier(.2,.72,.3,1);
+}
+
+*{margin:0;padding:0;box-sizing:border-box;}
+
+/* ===========================================================
+   FIXED 16:9 STAGE — MANDATORY BASE STYLES
+   Slides are authored at 1920×1080 and the whole stage is
+   scaled by one transform. Never reflow slide content.
+   =========================================================== */
+
+/* 1. Lock the browser viewport */
+html,
+body {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+    background: var(--stage-bg, #000);
+}
+
+/* 2. Full-window deck viewport */
+.deck-viewport {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+    background: var(--stage-bg, #000);
+}
+
+/* 3. Fixed 16:9 design canvas.
+   JavaScript sets transform: translate(...) scale(...). */
+.deck-stage {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 1920px;
+    height: 1080px;
+    overflow: hidden;
+    transform-origin: 0 0;
+    background: var(--slide-bg, #fff);
+}
+
+/* 4. Slides stack inside the fixed stage.
+   Content must be laid out at 1920×1080, not reflowed per device. */
+.slide {
+    position: absolute;
+    inset: 0;
+    width: 1920px;
+    height: 1080px;
+    overflow: hidden;
+    display: block;
+    visibility: hidden;
+    opacity: 0;
+    pointer-events: none;
+    background: var(--slide-bg, #fff);
+}
+
+.slide.active,
+.slide.visible {
+    visibility: visible;
+    opacity: 1;
+    pointer-events: auto;
+    z-index: 1;
+}
+
+/* 5. Keep media inside authored slide bounds */
+img,
+video,
+canvas,
+svg {
+    max-width: 100%;
+    max-height: 100%;
+}
+
+/* 6. Presentation chrome stays outside the slide design system */
+.deck-controls {
+    position: fixed;
+    left: 50%;
+    bottom: 22px;
+    transform: translateX(-50%);
+    z-index: 1000;
+}
+
+/* 7. Print one fixed-size slide per page */
+@media print {
+    html,
+    body {
+        width: 1920px;
+        height: auto;
+        overflow: visible;
+        background: #fff;
+    }
+
+    .deck-viewport {
+        position: static;
+        overflow: visible;
+        background: #fff;
+    }
+
+    .deck-stage {
+        position: static;
+        width: auto;
+        height: auto;
+        transform: none !important;
+        background: none;
+    }
+
+    .slide {
+        position: relative;
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        pointer-events: auto !important;
+        width: 1920px;
+        height: 1080px;
+        break-after: page;
+        page-break-after: always;
+    }
+
+    .slide:last-child {
+        break-after: auto;
+        page-break-after: auto;
+    }
+
+    .deck-controls {
+        display: none !important;
+    }
+}
+
+/* 8. Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.2s !important;
+    }
+}
+
+/* ===========================================================
+   SLIDE SURFACE
+   =========================================================== */
+.deck-stage{background:var(--paper);}
+.slide{background:var(--paper);}
+
+/* Registration marks — the corner crop marks of a printed spec sheet.
+   Purely structural: they frame the page without decorating it. */
+.reg{position:absolute;width:34px;height:34px;border-color:var(--ink);border-style:solid;border-width:0;}
+.reg.tl{top:44px;left:44px;border-top-width:2px;border-left-width:2px;}
+.reg.tr{top:44px;right:44px;border-top-width:2px;border-right-width:2px;}
+.reg.bl{bottom:44px;left:44px;border-bottom-width:2px;border-left-width:2px;}
+.reg.br{bottom:44px;right:44px;border-bottom-width:2px;border-right-width:2px;}
+
+/* ===========================================================
+   PAGE SKELETON
+   .wrap → document header → 3px ink rule → title block → body
+   Every content slide uses this identical vertical rhythm.
+   =========================================================== */
+.wrap{position:absolute;inset:0;padding:88px 104px 84px;display:flex;flex-direction:column;}
+
+.dochead{display:flex;justify-content:space-between;align-items:flex-end;
+  font-family:var(--mono);font-size:17px;letter-spacing:.16em;text-transform:uppercase;color:var(--grey);}
+.dochead b{color:var(--ink);font-weight:600;}
+.dochead .pg{font-variant-numeric:tabular-nums;}
+.dochead .pg em{font-style:normal;color:var(--ink);font-weight:600;}
+
+.hr{height:3px;background:var(--ink);margin-top:18px;transform:scaleX(0);transform-origin:0 50%;}
+
+/* --- title block --- */
+.head{padding-top:44px;padding-bottom:38px;}
+.eyebrow{display:inline-block;font-family:var(--mono);font-size:18px;font-weight:600;
+  letter-spacing:.22em;text-transform:uppercase;color:var(--paper);background:var(--red);
+  padding:9px 16px 8px;}
+h2{margin-top:20px;font-family:var(--sc);font-weight:900;font-size:62px;line-height:1.12;
+  color:var(--ink);letter-spacing:.005em;}
+.latin{display:block;font-family:var(--disp);font-weight:700;font-size:26px;letter-spacing:.03em;
+  color:var(--grey);margin-top:12px;text-transform:uppercase;}
+
+.body{flex:1;min-height:0;}
+
+/* ===========================================================
+   SHARED COMPONENTS
+   =========================================================== */
+
+/* --- spec table: label left, tabular value right --- */
+.spec-h{font-family:var(--mono);font-size:16px;letter-spacing:.2em;text-transform:uppercase;
+  color:var(--red);padding-bottom:16px;border-bottom:2px solid var(--ink);}
+.row{display:flex;justify-content:space-between;align-items:baseline;
+  padding:23px 0 21px;border-bottom:1px solid var(--rule);}
+.row .k{font-family:var(--sc);font-size:23px;color:var(--grey);}
+.row .v{font-family:var(--mono);font-size:25px;font-weight:600;color:var(--ink);
+  font-variant-numeric:tabular-nums;}
+.row .v.red{color:var(--red);}
+
+/* --- data grid: multi-column table with a mono header --- */
+.grid{width:100%;border-collapse:collapse;}
+.grid th{font-family:var(--mono);font-size:15px;font-weight:600;letter-spacing:.18em;
+  text-transform:uppercase;color:var(--red);text-align:left;padding-bottom:14px;
+  border-bottom:2px solid var(--ink);vertical-align:bottom;}
+.grid td{padding:19px 0 17px;border-bottom:1px solid var(--rule);vertical-align:top;
+  font-family:var(--sc);font-size:22px;color:var(--grey);line-height:1.5;}
+.grid td.m{font-family:var(--mono);font-size:21px;color:var(--ink);font-weight:500;}
+.grid td.strong{color:var(--ink);font-weight:700;}
+.grid td.red{color:var(--red);font-weight:600;}
+.grid th+th,.grid td+td{padding-left:30px;}
+
+/* --- card: bordered block used for components, steps, notes --- */
+.card{border:2px solid var(--ink);padding:26px 28px 24px;background:var(--paper);}
+.card .n{font-family:var(--disp);font-weight:900;font-size:26px;color:var(--red);
+  font-variant-numeric:tabular-nums;letter-spacing:.04em;}
+.card h3{font-family:var(--sc);font-weight:700;font-size:26px;color:var(--ink);margin-top:10px;line-height:1.3;}
+.card p{font-family:var(--sc);font-size:20px;line-height:1.62;color:var(--grey);margin-top:12px;}
+.card code{font-family:var(--mono);font-size:19px;color:var(--ink);}
+
+/* Limit cards sit in one row; a shared minimum height keeps the row solid
+   instead of leaving a thin strip floating above dead space. */
+.card.lim{min-height:352px;}
+
+/* --- inline code chip --- */
+code{font-family:var(--mono);}
+.chip{font-family:var(--mono);font-size:20px;color:var(--ink);
+  background:rgba(232,69,44,.1);padding:2px 8px;white-space:nowrap;}
+
+/* --- prose --- */
+.desc{font-family:var(--sc);font-size:25px;line-height:1.8;color:var(--grey);}
+.desc b{color:var(--ink);font-weight:700;box-shadow:inset 0 -11px 0 rgba(232,69,44,.16);}
+
+/* --- footer section index (cover + closing) --- */
+.index{display:flex;border-top:3px solid var(--ink);padding-top:26px;}
+.ix{flex:1;display:flex;align-items:baseline;gap:14px;}
+.ix .n{font-family:var(--disp);font-weight:900;font-size:30px;color:var(--red);
+  font-variant-numeric:tabular-nums;}
+.ix .t{font-family:var(--sc);font-size:24px;font-weight:500;color:var(--ink);}
+
+/* ===========================================================
+   SLIDE 1 — COVER
+   =========================================================== */
+.cover .main{flex:1;display:flex;padding-top:74px;}
+.cover .col-l{width:1050px;padding-right:76px;}
+.cover .col-r{flex:1;border-left:1px solid var(--rule);padding-left:56px;}
+.cover h1{font-family:var(--sc);font-weight:900;font-size:128px;line-height:1.14;
+  color:var(--ink);letter-spacing:.005em;margin-top:40px;}
+.cover .latin{font-size:44px;font-weight:800;margin-top:26px;}
+.cover .desc{margin-top:52px;font-size:27px;max-width:940px;}
+
+/* ===========================================================
+   SLIDE 2 — THE MANUAL STEP (process rail)
+   A vertical rail of numbered steps; the human step is the
+   only one rendered in signal red.
+   =========================================================== */
+.split{display:flex;height:100%;}
+.split .left{width:980px;padding-right:64px;}
+.split .right{flex:1;border-left:1px solid var(--rule);padding-left:56px;}
+
+.rail{position:relative;padding-left:62px;}
+.rail::before{content:"";position:absolute;left:19px;top:14px;bottom:20px;width:2px;background:var(--rule);}
+.step{position:relative;padding-bottom:26px;}
+.step:last-child{padding-bottom:0;}
+.step .dot{position:absolute;left:-62px;top:2px;width:40px;height:40px;border:2px solid var(--ink);
+  background:var(--paper);display:flex;align-items:center;justify-content:center;
+  font-family:var(--mono);font-size:18px;font-weight:600;color:var(--ink);}
+.step .t{font-family:var(--sc);font-size:25px;font-weight:700;color:var(--ink);line-height:1.35;}
+.step .d{font-family:var(--mono);font-size:19px;color:var(--grey);margin-top:6px;}
+.step.manual .dot{background:var(--red);border-color:var(--red);color:var(--paper);}
+.step.manual .t{color:var(--red);}
+.step.manual .d{color:var(--red);opacity:.85;}
+
+/* ===========================================================
+   SLIDE 3 — TOPOLOGY
+   Two bordered service panels with a labelled channel between.
+   =========================================================== */
+.topo{display:flex;align-items:stretch;gap:0;}
+.node{width:704px;border:2px solid var(--ink);}
+.node .nh{background:var(--ink);color:var(--paper);padding:16px 24px 14px;
+  font-family:var(--mono);font-size:19px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;
+  display:flex;justify-content:space-between;align-items:baseline;}
+.node .nh span{font-size:15px;opacity:.62;letter-spacing:.1em;}
+.node .nb{padding:22px 24px 20px;}
+.nrow{display:flex;align-items:baseline;gap:14px;padding:12px 0;border-bottom:1px dashed var(--rule);}
+.nrow:last-child{border-bottom:0;}
+.nrow .i{font-family:var(--mono);font-size:17px;color:var(--red);font-weight:600;width:26px;flex:none;}
+.nrow .x{font-family:var(--sc);font-size:22px;color:var(--ink);}
+.nrow .x em{font-style:normal;font-family:var(--mono);font-size:20px;color:var(--grey);}
+.nrow.keep .x{color:var(--grey);}
+
+.channel{flex:1;display:flex;flex-direction:column;justify-content:center;gap:32px;padding:0 22px;}
+.arrow{text-align:center;}
+.arrow .lbl{font-family:var(--mono);font-size:16px;color:var(--grey);letter-spacing:.08em;
+  margin-bottom:8px;line-height:1.5;}
+.arrow .ln{height:2px;background:var(--ink);position:relative;}
+.arrow .ln::after{content:"";position:absolute;top:-6px;width:0;height:0;
+  border-top:7px solid transparent;border-bottom:7px solid transparent;}
+.arrow.fwd .ln::after{right:-1px;border-left:12px solid var(--ink);}
+.arrow.back .ln{background:var(--red);}
+.arrow.back .ln::after{left:-1px;border-right:12px solid var(--red);}
+.arrow.back .lbl{color:var(--red);}
+
+.netnote{margin-top:30px;border-top:3px solid var(--ink);padding-top:20px;
+  display:flex;justify-content:space-between;align-items:baseline;
+  font-family:var(--mono);font-size:19px;color:var(--grey);letter-spacing:.06em;}
+.netnote b{color:var(--ink);font-weight:600;}
+
+/* ===========================================================
+   SLIDE 4 — AGENT MANDATE + MODULES
+   A labelled band states what the container is (and is not)
+   responsible for, above a row of its four source modules.
+   =========================================================== */
+.mandate{display:flex;border:2px solid var(--ink);}
+.mandate .ml{background:var(--ink);color:var(--paper);width:138px;flex:none;padding:22px 20px;
+  font-family:var(--mono);font-size:17px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;
+  display:flex;align-items:center;}
+.mandate .mr{flex:1;padding:20px 32px 18px;}
+.mandate .mp{font-family:var(--sc);font-size:25px;line-height:1.6;color:var(--grey);}
+.mandate .mp b{color:var(--ink);font-weight:700;box-shadow:inset 0 -11px 0 rgba(232,69,44,.16);}
+.mtags{display:flex;gap:12px;margin-top:15px;}
+.tag{font-family:var(--mono);font-size:18px;color:var(--red);padding:7px 14px 6px;
+  border:1px solid rgba(232,69,44,.45);}
+.tag::before{content:"\00d7\00a0";font-weight:700;}
+
+/* Module cards: the red slot normally holding a number carries a filename. */
+.card .fn{font-family:var(--mono);font-size:21px;font-weight:600;letter-spacing:.02em;}
+.card.mod{min-height:262px;display:flex;flex-direction:column;}
+.card.mod p{flex:1;}
+.card .meta{font-family:var(--mono);font-size:17px;color:var(--grey);
+  margin-top:14px;padding-top:12px;border-top:1px dashed var(--rule);}
+
+/* ===========================================================
+   SLIDE 5 — SEQUENCE (3×2 card grid)
+   =========================================================== */
+.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:26px;}
+.g2{display:grid;grid-template-columns:repeat(2,1fr);gap:30px;}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:26px;}
+
+/* ===========================================================
+   SLIDE 10 — BIG STAT BLOCK
+   =========================================================== */
+.stat{border-top:3px solid var(--ink);padding-top:18px;}
+.stat .num{font-family:var(--disp);font-weight:900;font-size:82px;line-height:1;color:var(--ink);
+  font-variant-numeric:tabular-nums;letter-spacing:-.01em;}
+.stat .num.red{color:var(--red);}
+.stat .cap{font-family:var(--sc);font-size:21px;color:var(--grey);margin-top:12px;line-height:1.45;}
+
+/* --- checklist --- */
+.check{display:flex;align-items:baseline;gap:16px;padding:16px 0 14px;border-bottom:1px solid var(--rule);}
+.check .mk{font-family:var(--mono);font-size:22px;font-weight:700;color:var(--red);flex:none;width:24px;}
+.check .tx{font-family:var(--sc);font-size:22px;color:var(--ink);line-height:1.5;}
+.check .tx em{font-style:normal;color:var(--grey);font-family:var(--mono);font-size:20px;}
+
+/* --- terminal-ish command block --- */
+.cmd{border:2px solid var(--ink);background:var(--ink);padding:20px 24px;}
+.cmd div{font-family:var(--mono);font-size:20px;color:var(--paper);line-height:1.85;white-space:nowrap;}
+.cmd div .p{color:var(--red);}
+.cmd div .c{color:#9AA3AE;}
+
+/* ===========================================================
+   SLIDE 12 — CLOSING
+   =========================================================== */
+.closing h1{font-family:var(--sc);font-weight:900;font-size:96px;line-height:1.3;color:var(--ink);}
+.closing h1 em{font-style:normal;color:var(--red);}
+
+/* ===========================================================
+   ENTRANCE ANIMATIONS
+   Staggered rise, driven by a per-element --d delay. Animations
+   are scoped to .slide.active so they replay on every visit.
+   =========================================================== */
+@keyframes rise{from{opacity:0;transform:translateY(22px)}to{opacity:1;transform:none}}
+@keyframes wipe{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes grow{from{transform:scaleY(0)}to{transform:scaleY(1)}}
+
+.r{opacity:0;}
+.slide.active .r{animation:rise .68s var(--ease) forwards;animation-delay:var(--d,0s);}
+.slide.active .hr{animation:wipe .8s var(--ease) .1s forwards;}
+
+/* ===========================================================
+   INLINE EDITING CHROME (outside the slide design system)
+   =========================================================== */
+.edit-hotzone{position:fixed;top:0;left:0;width:80px;height:80px;z-index:10000;cursor:pointer;}
+.edit-toggle{position:fixed;top:18px;left:18px;z-index:10001;
+  width:46px;height:46px;border:2px solid var(--ink);background:var(--paper);
+  font-size:20px;line-height:1;cursor:pointer;opacity:0;pointer-events:none;
+  transition:opacity .3s ease;}
+.edit-toggle.show,.edit-toggle.active{opacity:1;pointer-events:auto;}
+.edit-toggle.active{background:var(--red);border-color:var(--red);}
+.edit-banner{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);z-index:10001;
+  font-family:var(--mono);font-size:14px;letter-spacing:.1em;text-transform:uppercase;
+  background:var(--ink);color:var(--paper);padding:10px 18px;display:none;}
+.edit-banner.on{display:block;}
+body.editing [contenteditable="true"]:hover{outline:1px dashed var(--red);outline-offset:3px;}
+body.editing [contenteditable="true"]:focus{outline:2px solid var(--red);outline-offset:3px;}
+</style>
+</head>
+<body>
+
+<div class="deck-viewport">
+<main class="deck-stage" id="stage">
+
+<!-- ======================================================= -->
+<!-- SLIDE 1 · COVER                                          -->
+<!-- ======================================================= -->
+<section class="slide cover active">
+  <i class="reg tl"></i><i class="reg tr"></i><i class="reg bl"></i><i class="reg br"></i>
+  <div class="wrap">
+    <div class="dochead">
+      <span class="r" style="--d:.05s"><b>COPILOT2API</b> &nbsp;·&nbsp; 技术方案说明书</span>
+      <span class="r pg" style="--d:.05s">REV. A &nbsp;/&nbsp; 01 &nbsp;—&nbsp; 12</span>
+    </div>
+    <div class="hr"></div>
+
+    <div class="main">
+      <div class="col-l">
+        <span class="eyebrow r" style="--d:.28s">Github Device Flow</span>
+        <h1 class="r" style="--d:.4s">自动化登录方案</h1>
+        <span class="latin r" style="--d:.5s">Automated Device Flow Login</span>
+        <p class="desc r" style="--d:.62s">
+          由一个专用容器完成 GitHub 登录、填入 User Code 并点击授权。
+          <b>既有轮询与凭证落盘逻辑一行未改</b>，自动化只承接人工点击那一步；
+          任何失败都回退到原有手动流程，并附上浏览器截图。
+        </p>
+      </div>
+
+      <div class="col-r">
+        <div class="spec-h r" style="--d:.56s">规格 / Specification</div>
+        <div class="row r" style="--d:.66s"><span class="k">容器数量</span><span class="v">2</span></div>
+        <div class="row r" style="--d:.73s"><span class="k">代理侧新增依赖</span><span class="v">0</span></div>
+        <div class="row r" style="--d:.8s"><span class="k">轮询逻辑改动</span><span class="v">0 行</span></div>
+        <div class="row r" style="--d:.87s"><span class="k">凭证文件权限</span><span class="v">0600</span></div>
+        <div class="row r" style="--d:.94s"><span class="k">Agent 对外端口</span><span class="v red">无</span></div>
+        <div class="row r" style="--d:1.01s"><span class="k">失败行为</span><span class="v red">回退手动</span></div>
+      </div>
+    </div>
+
+    <div class="index r" style="--d:1.1s">
+      <span class="ix"><span class="n">01</span><span class="t">方案架构</span></span>
+      <span class="ix"><span class="n">02</span><span class="t">登录流程</span></span>
+      <span class="ix"><span class="n">03</span><span class="t">安全模型</span></span>
+      <span class="ix"><span class="n">04</span><span class="t">部署与验证</span></span>
+    </div>
+  </div>
+</section>
+
+<!-- ======================================================= -->
+<!-- SLIDE 2 · THE PROBLEM                                    -->
+<!-- ======================================================= -->
+<section class="slide">
+  <i class="reg tl"></i><i class="reg tr"></i><i class="reg bl"></i><i class="reg br"></i>
+  <div class="wrap">
+    <div class="dochead">
+      <span><b>01</b> &nbsp;·&nbsp; 方案架构</span>
+      <span class="pg"><em>02</em> / 12</span>
+    </div>
+    <div class="hr"></div>
+
+    <div class="head">
+      <span class="eyebrow r" style="--d:.16s">Problem</span>
+      <h2 class="r" style="--d:.24s">流程卡在最后一次人工点击</h2>
+      <span class="latin r" style="--d:.3s">Everything was automated except the click</span>
+    </div>
+
+    <div class="body split">
+      <div class="left">
+        <div class="rail">
+          <div class="step r" style="--d:.4s">
+            <span class="dot">1</span>
+            <div class="t">管理员在 admin UI 点击 Authenticate</div>
+            <div class="d">POST /admin/api/accounts/{id}/auth/start</div>
+          </div>
+          <div class="step r" style="--d:.48s">
+            <span class="dot">2</span>
+            <div class="t">后端调用 StartDeviceFlow() 取得设备码</div>
+            <div class="d">user_code + verification_uri</div>
+          </div>
+          <div class="step r" style="--d:.56s">
+            <span class="dot">3</span>
+            <div class="t">前端把 User Code 与链接显示出来</div>
+            <div class="d">轮询 goroutine 同时启动</div>
+          </div>
+          <div class="step manual r" style="--d:.64s">
+            <span class="dot">4</span>
+            <div class="t">管理员自己开浏览器、粘贴码、点 Authorize</div>
+            <div class="d">← 纯人工，每个账户都要来一次</div>
+          </div>
+          <div class="step r" style="--d:.72s">
+            <span class="dot">5</span>
+            <div class="t">CompleteDeviceFlow() 轮询到令牌并落盘</div>
+            <div class="d">&lt;token_dir&gt;/&lt;id&gt;/credentials.json</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="right">
+        <div class="spec-h r" style="--d:.44s">代价 / Cost</div>
+        <div class="row r" style="--d:.54s"><span class="k">N 个账户</span><span class="v red">N 次人工</span></div>
+        <div class="row r" style="--d:.62s"><span class="k">令牌失效后</span><span class="v red">全部重来</span></div>
+        <div class="row r" style="--d:.7s"><span class="k">粘错码 / 超时</span><span class="v">需重新发起</span></div>
+        <div class="row r" style="--d:.78s"><span class="k">可批量执行</span><span class="v red">否</span></div>
+        <p class="desc r" style="--d:.88s;font-size:22px;margin-top:34px;">
+          第 1、2、3、5 步早就是自动的。<b>缺的只是第 4 步</b>——
+          一个能替人打开浏览器并点下授权的执行体。
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================================================= -->
+<!-- SLIDE 3 · TOPOLOGY                                       -->
+<!-- ======================================================= -->
+<section class="slide">
+  <i class="reg tl"></i><i class="reg tr"></i><i class="reg bl"></i><i class="reg br"></i>
+  <div class="wrap">
+    <div class="dochead">
+      <span><b>01</b> &nbsp;·&nbsp; 方案架构</span>
+      <span class="pg"><em>03</em> / 12</span>
+    </div>
+    <div class="hr"></div>
+
+    <div class="head">
+      <span class="eyebrow r" style="--d:.16s">Topology</span>
+      <h2 class="r" style="--d:.24s">加一个专用容器，不动既有逻辑</h2>
+      <span class="latin r" style="--d:.3s">One dedicated container, zero changes to polling</span>
+    </div>
+
+    <div class="body">
+      <div class="topo">
+        <div class="node r" style="--d:.4s">
+          <div class="nh"><span style="opacity:1;font-size:19px">copilot2api</span><span>Go · scratch 镜像</span></div>
+          <div class="nb">
+            <div class="nrow"><span class="i">UI</span><span class="x">admin 界面 <em>[ Auto authenticate ]</em></span></div>
+            <div class="nrow keep"><span class="i">①</span><span class="x">StartDeviceFlow() <em>取设备码</em></span></div>
+            <div class="nrow keep"><span class="i">②</span><span class="x">CompleteDeviceFlow() <em>持续轮询</em></span></div>
+            <div class="nrow keep"><span class="i">③</span><span class="x">写入 <em>credentials.json</em></span></div>
+            <div class="nrow"><span class="i">＋</span><span class="x">github_logins.json <em>0600 明文凭证</em></span></div>
+          </div>
+        </div>
+
+        <div class="channel">
+          <div class="arrow fwd r" style="--d:.56s">
+            <div class="lbl">POST /login<br>user_code · username · password</div>
+            <div class="ln"></div>
+          </div>
+          <div class="arrow back r" style="--d:.64s">
+            <div class="ln"></div>
+            <div class="lbl" style="margin-top:8px;margin-bottom:0">ok / error_class<br>失败截图 (base64 PNG)</div>
+          </div>
+        </div>
+
+        <div class="node r" style="--d:.48s">
+          <div class="nh"><span style="opacity:1;font-size:19px">login-agent</span><span>Node · Playwright</span></div>
+          <div class="nb">
+            <div class="nrow"><span class="i">1</span><span class="x">github.com/login <em>用户名 + 密码</em></span></div>
+            <div class="nrow"><span class="i">2</span><span class="x">打开 <em>/login/device</em></span></div>
+            <div class="nrow"><span class="i">3</span><span class="x">填入 User Code <em>→ Continue</em></span></div>
+            <div class="nrow"><span class="i">4</span><span class="x">等按钮解禁 <em>→ Authorize</em></span></div>
+            <div class="nrow"><span class="i">＋</span><span class="x">持久化 profile <em>/data 复用 cookie</em></span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="netnote r" style="--d:.76s">
+        <span>Docker compose <b>internal bridge</b> · login-agent 无 <b>ports:</b> 段，宿主与公网均不可达</span>
+        <span>轮询与落盘 <b>完全复用</b>，自动化失败不影响手动路径</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================================================= -->
+<!-- SLIDE 4 · AGENT MANDATE + MODULES                        -->
+<!-- ======================================================= -->
+<section class="slide">
+  <i class="reg tl"></i><i class="reg tr"></i><i class="reg bl"></i><i class="reg br"></i>
+  <div class="wrap">
+    <div class="dochead">
+      <span><b>01</b> &nbsp;·&nbsp; 方案架构</span>
+      <span class="pg"><em>04</em> / 12</span>
+    </div>
+    <div class="hr"></div>
+
+    <div class="head">
+      <span class="eyebrow r" style="--d:.16s">Agent</span>
+      <h2 class="r" style="--d:.24s">这个容器里面是什么</h2>
+      <span class="latin r" style="--d:.3s">Inside the login-agent container</span>
+    </div>
+
+    <div class="body">
+      <div class="mandate r" style="--d:.36s">
+        <div class="ml">Mandate</div>
+        <div class="mr">
+          <p class="mp">一只<b>代替人点鼠标的手</b>。容器只负责在无头浏览器里走完 GitHub 的设备授权页，
+            结果由 GitHub 直接回到代理的轮询里——<b>agent 全程看不到令牌</b>。</p>
+          <div class="mtags">
+            <span class="tag">不接触 access token</span>
+            <span class="tag">不读写凭证目录</span>
+            <span class="tag">不感知账户配置</span>
+            <span class="tag">不对宿主暴露端口</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="g4" style="margin-top:26px">
+        <div class="card mod r" style="--d:.46s">
+          <div class="n fn">server.js</div>
+          <h3>接口与排队</h3>
+          <p>只有两个端点：<code>GET /health</code>（附带排队深度）与 <code>POST /login</code>。共享密钥校验、64 KB 体积上限，请求进入<b>互斥队列串行执行</b>。</p>
+          <div class="meta">172 行 · node:http · 零 Web 框架</div>
+        </div>
+        <div class="card mod r" style="--d:.53s">
+          <div class="n fn">github.js</div>
+          <h3>浏览器编排</h3>
+          <p>按 <code>launch → login → device_code → authorize</code> 推进，并始终记录停在哪一步。会话复用持久化 profile，失败时立刻截图。</p>
+          <div class="meta">303 行 · Playwright · 唯一触网模块</div>
+        </div>
+        <div class="card mod r" style="--d:.6s">
+          <div class="n fn">selectors.js</div>
+          <h3>页面定位</h3>
+          <p>8 组 DOM 选择器，每组都是候选列表而非单一写死值。GitHub 一旦改版，<b>只需要改这一个文件</b>。</p>
+          <div class="meta">96 行 · 全部选择器的单一出处</div>
+        </div>
+        <div class="card mod r" style="--d:.67s">
+          <div class="n fn">codes.js</div>
+          <h3>纯逻辑</h3>
+          <p>User Code 规范化（兼容单框与逐字符两种页面）、七类失败判定、请求体校验。不依赖 Playwright，可离线单测。</p>
+          <div class="meta">192 行 · 19 个用例 · 不需要浏览器</div>
+        </div>
+      </div>
+
+      <div class="netnote r" style="--d:.78s;margin-top:16px">
+        <span>基础镜像 <b>playwright:v1.62.1-noble</b> · 第三方依赖仅 <b>1</b> 个 · 以非 root 用户 <b>pwuser</b> 运行</span>
+        <span>唯一持久化的是 <b>/data</b> 里的浏览器 profile</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================================================= -->
+<!-- SLIDE 5 · SEQUENCE                                       -->
+<!-- ======================================================= -->
+<section class="slide">
+  <i class="reg tl"></i><i class="reg tr"></i><i class="reg bl"></i><i class="reg br"></i>
+  <div class="wrap">
+    <div class="dochead">
+      <span><b>02</b> &nbsp;·&nbsp; 登录流程</span>
+      <span class="pg"><em>05</em> / 12</span>
+    </div>
+    <div class="hr"></div>
+
+    <div class="head">
+      <span class="eyebrow r" style="--d:.16s">Sequence</span>
+      <h2 class="r" style="--d:.24s">点一次按钮之后发生的六件事</h2>
+      <span class="latin r" style="--d:.3s">From one click to credentials.json</span>
+    </div>
+
+    <div class="body">
+      <div class="g3">
+        <div class="card r" style="--d:.38s">
+          <div class="n">01</div>
+          <h3>发起设备流</h3>
+          <p>admin 提交 <code>{"auto":true}</code>，后端照常调用 <code>StartDeviceFlow()</code>，拿到 user_code 与验证链接，轮询 goroutine 立即启动。</p>
+        </div>
+        <div class="card r" style="--d:.46s">
+          <div class="n">02</div>
+          <h3>取出账户凭证</h3>
+          <p>从 <code>github_logins.json</code> 读出该账户的 GitHub 用户名与密码。没有配置凭证的账户不会出现自动按钮。</p>
+        </div>
+        <div class="card r" style="--d:.54s">
+          <div class="n">03</div>
+          <h3>调用 login-agent</h3>
+          <p>另起 goroutine 走内网 HTTP，带 <code>X-Agent-Token</code>。agent 用互斥队列串行处理，避免多个 Chromium 同时占内存。</p>
+        </div>
+        <div class="card r" style="--d:.62s">
+          <div class="n">04</div>
+          <h3>浏览器完成授权</h3>
+          <p>登录 → 打开设备页 → 填码 → 等 Authorize 按钮从 disabled 解禁 → 点击。全程无头 Chromium。</p>
+        </div>
+        <div class="card r" style="--d:.7s">
+          <div class="n">05</div>
+          <h3>轮询自然收敛</h3>
+          <p>授权成功的一瞬间，原本就在跑的 <code>CompleteDeviceFlow()</code> 拿到 access token —— 这一段代码没有任何改动。</p>
+        </div>
+        <div class="card r" style="--d:.78s">
+          <div class="n">06</div>
+          <h3>凭证落盘</h3>
+          <p>令牌写入 <code>&lt;token_dir&gt;/&lt;id&gt;/credentials.json</code>，账户状态转为 authenticated，UI 自动刷新。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================================================= -->
+<!-- SLIDE 6 · ADMIN UI                                       -->
+<!-- ======================================================= -->
+<section class="slide">
+  <i class="reg tl"></i><i class="reg tr"></i><i class="reg bl"></i><i class="reg br"></i>
+  <div class="wrap">
+    <div class="dochead">
+      <span><b>02</b> &nbsp;·&nbsp; 登录流程</span>
+      <span class="pg"><em>06</em> / 12</span>
+    </div>
+    <div class="hr"></div>
+
+    <div class="head">
+      <span class="eyebrow r" style="--d:.16s">Admin UI</span>
+      <h2 class="r" style="--d:.24s">管理界面怎么用</h2>
+      <span class="latin r" style="--d:.3s">Add accounts once, authenticate in one click</span>
+    </div>
+
+    <div class="body split">
+      <div class="left">
+        <div class="g2" style="grid-template-columns:1fr;gap:22px">
+          <div class="card r" style="--d:.38s">
+            <div class="n">A</div>
+            <h3>添加账户时一并填写 GitHub 凭证</h3>
+            <p>新增账户表单多了 GitHub 用户名与密码两个字段，都可留空、之后再补。已有账户可通过表格里的 <code>Login</code> 按钮随时设置或清除。</p>
+          </div>
+          <div class="card r" style="--d:.48s">
+            <div class="n">B</div>
+            <h3>Auto authenticate 按钮</h3>
+            <p>仅当 agent 已启用、该账户已配置凭证且尚未认证时出现。原来的 <code>Authenticate</code> 按钮保留不变，两条路径并存。</p>
+          </div>
+          <div class="card r" style="--d:.58s">
+            <div class="n">C</div>
+            <h3>进度与失败证据</h3>
+            <p>对话框实时显示 <code>running → succeeded / failed</code>；失败时给出错误分类、浏览器截图，并<b style="color:var(--ink);box-shadow:none">继续展示 User Code 与链接</b>供人工接管。</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="right">
+        <div class="spec-h r" style="--d:.44s">状态机 / Auto state</div>
+        <div class="row r" style="--d:.54s"><span class="k">未配置 agent</span><span class="v">按钮不渲染</span></div>
+        <div class="row r" style="--d:.61s"><span class="k">idle</span><span class="v">尚未发起</span></div>
+        <div class="row r" style="--d:.68s"><span class="k">running</span><span class="v">浏览器执行中</span></div>
+        <div class="row r" style="--d:.75s"><span class="k">succeeded</span><span class="v">已点击授权</span></div>
+        <div class="row r" style="--d:.82s"><span class="k">failed</span><span class="v red">回退手动</span></div>
+        <p class="desc r" style="--d:.92s;font-size:22px;margin-top:32px">
+          无论自动化成败，<b>轮询 goroutine 都不会被中断</b>——
+          管理员随时可以自己完成授权，状态照样会翻成 authenticated。
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================================================= -->
+<!-- SLIDE 7 · SECURITY                                       -->
+<!-- ======================================================= -->
+<section class="slide">
+  <i class="reg tl"></i><i class="reg tr"></i><i class="reg bl"></i><i class="reg br"></i>
+  <div class="wrap">
+    <div class="dochead">
+      <span><b>03</b> &nbsp;·&nbsp; 安全模型</span>
+      <span class="pg"><em>07</em> / 12</span>
+    </div>
+    <div class="hr"></div>
+
+    <div class="head">
+      <span class="eyebrow r" style="--d:.16s">Security</span>
+      <h2 class="r" style="--d:.24s">明文密码的五道约束</h2>
+      <span class="latin r" style="--d:.3s">Where the credentials live and who can reach them</span>
+    </div>
+
+    <div class="body">
+      <table class="grid">
+        <tr class="r" style="--d:.36s">
+          <th style="width:290px">面 / Surface</th>
+          <th style="width:640px">措施</th>
+          <th>为什么</th>
+        </tr>
+        <tr class="r" style="--d:.44s">
+          <td class="strong">磁盘</td>
+          <td>独立文件 <code>github_logins.json</code>，权限 <span class="chip">0600</span>，临时文件 + rename 原子替换，不进 <code>accounts.json</code>。</td>
+          <td>与业务配置隔离，误备份 / 误提交的面更小。</td>
+        </tr>
+        <tr class="r" style="--d:.51s">
+          <td class="strong">HTTP 响应</td>
+          <td>对外只暴露 <code>username</code> 与 <code>has_password</code> 两个字段。</td>
+          <td>admin API 任何路径都取不回密码原文。</td>
+        </tr>
+        <tr class="r" style="--d:.58s">
+          <td class="strong">日志</td>
+          <td>密码不参与任何日志格式化；启动时只打印 agent URL，不打印 token。</td>
+          <td>实测全量日志中密码出现 <b style="color:var(--red)">0</b> 次。</td>
+        </tr>
+        <tr class="r" style="--d:.65s">
+          <td class="strong">网络</td>
+          <td>login-agent 在 compose 里<b style="color:var(--ink)">没有 ports 段</b>，只在内网可达，调用需带 <code>X-Agent-Token</code>。</td>
+          <td>持有明文凭证的进程绝不能被宿主或公网触达。</td>
+        </tr>
+        <tr class="r" style="--d:.72s">
+          <td class="strong">Admin 入口</td>
+          <td><code>COPILOT2API_ADMIN_TOKEN</code> 在 compose 中被标记为<b style="color:var(--ink)">必填</b>，缺失直接启动失败。</td>
+          <td>否则任何能打开 admin 的人都能用他人凭证发起登录。</td>
+        </tr>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ======================================================= -->
+<!-- SLIDE 8 · FAILURE MODES                                  -->
+<!-- ======================================================= -->
+<section class="slide">
+  <i class="reg tl"></i><i class="reg tr"></i><i class="reg bl"></i><i class="reg br"></i>
+  <div class="wrap">
+    <div class="dochead">
+      <span><b>03</b> &nbsp;·&nbsp; 安全模型</span>
+      <span class="pg"><em>08</em> / 12</span>
+    </div>
+    <div class="hr"></div>
+
+    <div class="head">
+      <span class="eyebrow r" style="--d:.16s">Failure</span>
+      <h2 class="r" style="--d:.24s">失败分类与回退</h2>
+      <span class="latin r" style="--d:.3s">Every failure returns a class, a message and a screenshot</span>
+    </div>
+
+    <div class="body split">
+      <div class="left" style="width:1120px">
+        <table class="grid">
+          <tr class="r" style="--d:.36s">
+            <th style="width:330px">error_class</th>
+            <th>含义</th>
+          </tr>
+          <tr class="r" style="--d:.43s"><td class="m red">invalid_credentials</td><td>用户名或密码不正确。</td></tr>
+          <tr class="r" style="--d:.49s"><td class="m red">two_factor_required</td><td>账户开启了两步验证，本方案不支持。</td></tr>
+          <tr class="r" style="--d:.55s"><td class="m red">device_verification</td><td>GitHub 要求邮箱设备验证码（陌生 IP 常见）。</td></tr>
+          <tr class="r" style="--d:.61s"><td class="m red">captcha</td><td>触发了人机校验。</td></tr>
+          <tr class="r" style="--d:.67s"><td class="m red">code_rejected</td><td>User Code 被拒绝或已过期。</td></tr>
+          <tr class="r" style="--d:.73s"><td class="m red">timeout</td><td>超出 agent 超时时间（compose 默认 240 秒）。</td></tr>
+          <tr class="r" style="--d:.79s"><td class="m red">unknown</td><td>页面结构不匹配任何已知形态，截图是主要线索。</td></tr>
+        </table>
+      </div>
+
+      <div class="right">
+        <div class="spec-h r" style="--d:.44s">回退 / Fallback</div>
+        <div class="check r" style="--d:.54s"><span class="mk">✓</span><span class="tx">User Code 与链接<em> 继续显示</em></span></div>
+        <div class="check r" style="--d:.61s"><span class="mk">✓</span><span class="tx">轮询 goroutine <em>不中断</em></span></div>
+        <div class="check r" style="--d:.68s"><span class="mk">✓</span><span class="tx">失败截图 <em>可在 UI 直接查看</em></span></div>
+        <div class="check r" style="--d:.75s"><span class="mk">✓</span><span class="tx">手动授权后 <em>状态照常翻转</em></span></div>
+        <p class="desc r" style="--d:.86s;font-size:22px;margin-top:32px">
+          分类判断刻意把<b>设备验证放在两步验证之前</b>——
+          设备页面里同样含有 “authentication code” 字样，顺序错了就会误报。
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================================================= -->
+<!-- SLIDE 9 · DEPLOYMENT                                    -->
+<!-- ======================================================= -->
+<section class="slide">
+  <i class="reg tl"></i><i class="reg tr"></i><i class="reg bl"></i><i class="reg br"></i>
+  <div class="wrap">
+    <div class="dochead">
+      <span><b>04</b> &nbsp;·&nbsp; 部署与验证</span>
+      <span class="pg"><em>09</em> / 12</span>
+    </div>
+    <div class="hr"></div>
+
+    <div class="head">
+      <span class="eyebrow r" style="--d:.16s">Deploy</span>
+      <h2 class="r" style="--d:.24s">三条命令起一套环境</h2>
+      <span class="latin r" style="--d:.3s">Compose up, with sane defaults</span>
+    </div>
+
+    <div class="body split">
+      <div class="left" style="width:920px">
+        <div class="cmd r" style="--d:.38s">
+          <div><span class="c"># 1. 准备环境变量</span></div>
+          <div><span class="p">$</span> cp .env.example .env &amp;&amp; chmod 600 .env</div>
+          <div><span class="p">$</span> openssl rand -hex 24   <span class="c"># 填入两个 token</span></div>
+          <div style="height:10px"></div>
+          <div><span class="c"># 2. 构建并启动</span></div>
+          <div><span class="p">$</span> docker compose up -d --build</div>
+          <div style="height:10px"></div>
+          <div><span class="c"># 3. 打开 admin</span></div>
+          <div><span class="p">$</span> open http://127.0.0.1:7777/admin/</div>
+        </div>
+
+        <div class="g2 r" style="--d:.5s;margin-top:30px">
+          <div class="card">
+            <div class="n">SVC 1</div>
+            <h3>copilot2api</h3>
+            <p>仅绑定回环地址发布到宿主，端口由 <code>COPILOT2API_HOST_PORT</code> 决定，默认 7777。</p>
+          </div>
+          <div class="card">
+            <div class="n">SVC 2</div>
+            <h3>login-agent</h3>
+            <p>无端口发布，<code>shm_size 1gb</code> 供 Chromium 使用，<code>/data</code> 持久化浏览器 profile。</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="right">
+        <div class="spec-h r" style="--d:.44s">环境变量 / Environment</div>
+        <div class="check r" style="--d:.54s"><span class="mk">1</span><span class="tx"><code>COPILOT2API_ADMIN_TOKEN</code><em><br>保护 admin UI，compose 中必填</em></span></div>
+        <div class="check r" style="--d:.61s"><span class="mk">2</span><span class="tx"><code>COPILOT2API_LOGIN_AGENT_URL</code><em><br>留空即关闭整个自动登录功能</em></span></div>
+        <div class="check r" style="--d:.68s"><span class="mk">3</span><span class="tx"><code>COPILOT2API_LOGIN_AGENT_TOKEN</code><em><br>内网调用共享密钥</em></span></div>
+        <div class="check r" style="--d:.75s"><span class="mk">4</span><span class="tx"><code>…_TIMEOUT_SECONDS</code><em><br>默认 180，compose 设为 240</em></span></div>
+        <div class="check r" style="--d:.82s"><span class="mk">5</span><span class="tx"><code>COPILOT2API_HOST_PORT</code><em><br>宿主端口被占用时覆盖它</em></span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================================================= -->
+<!-- SLIDE 10 · VERIFICATION                                  -->
+<!-- ======================================================= -->
+<section class="slide">
+  <i class="reg tl"></i><i class="reg tr"></i><i class="reg bl"></i><i class="reg br"></i>
+  <div class="wrap">
+    <div class="dochead">
+      <span><b>04</b> &nbsp;·&nbsp; 部署与验证</span>
+      <span class="pg"><em>10</em> / 12</span>
+    </div>
+    <div class="hr"></div>
+
+    <div class="head">
+      <span class="eyebrow r" style="--d:.16s">Verification</span>
+      <h2 class="r" style="--d:.24s">验证做到了什么程度</h2>
+      <span class="latin r" style="--d:.3s">Unit tests plus a real run against github.com</span>
+    </div>
+
+    <div class="body split">
+      <div class="left" style="width:900px">
+        <div class="g4">
+          <div class="stat r" style="--d:.38s"><div class="num">31</div><div class="cap">本次新增<br>Go 用例</div></div>
+          <div class="stat r" style="--d:.45s"><div class="num">78</div><div class="cap">相关包<br>全部通过</div></div>
+          <div class="stat r" style="--d:.52s"><div class="num">19</div><div class="cap">Node 用例<br>无需网络</div></div>
+          <div class="stat r" style="--d:.59s"><div class="num red">0</div><div class="cap">已有行为<br>回归</div></div>
+        </div>
+
+        <p class="desc r" style="--d:.7s;font-size:23px;margin-top:46px">
+          <code>go build</code>、<code>go vet</code>、<code>go test ./...</code> 全绿；
+          <b>凭证存储、客户端错误分类、admin 端点守卫路径</b>均有针对性用例。
+          User Code 规范化与失败分类在 Node 侧离线覆盖。
+        </p>
+      </div>
+
+      <div class="right">
+        <div class="spec-h r" style="--d:.44s">实测记录 / Live run</div>
+        <div class="check r" style="--d:.54s"><span class="mk">✓</span><span class="tx">真实设备码签发成功</span></div>
+        <div class="check r" style="--d:.6s"><span class="mk">✓</span><span class="tx">内网 DNS 可达 <em>login-agent:8080</em></span></div>
+        <div class="check r" style="--d:.66s"><span class="mk">✓</span><span class="tx">Chromium 打开真实登录页</span></div>
+        <div class="check r" style="--d:.72s"><span class="mk">✓</span><span class="tx">错误分类正确 <em>invalid_credentials</em></span></div>
+        <div class="check r" style="--d:.78s"><span class="mk">✓</span><span class="tx">失败截图成功回传</span></div>
+        <div class="check r" style="--d:.84s"><span class="mk">✓</span><span class="tx">手动回退路径保留 <em>pending</em></span></div>
+        <div class="check r" style="--d:.9s"><span class="mk">✓</span><span class="tx">凭证文件权限 <em>0600</em></span></div>
+        <div class="check r" style="--d:.96s"><span class="mk">✓</span><span class="tx">删除账户级联清理</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================================================= -->
+<!-- SLIDE 11 · LIMITS                                        -->
+<!-- ======================================================= -->
+<section class="slide">
+  <i class="reg tl"></i><i class="reg tr"></i><i class="reg bl"></i><i class="reg br"></i>
+  <div class="wrap">
+    <div class="dochead">
+      <span><b>04</b> &nbsp;·&nbsp; 部署与验证</span>
+      <span class="pg"><em>11</em> / 12</span>
+    </div>
+    <div class="hr"></div>
+
+    <div class="head">
+      <span class="eyebrow r" style="--d:.16s">Limits</span>
+      <h2 class="r" style="--d:.24s">已知边界</h2>
+      <span class="latin r" style="--d:.3s">What this does not solve</span>
+    </div>
+
+    <div class="body">
+      <div class="g4">
+        <div class="card lim r" style="--d:.38s">
+          <div class="n">L1</div>
+          <h3>不支持两步验证</h3>
+          <p>开启 2FA 的账户会返回 <code>two_factor_required</code> 并停在那里。这是设计取舍，不是缺陷。</p>
+          <p style="color:var(--ink)"><b>缓解：</b>此类账户走原有手动流程。</p>
+        </div>
+        <div class="card lim r" style="--d:.45s">
+          <div class="n">L2</div>
+          <h3>陌生 IP 的邮箱验证码</h3>
+          <p>即使没开 2FA，GitHub 仍可能在新设备登录时要求邮箱验证码。</p>
+          <p style="color:var(--ink)"><b>缓解：</b><code>/data</code> 持久化 profile 复用 cookie，首次通过之后基本不再触发。</p>
+        </div>
+        <div class="card lim r" style="--d:.52s">
+          <div class="n">L3</div>
+          <h3>GitHub 页面改版</h3>
+          <p>登录页与设备授权页的 DOM 变化会让选择器失效，这是所有浏览器自动化的共同风险。</p>
+          <p style="color:var(--ink)"><b>缓解：</b>选择器集中在 <code>selectors.js</code>，带 fallback，失败必附截图。</p>
+        </div>
+        <div class="card lim r" style="--d:.59s">
+          <div class="n">L4</div>
+          <h3>登录请求串行执行</h3>
+          <p>agent 用互斥队列逐个处理，避免多个 Chromium 同时驻留内存。批量账户是排队而非并发。</p>
+          <p style="color:var(--ink)"><b>缓解：</b>单次授权通常几十秒，批量场景预留时间即可。</p>
+        </div>
+      </div>
+
+      <div class="netnote r" style="--d:.7s;margin-top:52px">
+        <span>关闭方式：不设置 <b>COPILOT2API_LOGIN_AGENT_URL</b> 即可，全部新功能静默下线</span>
+        <span><b>accounts.json</b> 结构未变，老配置无需迁移</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================================================= -->
+<!-- SLIDE 12 · CLOSING                                       -->
+<!-- ======================================================= -->
+<section class="slide closing">
+  <i class="reg tl"></i><i class="reg tr"></i><i class="reg bl"></i><i class="reg br"></i>
+  <div class="wrap">
+    <div class="dochead">
+      <span><b>COPILOT2API</b> &nbsp;·&nbsp; 技术方案说明书</span>
+      <span class="pg"><em>12</em> / 12</span>
+    </div>
+    <div class="hr"></div>
+
+    <div class="body" style="display:flex;flex-direction:column;justify-content:center;padding-top:40px">
+      <h1 class="r" style="--d:.24s">
+        自动化只承接<br><em>人工点击那一步</em>。
+      </h1>
+      <p class="desc r" style="--d:.42s;font-size:27px;margin-top:44px;max-width:1300px">
+        设备流的发起、轮询与凭证落盘全部沿用原有实现；新增的容器只负责在无头浏览器里
+        登录、填码、点授权。<b>失败即回退，功能可一键关闭</b>，对既有部署零影响。
+      </p>
+
+      <div class="g4 r" style="--d:.58s;margin-top:66px">
+        <div class="stat"><div class="num">2</div><div class="cap">容器 · 一条内网</div></div>
+        <div class="stat"><div class="num red">0</div><div class="cap">轮询逻辑改动</div></div>
+        <div class="stat"><div class="num red">0</div><div class="cap">对宿主暴露的 agent 端口</div></div>
+        <div class="stat"><div class="num">1</div><div class="cap">条失败回退路径</div></div>
+      </div>
+    </div>
+
+    <div class="index r" style="--d:.74s">
+      <span class="ix"><span class="n">01</span><span class="t">docs/auto-login.md</span></span>
+      <span class="ix"><span class="n">02</span><span class="t">docs/auto-login.zh-CN.md</span></span>
+      <span class="ix"><span class="n">03</span><span class="t">docker-compose.yml</span></span>
+      <span class="ix"><span class="n">04</span><span class="t">login-agent/README.md</span></span>
+    </div>
+  </div>
+</section>
+
+</main>
+</div>
+
+<!-- Inline editing chrome — lives outside the slide stage -->
+<div class="edit-hotzone" title="编辑模式"></div>
+<button class="edit-toggle" id="editToggle" title="编辑模式 (E)">✏️</button>
+<div class="edit-banner" id="editBanner">编辑模式 · 点击任意文字修改 · Ctrl+S 导出 · E 退出</div>
+
+<script>
+/* ===========================================================
+   SLIDE PRESENTATION CONTROLLER
+   Fixed 1920×1080 stage scaled by a single transform, plus
+   keyboard / wheel / touch navigation.
+   =========================================================== */
+class SlidePresentation {
+  constructor(){
+    this.slides = [...document.querySelectorAll('.slide')];
+    this.stage  = document.getElementById('stage');
+    this.current = 0;
+    this.setupStageScale();
+    this.setupKeyboardNav();
+    this.setupWheelNav();
+    this.setupTouchNav();
+    this.showSlide(0);
+  }
+
+  /* Scale the whole stage to fit the window; letterbox as needed. */
+  setupStageScale(){
+    const scale = () => {
+      const f = Math.min(innerWidth / 1920, innerHeight / 1080);
+      const x = (innerWidth  - 1920 * f) / 2;
+      const y = (innerHeight - 1080 * f) / 2;
+      this.stage.style.transform = `translate(${x}px, ${y}px) scale(${f})`;
+    };
+    scale();
+    addEventListener('resize', scale);
+  }
+
+  setupKeyboardNav(){
+    addEventListener('keydown', e => {
+      if (document.body.classList.contains('editing') &&
+          e.target.getAttribute('contenteditable')) return;
+      switch (e.key){
+        case 'ArrowRight': case 'ArrowDown': case ' ': case 'PageDown':
+          e.preventDefault(); this.next(); break;
+        case 'ArrowLeft': case 'ArrowUp': case 'PageUp':
+          e.preventDefault(); this.prev(); break;
+        case 'Home': e.preventDefault(); this.showSlide(0); break;
+        case 'End':  e.preventDefault(); this.showSlide(this.slides.length - 1); break;
+      }
+    });
+  }
+
+  /* Throttled so one trackpad flick does not skip several slides. */
+  setupWheelNav(){
+    let lock = false;
+    addEventListener('wheel', e => {
+      if (lock || Math.abs(e.deltaY) < 24) return;
+      lock = true;
+      e.deltaY > 0 ? this.next() : this.prev();
+      setTimeout(() => lock = false, 700);
+    }, { passive: true });
+  }
+
+  setupTouchNav(){
+    let x0 = 0, y0 = 0;
+    addEventListener('touchstart', e => {
+      x0 = e.changedTouches[0].clientX;
+      y0 = e.changedTouches[0].clientY;
+    }, { passive: true });
+    addEventListener('touchend', e => {
+      const dx = e.changedTouches[0].clientX - x0;
+      const dy = e.changedTouches[0].clientY - y0;
+      if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy)) {
+        dx < 0 ? this.next() : this.prev();
+      }
+    }, { passive: true });
+  }
+
+  next(){ this.showSlide(this.current + 1); }
+  prev(){ this.showSlide(this.current - 1); }
+
+  showSlide(i){
+    this.current = Math.max(0, Math.min(i, this.slides.length - 1));
+    this.slides.forEach((s, n) => {
+      const on = n === this.current;
+      s.classList.toggle('active', on);
+      s.classList.toggle('visible', on);
+    });
+  }
+}
+const deck = new SlidePresentation();
+
+/* ===========================================================
+   INLINE TEXT EDITOR
+   Makes every leaf text node editable, persists to localStorage,
+   and exports the edited deck with Ctrl+S.
+   =========================================================== */
+class InlineEditor {
+  constructor(){
+    this.isActive = false;
+    this.KEY = 'copilot2api-autologin-deck';
+    this.nodes = [...document.querySelectorAll('.deck-stage *')]
+      .filter(el => el.children.length === 0 && el.textContent.trim().length > 0);
+    this.nodes.forEach((el, i) => el.dataset.ed = i);
+    this.restore();
+  }
+
+  restore(){
+    let saved;
+    try { saved = JSON.parse(localStorage.getItem(this.KEY) || '{}'); } catch { return; }
+    Object.entries(saved).forEach(([i, html]) => {
+      if (this.nodes[i]) this.nodes[i].innerHTML = html;
+    });
+  }
+
+  save(){
+    const out = {};
+    this.nodes.forEach((el, i) => out[i] = el.innerHTML);
+    try { localStorage.setItem(this.KEY, JSON.stringify(out)); } catch {}
+  }
+
+  toggle(){
+    this.isActive = !this.isActive;
+    document.body.classList.toggle('editing', this.isActive);
+    document.getElementById('editToggle').classList.toggle('active', this.isActive);
+    document.getElementById('editBanner').classList.toggle('on', this.isActive);
+    this.nodes.forEach(el => {
+      if (this.isActive) el.setAttribute('contenteditable', 'true');
+      else el.removeAttribute('contenteditable');
+    });
+    if (!this.isActive) this.save();
+  }
+
+  /* Ctrl+S downloads a standalone copy with the edits baked in. */
+  export(){
+    this.save();
+    const clone = document.documentElement.cloneNode(true);
+    clone.querySelectorAll('[contenteditable]').forEach(el => el.removeAttribute('contenteditable'));
+    clone.querySelectorAll('[data-ed]').forEach(el => el.removeAttribute('data-ed'));
+    clone.querySelector('body')?.classList.remove('editing');
+    const blob = new Blob(['<!DOCTYPE html>\n' + clone.outerHTML], { type: 'text/html' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'auto-login-slides.html';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+}
+const editor = new InlineEditor();
+
+/* --- Edit chrome wiring: click, hover-with-grace, and the E key --- */
+const hotzone = document.querySelector('.edit-hotzone');
+const editToggle = document.getElementById('editToggle');
+let hideTimeout = null;
+
+/* Wait for genuine pointer movement before honouring hover. A browser can
+   fire a synthetic mousemove at (0,0) on load, so a single event is not
+   enough — the pointer must actually change position. */
+let armed = false, lastX = null, lastY = null;
+addEventListener('mousemove', e => {
+  if (armed) return;
+  if (lastX === null) { lastX = e.clientX; lastY = e.clientY; return; }
+  if (e.clientX === lastX && e.clientY === lastY) return;
+  armed = true;
+  if (e.clientX < 80 && e.clientY < 80) show();
+}, true);
+
+const show = () => {
+  if (!armed) return;
+  clearTimeout(hideTimeout);
+  editToggle.classList.add('show');
+};
+const hide = () => {
+  hideTimeout = setTimeout(() => {
+    if (!editor.isActive) editToggle.classList.remove('show');
+  }, 400);
+};
+
+hotzone.addEventListener('mouseenter', show);
+hotzone.addEventListener('mouseleave', hide);
+editToggle.addEventListener('mouseenter', show);
+editToggle.addEventListener('mouseleave', hide);
+hotzone.addEventListener('click', () => editor.toggle());
+editToggle.addEventListener('click', () => editor.toggle());
+
+addEventListener('keydown', e => {
+  if ((e.key === 'e' || e.key === 'E') && !e.target.getAttribute('contenteditable')) {
+    editor.toggle();
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+    e.preventDefault();
+    editor.export();
+  }
+});
+</script>
+</body>
+</html>

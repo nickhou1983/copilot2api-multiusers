@@ -119,6 +119,21 @@ All changes are written back to `accounts.json` and applied to the running proxy
 
 ⚠️ The admin UI can read API keys and trigger GitHub authentication. Keep it local. To require a token, set `COPILOT2API_ADMIN_TOKEN`; the UI then expects it as an `X-Admin-Token` header or `?admin_token=<token>` query parameter (open `http://127.0.0.1:7777/admin/?admin_token=<token>`).
 
+### Automated Device Flow Login (optional)
+
+Authenticating an account normally still needs a human to open GitHub, paste the code, and click **Authorize**. With many accounts that gets tedious.
+
+An optional **login agent** container (Node + Playwright) can do it for you: store each account's GitHub username and password, click **Auto authenticate**, and the agent signs in, enters the user code, and authorizes — the proxy's existing polling then saves the token exactly as before.
+
+```bash
+cp .env.example .env    # set COPILOT2API_ADMIN_TOKEN and LOGIN_AGENT_TOKEN
+docker compose up -d --build
+```
+
+The feature is **off unless `COPILOT2API_LOGIN_AGENT_URL` is set**, and any automation failure falls back to the manual flow. It requires accounts **without 2FA**, and it stores passwords in plain text (mode `0600`) — read the security notes first.
+
+See **[docs/auto-login.md](docs/auto-login.md)** for setup, configuration, security, and troubleshooting.
+
 ## Usage with Claude Code
 
 Add to `~/.claude/settings.json`:
@@ -301,6 +316,10 @@ Environment variables are used as defaults when flags are not provided:
 | `COPILOT2API_TOKEN_DIR` | Token storage directory | `~/.config/copilot2api` |
 | `COPILOT2API_ACCOUNTS_FILE` | Multi-account config file path (see [Multiple GitHub Accounts](#multiple-github-accounts)) | `<token-dir>/accounts.json` |
 | `COPILOT2API_ADMIN_TOKEN` | If set, the `/admin/` UI requires this token (`X-Admin-Token` header or `?admin_token=`) | _(unset, no auth)_ |
+| `COPILOT2API_LOGIN_AGENT_URL` | Base URL of the login agent that automates the Device Flow. Unset disables automation (see [Automated Device Flow Login](docs/auto-login.md)) | _(unset, disabled)_ |
+| `COPILOT2API_LOGIN_AGENT_TOKEN` | Shared secret sent to the login agent as `X-Agent-Token` | _(unset, no auth)_ |
+| `COPILOT2API_LOGIN_AGENT_TIMEOUT_SECONDS` | Per-login timeout for the login agent | `180` |
+| `COPILOT2API_LOGINS_FILE` | Where GitHub login credentials for automated login are stored | `<token-dir>/github_logins.json` |
 | `COPILOT2API_SSE_KEEPALIVE_SECONDS` | Idle interval after which a `ping` event is injected into native `/v1/messages` streams, keeping long thinking phases from being cut off by NATs, CDNs, or load balancers. `0` disables it | `15` |
 | `COPILOT2API_SSE_MAX_IDLE_SECONDS` | Abort a native `/v1/messages` stream with an `error` event once the upstream has sent no bytes for this long, so a wedged upstream is not kept alive indefinitely by the pings. `0` disables it | `600` |
 | `COPILOT2API_DEBUG` | Enable debug logging (`true`/`false`, `1`/`0`) | `false` |

@@ -69,6 +69,10 @@
   .acct-head { display: flex; justify-content: space-between; align-items: center; margin: 0 0 10px; }
   .acct-head h3 { margin: 0; font-size: 14px; }
   tr.totals td { font-weight: 600; border-top: 2px solid var(--border); }
+  dialog.wide { max-width: 620px; }
+  .shot { display: block; width: 100%; margin-top: 10px; border: 1px solid var(--border); border-radius: 8px; }
+  .auto-box { margin-top: 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: #0c0e12; }
+  .auto-box h3 { margin: 0 0 6px; font-size: 13px; }
 </style>
 </head>
 <body>
@@ -92,13 +96,18 @@
       <div class="field"><label>Auth mode</label><select id="new-mode"><option value="">exchange (default)</option><option value="direct">direct</option></select></div>
       <button id="add-btn">Add</button>
     </div>
+    <div class="row" id="new-login-row" style="margin-top:12px;display:none">
+      <div class="field"><label>GitHub username (optional)</label><input id="new-gh-user" placeholder="user@example.com" autocomplete="off" /></div>
+      <div class="field"><label>GitHub password (optional)</label><input id="new-gh-pass" type="password" placeholder="stored for automated login" autocomplete="new-password" /></div>
+      <p class="muted small" style="margin:0;align-self:center">Stored in <code>github_logins.json</code> and used only to complete the device flow automatically.</p>
+    </div>
   </section>
 
   <section class="panel">
     <h2>Accounts</h2>
     <table>
-      <thead><tr><th>ID</th><th>API Key</th><th>Token dir</th><th>Mode</th><th>Status</th><th>Actions</th></tr></thead>
-      <tbody id="rows"><tr><td colspan="6" class="muted">Loading…</td></tr></tbody>
+      <thead><tr><th>ID</th><th>API Key</th><th>Token dir</th><th>Mode</th><th>GitHub login</th><th>Status</th><th>Actions</th></tr></thead>
+      <tbody id="rows"><tr><td colspan="7" class="muted">Loading…</td></tr></tbody>
     </table>
   </section>
   </div>
@@ -130,13 +139,33 @@
   </div>
 </main>
 
-<dialog id="auth-dialog">
+<dialog id="auth-dialog" class="wide">
   <h2>Authenticate GitHub</h2>
   <p class="small">Open the verification URL and enter the code to authorize this account.</p>
   <p>Code: <code id="auth-code">—</code></p>
   <p><a id="auth-link" href="#" target="_blank" rel="noopener">Open verification page ↗</a></p>
   <p id="auth-state" class="muted small">Waiting for authorization…</p>
+  <div class="auto-box" id="auto-box" style="display:none">
+    <h3>Automated login</h3>
+    <p id="auto-state" class="small muted">Starting…</p>
+    <p id="auto-hint" class="small muted" style="display:none">Automation failed — the code above is still valid, so you can finish manually.</p>
+    <div id="auto-shot"></div>
+  </div>
   <div class="actions"><button class="ghost" id="auth-close">Close</button></div>
+</dialog>
+
+<dialog id="login-dialog">
+  <h2>GitHub login credentials</h2>
+  <p class="small muted">Account: <code id="login-id">—</code></p>
+  <p class="small muted">Used only by the login agent to complete the device flow. The password is stored in plain text in <code>github_logins.json</code> (mode 0600) and is never returned by the API.</p>
+  <div class="field"><label>Username or email</label><input id="login-user" autocomplete="off" /></div>
+  <div class="field" style="margin-top:10px"><label>Password</label><input id="login-pass" type="password" autocomplete="new-password" placeholder="leave blank to keep current" /></div>
+  <p id="login-meta" class="small muted" style="margin-top:10px"></p>
+  <div class="actions">
+    <button id="login-save">Save</button>
+    <button class="danger" id="login-clear">Clear</button>
+    <button class="ghost" id="login-close">Close</button>
+  </div>
 </dialog>
 
 <dialog id="token-dialog">
@@ -189,12 +218,22 @@ function statusBadge(a) {
   return '<span class="badge no">needs auth</span>';
 }
 
+// Feature flags from the server: automation controls stay hidden unless the
+// deployment actually has a login agent wired up.
+let FEATURES = { auto_login_enabled: false, login_store_enabled: false };
+async function loadFeatures() {
+  try {
+    FEATURES = await api("GET", "/admin/api/config");
+  } catch (e) { /* keep defaults: manual flow only */ }
+  document.getElementById("new-login-row").style.display = FEATURES.login_store_enabled ? "" : "none";
+}
+
 async function load() {
   const rows = document.getElementById("rows");
   try {
     const accounts = await api("GET", "/admin/api/accounts");
     if (!accounts.length) {
-      rows.innerHTML = '<tr><td colspan="6" class="muted">No accounts yet. Add one above.</td></tr>';
+      rows.innerHTML = '<tr><td colspan="7" class="muted">No accounts yet. Add one above.</td></tr>';
       return;
     }
     rows.innerHTML = accounts.map(a => `
@@ -203,16 +242,19 @@ async function load() {
         <td><code title="${a.api_key}">${maskKey(a.api_key)}</code></td>
         <td>${a.token_dir ? `<code>${a.token_dir}</code>` : '<span class="muted">'+a.id+'</span>'}</td>
         <td><code>${a.auth_mode || "exchange"}</code></td>
+        <td>${a.has_login ? `<code>${a.github_username || "(set)"}</code>` : '<span class="muted">—</span>'}</td>
         <td>${statusBadge(a)}</td>
         <td class="actions">
           <button class="ghost" data-act="token">Token</button>
           <button class="ghost" data-act="rekey">Rotate key</button>
+          ${FEATURES.login_store_enabled ? '<button class="ghost" data-act="login">Login</button>' : ""}
           ${a.authenticated ? "" : '<button data-act="auth">Authenticate</button>'}
+          ${!a.authenticated && a.has_login && FEATURES.auto_login_enabled ? '<button data-act="auto">Auto authenticate</button>' : ""}
           <button class="danger" data-act="delete">Delete</button>
         </td>
       </tr>`).join("");
   } catch (e) {
-    rows.innerHTML = `<tr><td colspan="6" class="badge no">${e.message}</td></tr>`;
+    rows.innerHTML = `<tr><td colspan="7" class="badge no">${e.message}</td></tr>`;
   }
 }
 
@@ -229,13 +271,17 @@ document.getElementById("add-btn").addEventListener("click", async () => {
   const api_key = document.getElementById("new-key").value.trim();
   const token_dir = document.getElementById("new-dir").value.trim();
   const auth_mode = document.getElementById("new-mode").value;
+  const github_username = document.getElementById("new-gh-user").value.trim();
+  const github_password = document.getElementById("new-gh-pass").value;
   if (!id) { toast("id is required", "err"); return; }
   try {
-    const result = await api("POST", "/admin/api/accounts", { id, api_key, token_dir, auth_mode });
+    const result = await api("POST", "/admin/api/accounts", { id, api_key, token_dir, auth_mode, github_username, github_password });
     document.getElementById("new-id").value = "";
     document.getElementById("new-key").value = "";
     document.getElementById("new-dir").value = "";
     document.getElementById("new-mode").value = "";
+    document.getElementById("new-gh-user").value = "";
+    document.getElementById("new-gh-pass").value = "";
     toast("Account added (key: " + result.api_key.slice(0,8) + "…)");
     load();
   } catch (e) { toast(e.message, "err"); }
@@ -258,12 +304,54 @@ document.getElementById("rows").addEventListener("click", async (ev) => {
       await api("PUT", "/admin/api/accounts/" + encodeURIComponent(id), { api_key: key.trim() });
       toast("Key rotated"); load();
     } else if (act === "auth") {
-      await startAuth(id);
+      await startAuth(id, false);
+    } else if (act === "auto") {
+      await startAuth(id, true);
+    } else if (act === "login") {
+      await showLogin(id);
     } else if (act === "token") {
       await showTokens(id);
     }
   } catch (e) { toast(e.message, "err"); }
 });
+
+// --- GitHub login credentials ---
+let loginId = "";
+async function showLogin(id) {
+  loginId = id;
+  const data = await api("GET", "/admin/api/accounts/" + encodeURIComponent(id) + "/login");
+  document.getElementById("login-id").textContent = id;
+  document.getElementById("login-user").value = data.username || "";
+  document.getElementById("login-pass").value = "";
+  document.getElementById("login-meta").textContent = data.has_password
+    ? "A password is stored. Leave the field blank to keep it."
+    : "No password stored yet.";
+  document.getElementById("login-dialog").showModal();
+}
+document.getElementById("login-save").addEventListener("click", async () => {
+  const username = document.getElementById("login-user").value.trim();
+  const password = document.getElementById("login-pass").value;
+  if (!username || !password) {
+    toast("Username and password are both required", "err");
+    return;
+  }
+  try {
+    await api("PUT", "/admin/api/accounts/" + encodeURIComponent(loginId) + "/login", { username, password });
+    document.getElementById("login-dialog").close();
+    toast("Credentials saved");
+    load();
+  } catch (e) { toast(e.message, "err"); }
+});
+document.getElementById("login-clear").addEventListener("click", async () => {
+  if (!confirm(`Clear stored GitHub credentials for "${loginId}"?`)) return;
+  try {
+    await api("DELETE", "/admin/api/accounts/" + encodeURIComponent(loginId) + "/login");
+    document.getElementById("login-dialog").close();
+    toast("Credentials cleared");
+    load();
+  } catch (e) { toast(e.message, "err"); }
+});
+document.getElementById("login-close").addEventListener("click", () => document.getElementById("login-dialog").close());
 
 let tokState = { github: "", copilot: "", revealed: false };
 function renderTokens() {
@@ -291,10 +379,63 @@ document.getElementById("tok-copy").addEventListener("click", async () => {
 });
 document.getElementById("tok-close").addEventListener("click", () => document.getElementById("token-dialog").close());
 
-async function startAuth(id) {
+const AUTO_MESSAGES = {
+  invalid_credentials: "GitHub rejected the stored username or password.",
+  two_factor_required: "The account asks for two-factor authentication, which the agent cannot complete.",
+  device_verification: "GitHub asked for an email device-verification code.",
+  captcha: "GitHub presented a CAPTCHA or similar challenge.",
+  code_rejected: "GitHub rejected the user code.",
+  timeout: "The agent timed out before finishing.",
+  agent_unreachable: "The login agent could not be reached.",
+};
+
+function renderAuto(auto) {
+  const box = document.getElementById("auto-box");
+  const stateEl = document.getElementById("auto-state");
+  const hintEl = document.getElementById("auto-hint");
+  const shotEl = document.getElementById("auto-shot");
+  if (!auto || auto.state === "idle") { box.style.display = "none"; return; }
+  box.style.display = "";
+
+  if (auto.state === "running") {
+    stateEl.textContent = "⏳ Signing in and authorizing in the browser container" + (auto.step ? " (" + auto.step + ")" : "") + "…";
+    stateEl.className = "small muted";
+    hintEl.style.display = "none";
+    shotEl.replaceChildren();
+    return;
+  }
+  if (auto.state === "succeeded") {
+    stateEl.textContent = "✅ Authorized in the browser container. Waiting for the token…";
+    stateEl.className = "small";
+    hintEl.style.display = "none";
+    shotEl.replaceChildren();
+    return;
+  }
+  // failed
+  const detail = AUTO_MESSAGES[auto.error_class] || auto.error || "Automated login failed.";
+  stateEl.textContent = "⚠️ " + detail + (auto.step ? " (stopped at: " + auto.step + ")" : "");
+  stateEl.className = "small";
+  hintEl.style.display = "";
+  if (auto.has_screenshot && !shotEl.firstChild) {
+    // Built here rather than in markup so no broken image ships when there is
+    // nothing to show. Cache-busted because each attempt overwrites the shot.
+    const img = document.createElement("img");
+    img.className = "shot";
+    img.alt = "Screenshot of the page where automated login stopped";
+    img.src = qs("/admin/api/accounts/" + encodeURIComponent(autoAccountId) + "/auth/screenshot?_=" + Date.now());
+    shotEl.replaceChildren(img);
+  }
+}
+
+let autoAccountId = "";
+async function startAuth(id, auto) {
+  autoAccountId = id;
   const dlg = document.getElementById("auth-dialog");
   const stateEl = document.getElementById("auth-state");
-  const data = await api("POST", "/admin/api/accounts/" + encodeURIComponent(id) + "/auth/start");
+  document.getElementById("auto-shot").replaceChildren();
+  renderAuto(auto ? { state: "running" } : null);
+
+  const data = await api("POST", "/admin/api/accounts/" + encodeURIComponent(id) + "/auth/start", { auto: !!auto });
   document.getElementById("auth-code").textContent = data.user_code;
   const link = document.getElementById("auth-link");
   link.href = data.verification_uri;
@@ -307,6 +448,7 @@ async function startAuth(id) {
   authTimer = setInterval(async () => {
     try {
       const st = await api("GET", "/admin/api/accounts/" + encodeURIComponent(id) + "/auth/status");
+      renderAuto(st.auto);
       if (st.authenticated) {
         clearInterval(authTimer);
         stateEl.textContent = "✅ Authenticated!";
@@ -501,7 +643,9 @@ document.getElementById("models-refresh").addEventListener("click", () => loadMo
 document.getElementById("models-update").addEventListener("click", () => loadModels(true));
 document.getElementById("models-account").addEventListener("change", () => loadModels(false));
 
-load();
+// Feature flags gate which controls render, so they must land before the first
+// account list draw.
+loadFeatures().then(load);
 </script>
 </body>
 </html>

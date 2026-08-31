@@ -36,7 +36,12 @@ __debug_bin*
 # Local config
 .env
 .env.*
+!.env.example
 copilot2api-darwin-arm64
+
+# Login agent
+login-agent/node_modules/
+login-agent/data/
 
 # Capability test artifacts
 scripts/out/

@@ -1,0 +1,11 @@
+# The Go image does not need the browser agent or local state.
+login-agent/
+benchmark/
+scripts/out/
+.git/
+.github/
+*.md
+docs/
+.env
+.env.*
+!.env.example
