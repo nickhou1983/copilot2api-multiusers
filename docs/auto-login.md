@@ -132,6 +132,14 @@ docker compose exec login-agent \
   node -e "fetch('http://127.0.0.1:8080/health').then(r=>r.text()).then(console.log)"
 ```
 
+`unknown` failures are the ones worth reading the screenshot for. One known
+shape: **"Device code input was not found on the verification page."** means
+GitHub served a page the agent did not recognize instead of the code form. When
+a session already exists, `/login/device` redirects to
+`/login/device/select_account` ("Device Activation — Signed in as …" with a
+**Continue** button); the agent clicks through that automatically. If the
+screenshot shows some *other* page, the markup has probably changed.
+
 If GitHub changes its markup, the selectors live in one place —
 [`login-agent/src/selectors.js`](../login-agent/src/selectors.js) — and each has
 ordered fallbacks.

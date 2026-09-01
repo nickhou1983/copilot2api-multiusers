@@ -153,6 +153,23 @@ export function isDeviceActivated(text = '') {
 }
 
 /**
+ * True when the device page is showing the account-confirmation card
+ * ("Device Activation — Signed in as <user>" with Continue / Use a different
+ * account) instead of the code form. GitHub interposes this whenever a session
+ * already exists, so it must be clicked through before the code can be typed.
+ *
+ * Note this deliberately does not match the "Device activated" success page:
+ * that text says "activated", not "activation".
+ */
+export function isSessionInterstitial(text = '') {
+  const t = String(text).toLowerCase();
+  if (isDeviceActivated(t)) {
+    return false;
+  }
+  return t.includes('use a different account') || (t.includes('signed in as') && t.includes('continue'));
+}
+
+/**
  * Maps a thrown error to a failure class. Playwright timeouts get their own
  * class because the operator fix differs from a generic failure.
  */

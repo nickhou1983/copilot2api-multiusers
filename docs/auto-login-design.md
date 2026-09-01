@@ -143,6 +143,7 @@ sequenceDiagram
         P->>L: username / password / user_code / verification URL
         L->>G: Open the sign-in page and submit credentials
         L->>G: Open the device verification page
+        L->>G: Click Continue if an account confirmation page appears
         L->>G: Enter the user_code
         L->>G: Click Authorize
         G-->>L: Authorization accepted
@@ -165,7 +166,7 @@ Each request advances through a fixed sequence, and the agent always records whe
 |-------|--------------|-------|
 | `launch` | Start the browser context | Each account uses its own **persistent** browser profile |
 | `login` | Ensure the session is signed in | If the profile's session is still valid, the sign-in form is skipped entirely |
-| `device_code` | Open the verification page and enter the code | Handles both page shapes: one combined input, or one box per character |
+| `device_code` | Open the verification page and enter the code | Clicks through the "signed in as" confirmation page first, then handles both code-form shapes: one combined input, or one box per character |
 | `authorize` | Click Authorize | GitHub deliberately disables this button for a few seconds; the agent waits until it is usable |
 | `done` | Complete | GitHub has accepted the authorization; the rest is the proxy's poller |
 

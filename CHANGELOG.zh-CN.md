@@ -26,6 +26,7 @@
 
 ### Bug 修复
 
+- 修复自动化 GitHub Device Flow 登录报错 `Device code input was not found on the verification page.`（`step: device_code`）的问题。当浏览器 profile 中已有 GitHub 会话时，`https://github.com/login/device` 会重定向到 **Device Activation** 账号确认页（`/login/device/select_account`，显示「Signed in as …」与 **Continue** 按钮），而不是直接渲染验证码表单。现在 agent 会先点过该页面再填入 `user_code`；若 GitHub 直接跳到授权页，也会跳过填码步骤直接进入授权。此问题只影响同一账号的第二次及后续自动登录，首次（profile 为空）不受影响。
 - 修复原生 `/v1/messages` 流式响应把 HTTP 响应头扣留到上游首字节到达的问题。现在上游流建立后会立即 flush 响应头(含 `Content-Type: text/event-stream`),长推理静默期不会再在产出任何数据之前就触发客户端与中间层的「响应头超时」。此行为与 OpenAI、Gemini 流式路径原本的做法一致。
 - 修复原生 `/v1/messages` 流在客户端断开后仍继续读完上游响应的问题。现在请求 context 被取消(或写入失败)时会立即中止并释放上游连接,不再继续读取剩余响应 —— 长流场景下此前可能白白多跑数分钟。
 - 修复 `POST /v1/responses` 对所有上游不原生支持 Responses API 的模型（如 `claude-*`、`gemini-*`、`kimi-k2.7-code`)一律返回 `400 "Invalid JSON in request body"` 的问题。Responses→Chat Completions 转换路径此前只把 `input` 解析为数组，导致 OpenAI 官方文档中的字符串简写形式（`"input": "hello"`）解析失败。现在 `input` 同时接受纯字符串与输入项数组。

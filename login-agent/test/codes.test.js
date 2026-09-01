@@ -7,6 +7,7 @@ import {
   classifyLoginPage,
   classifyThrownError,
   isDeviceActivated,
+  isSessionInterstitial,
   normalizeUserCode,
   profileDirName,
   validateLoginRequest,
@@ -175,4 +176,20 @@ test('profileDirName sanitizes path traversal and separators', () => {
   assert.equal(profileDirName('..'), '_');
   assert.equal(profileDirName('.'), '_');
   assert.equal(profileDirName(''), '_');
+});
+
+test('isSessionInterstitial detects the account confirmation card', () => {
+  assert.equal(
+    isSessionInterstitial('Device Activation\nSigned in as rubber-duck-fly\nContinue\nUse a different account'),
+    true,
+  );
+  assert.equal(isSessionInterstitial('Signed in as octocat Continue'), true);
+  assert.equal(isSessionInterstitial('USE A DIFFERENT ACCOUNT'), true);
+});
+
+test('isSessionInterstitial ignores the code form and success pages', () => {
+  assert.equal(isSessionInterstitial('Enter the code displayed on your device\nContinue'), false);
+  assert.equal(isSessionInterstitial('Device activated\nSigned in as octocat'), false);
+  assert.equal(isSessionInterstitial(''), false);
+  assert.equal(isSessionInterstitial(), false);
 });

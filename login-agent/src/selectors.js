@@ -9,6 +9,10 @@
 export const GITHUB_ORIGIN = 'https://github.com';
 export const LOGIN_URL = `${GITHUB_ORIGIN}/login`;
 export const DEFAULT_DEVICE_URL = `${GITHUB_ORIGIN}/login/device`;
+// Where /login/device redirects when a session already exists: an account
+// confirmation card ("Signed in as <user>") that must be cleared before the
+// code form is rendered.
+export const DEVICE_SELECT_ACCOUNT_PATH = '/login/device/select_account';
 // Cheap authenticated-session probe: redirects to /login when signed out.
 export const SESSION_PROBE_URL = `${GITHUB_ORIGIN}/settings/profile`;
 
@@ -35,7 +39,6 @@ export const selectors = {
 
   /** Single-input variant of the device code form. */
   deviceCodeSingle: ['#user-code', 'input[name="user_code"]', 'input[autocomplete="one-time-code"]'],
-
   /** Per-character variant of the device code form. */
   deviceCodeBoxes: [
     'input[data-index]',
@@ -48,6 +51,25 @@ export const selectors = {
     'button[type="submit"]',
     'input[type="submit"][value="Continue"]',
     'form[action="/login/device/code"] button',
+  ],
+
+  /**
+   * Markers unique to the "Device Activation — Signed in as <user>" card that
+   * GitHub interposes before the code form when a session already exists.
+   */
+  sessionCardMarker: [
+    'a:has-text("Use a different account")',
+    'button:has-text("Use a different account")',
+    'form[action*="/logout"]:has-text("different account")',
+  ],
+
+  /** Continue button on that account-confirmation card. */
+  sessionCardContinue: [
+    'form[action^="/login/device"] button[type="submit"]:has-text("Continue")',
+    'form[action^="/login/device"] input[type="submit"][value="Continue"]',
+    'button[type="submit"]:has-text("Continue")',
+    'input[type="submit"][value="Continue"]',
+    'a:has-text("Continue")',
   ],
 
   /** Green "Authorize <app>" button on the OAuth grant page. */

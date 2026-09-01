@@ -9,11 +9,13 @@ import {
   classifyLoginPage,
   classifyThrownError,
   isDeviceActivated,
+  isSessionInterstitial,
   normalizeUserCode,
   profileDirName,
 } from './codes.js';
 import {
   DEFAULT_DEVICE_URL,
+  DEVICE_SELECT_ACCOUNT_PATH,
   LOGIN_URL,
   SESSION_PROBE_URL,
   anyAttached,
@@ -170,8 +172,18 @@ async function submitDeviceCode(page, verificationUri, code, log) {
     return loginProblem;
   }
 
+  // With a live session GitHub first asks the user to confirm which account is
+  // authorizing. Click through it before looking for the code input.
+  await dismissSessionCard(page, log);
+
   const filled = await fillUserCode(page, code);
   if (!filled) {
+    // The code form can be skipped entirely when GitHub jumps straight to the
+    // grant page; let the authorize step handle that rather than failing here.
+    if (await anyAttached(page, selectors.authorize)) {
+      log('device code form skipped; already on the authorization page');
+      return null;
+    }
     return { errorClass: ErrorClass.UNKNOWN, message: 'Device code input was not found on the verification page.' };
   }
 
@@ -184,6 +196,40 @@ async function submitDeviceCode(page, verificationUri, code, log) {
   await page.waitForLoadState('networkidle').catch(() => {});
 
   return classifyDevicePage(await pageState(page));
+}
+
+/**
+ * Clicks through the "Device Activation — Signed in as <user>" confirmation
+ * card when GitHub shows it in place of the code form. A no-op otherwise.
+ *
+ * @returns {Promise<boolean>} whether the card was dismissed
+ */
+async function dismissSessionCard(page, log) {
+  // The code form is the expected state; only look for the card when it is absent.
+  if ((await anyAttached(page, selectors.deviceCodeSingle)) || (await anyAttached(page, selectors.deviceCodeBoxes))) {
+    return false;
+  }
+
+  const state = await pageState(page);
+  const onSelectAccount = String(state.url).includes(DEVICE_SELECT_ACCOUNT_PATH);
+  if (
+    !onSelectAccount &&
+    !isSessionInterstitial(state.text) &&
+    !(await anyAttached(page, selectors.sessionCardMarker))
+  ) {
+    return false;
+  }
+
+  const continueSelector = await firstVisible(page, selectors.sessionCardContinue, 5000);
+  if (!continueSelector) {
+    return false;
+  }
+
+  log('confirming signed-in account on the device page');
+  await page.click(continueSelector).catch(() => {});
+  await page.waitForLoadState('domcontentloaded').catch(() => {});
+  await page.waitForLoadState('networkidle').catch(() => {});
+  return true;
 }
 
 /**

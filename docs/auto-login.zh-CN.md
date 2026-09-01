@@ -115,6 +115,12 @@ docker compose exec login-agent \
   node -e "fetch('http://127.0.0.1:8080/health').then(r=>r.text()).then(console.log)"
 ```
 
+`unknown` 类失败最值得配合截图排查。已知的一种形态：**"Device code input was not
+found on the verification page."** 表示 GitHub 返回了 agent 不认识的页面，而不是填码表单。
+当会话已存在时，`/login/device` 会重定向到 `/login/device/select_account`
+（「Device Activation — Signed in as …」外加一个 **Continue** 按钮），agent 会自动点过该页。
+如果截图显示的是**别的**页面，多半是页面结构变了。
+
 GitHub 改版时，所有选择器集中在
 [`login-agent/src/selectors.js`](../login-agent/src/selectors.js) 一个文件里，且都带有降级候选。
 
