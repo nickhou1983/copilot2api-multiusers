@@ -420,6 +420,18 @@ td {
 tr:last-child td { border-bottom: none; }
 td.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 
+/* 紧凑表格:用于行数较多的矩阵页(如 §03.5 Prompt Cache 8 行 × 5 列) */
+.panel.compact th { padding: 11px 20px; }
+.panel.compact td { padding: 10px 20px; font-size: 19px; line-height: 1.5; }
+.test-cond {
+  font-size: 17px; line-height: 1.5; color: var(--ink-soft);
+  margin: 0 0 14px;
+}
+.test-cond .cond-key {
+  font-family: var(--mono); font-size: 13px; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--ink-faint); margin-right: 10px;
+}
+
 /* 判定徽章 */
 .badge {
   display: inline-block;
@@ -642,7 +654,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2607</span>
     <span class="doc-sec">Key Figures — 关键指标</span>
-    <span class="doc-pg">02 / 17</span>
+    <span class="doc-pg">02 / 18</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -699,7 +711,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2607</span>
     <span class="doc-sec">Section 01 — Overall Findings</span>
-    <span class="doc-pg">03 / 17</span>
+    <span class="doc-pg">03 / 18</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -724,7 +736,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2607</span>
     <span class="doc-sec">Section 02 — Upstream Hosting Topology</span>
-    <span class="doc-pg">04 / 17</span>
+    <span class="doc-pg">04 / 18</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -776,7 +788,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2607</span>
     <span class="doc-sec">Section 02 — Upstream Hosting Topology</span>
-    <span class="doc-pg">05 / 17</span>
+    <span class="doc-pg">05 / 18</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -809,7 +821,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2607</span>
     <span class="doc-sec">Section 03 — Capability Matrix</span>
-    <span class="doc-pg">06 / 17</span>
+    <span class="doc-pg">06 / 18</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -832,7 +844,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2607</span>
     <span class="doc-sec">Section 03 — Capability Matrix</span>
-    <span class="doc-pg">07 / 17</span>
+    <span class="doc-pg">07 / 18</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal" style="margin-bottom: 20px;">
@@ -898,7 +910,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2607</span>
     <span class="doc-sec">Section 03 — Capability Matrix</span>
-    <span class="doc-pg">08 / 17</span>
+    <span class="doc-pg">08 / 18</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -950,7 +962,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-top">
     <span class="doc-no">TD-2607</span>
     <span class="doc-sec">Section 03 — Capability Matrix</span>
-    <span class="doc-pg">09 / 17</span>
+    <span class="doc-pg">09 / 18</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal" style="margin-bottom: 22px;">
@@ -991,12 +1003,99 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-foot"><span>Capability Matrix · 3.4</span><span>2026-07-13</span></div>
 </section>
 
-<!-- ==================== SLIDE 10 · §04 SO 落点矩阵 ==================== -->
+<!-- ==================== SLIDE 10 · §03.5 Prompt Cache 命中率 ==================== -->
+<section class="slide" aria-label="Prompt Cache 命中率测试汇总">
+  <div class="s-top">
+    <span class="doc-no">TD-2607</span>
+    <span class="doc-sec">Section 03 — Capability Matrix</span>
+    <span class="doc-pg">10 / 18</span>
+  </div>
+  <div class="s-body">
+    <div class="sec-head reveal">
+      <div class="sec-no">03</div>
+      <div>
+        <div class="sec-label">Section 03.5 — Prompt Cache(2026-09-02 专项实测)</div>
+        <h2>Prompt Cache 命中率测试汇总</h2>
+      </div>
+    </div>
+    <p class="test-cond reveal"><span class="cond-key">Test Conditions</span>Direct 模式 · 端点仅 <code>/v1/messages</code> · 4 模型全部为 <strong>native 路由</strong> · 204/204 请求成功,无错误</p>
+    <div class="panel reveal compact">
+      <table>
+        <thead><tr><th style="width:26%">维度</th><th>claude-sonnet-5</th><th>claude-sonnet-4.6</th><th>claude-opus-4.8</th><th>claude-opus-5</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>静态重放命中率(S1,稳态)</td>
+            <td><span class="badge ok">99.8%</span></td>
+            <td><span class="badge ok">99.7%</span></td>
+            <td><span class="badge ok">99.8%</span></td>
+            <td><span class="badge ok">99.8%</span></td>
+          </tr>
+          <tr>
+            <td>多轮追加命中率(S2,稳态)</td>
+            <td><span class="badge ok">97.8–98.6%</span></td>
+            <td><span class="badge ok">98.5–98.6%</span></td>
+            <td><span class="badge ok">98.2–98.7%</span></td>
+            <td><span class="badge ok">97.7–98.4%</span></td>
+          </tr>
+          <tr>
+            <td>thinking + tools 多轮命中率(S6,第 2/3 轮)</td>
+            <td>98.0% / <span class="badge warn">91.4%</span></td>
+            <td>96.8% / <span class="badge warn">87.4%</span></td>
+            <td>98.0% / <span class="badge warn">90.1%</span></td>
+            <td>98.1% / <span class="badge ok">92.2%</span> 最佳</td>
+          </tr>
+          <tr>
+            <td>最小可缓存前缀</td>
+            <td>~1024 token(14 段起)</td>
+            <td>~1024 token(14 段起)</td>
+            <td>~1024 token(14 段起)</td>
+            <td><span class="badge diff">~950 token</span> 8 段即命中,最低</td>
+          </tr>
+          <tr>
+            <td>尾部改动失效(S3)</td>
+            <td><span class="badge no">R→0</span> 严格失效</td>
+            <td><span class="badge no">R→0</span></td>
+            <td><span class="badge no">R→0</span></td>
+            <td><span class="badge no">R→0</span></td>
+          </tr>
+          <tr>
+            <td>流式 vs 非流式(S1S)</td>
+            <td><span class="badge ok">一致</span></td>
+            <td><span class="badge ok">一致</span></td>
+            <td><span class="badge ok">一致</span></td>
+            <td><span class="badge ok">一致</span></td>
+          </tr>
+          <tr>
+            <td>TTL <code>ephemeral</code> 默认</td>
+            <td><span class="badge no">5–6.3min 内 100% miss</span></td>
+            <td>同左</td>
+            <td>同左</td>
+            <td>同左</td>
+          </tr>
+          <tr>
+            <td>TTL <code>ttl:"1h"</code></td>
+            <td><span class="badge ok">6.3min 后 99.8% hit</span></td>
+            <td><span class="badge ok">99.7%</span></td>
+            <td><span class="badge ok">99.8%</span></td>
+            <td><span class="badge ok">99.8%</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <ul class="notes" style="margin-top: 18px;">
+      <li><strong>前缀低于 ~1024 token 时 <code>cache_control</code> 被静默忽略</strong>——不报错、不提示,全按 input 全价计费,命中率恒为 0;opus-5 是唯一例外(~950 token 即可命中)。</li>
+      <li><strong>默认 <code>ephemeral</code> 实际存活期短于标称 5 分钟</strong>(5–6.3min 实测 100% miss);跨分钟级复用必须显式声明 <code>ttl:"1h"</code>。</li>
+    </ul>
+  </div>
+  <div class="s-foot"><span>Capability Matrix · 3.5 — Prompt Cache</span><span>2026-09-02</span></div>
+</section>
+
+<!-- ==================== SLIDE 11 · §04 SO 落点矩阵 ==================== -->
 <section class="slide" aria-label="Structured Outputs 落点矩阵">
   <div class="s-top">
     <span class="doc-no">TD-2607</span>
     <span class="doc-sec">Section 04 — Structured Outputs</span>
-    <span class="doc-pg">10 / 17</span>
+    <span class="doc-pg">11 / 18</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1039,12 +1138,12 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-foot"><span>Structured Outputs · 1 of 2</span><span>2026-07-13</span></div>
 </section>
 
-<!-- ==================== SLIDE 11 · §04 FIG.07 token 开销 ==================== -->
+<!-- ==================== SLIDE 12 · §04 FIG.07 token 开销 ==================== -->
 <section class="slide" aria-label="输入 token 开销对比">
   <div class="s-top">
     <span class="doc-no">TD-2607</span>
     <span class="doc-sec">Section 04 — Structured Outputs</span>
-    <span class="doc-pg">11 / 17</span>
+    <span class="doc-pg">12 / 18</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1081,12 +1180,12 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-foot"><span>Structured Outputs · 2 of 2</span><span>2026-07-13</span></div>
 </section>
 
-<!-- ==================== SLIDE 12 · §05.1 分叉表 ==================== -->
+<!-- ==================== SLIDE 13 · §05.1 分叉表 ==================== -->
 <section class="slide" aria-label="代理分叉点">
   <div class="s-top">
     <span class="doc-no">TD-2607</span>
     <span class="doc-sec">Section 05 — Proxy Conformance</span>
-    <span class="doc-pg">12 / 17</span>
+    <span class="doc-pg">13 / 18</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1124,12 +1223,12 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-foot"><span>Proxy Conformance · 5.1 (1 of 2)</span><span>2026-07-13</span></div>
 </section>
 
-<!-- ==================== SLIDE 13 · §05.1 beta 白名单 / computer use ==================== -->
+<!-- ==================== SLIDE 14 · §05.1 beta 白名单 / computer use ==================== -->
 <section class="slide" aria-label="beta 白名单与 computer use">
   <div class="s-top">
     <span class="doc-no">TD-2607</span>
     <span class="doc-sec">Section 05 — Proxy Conformance</span>
-    <span class="doc-pg">13 / 17</span>
+    <span class="doc-pg">14 / 18</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1153,12 +1252,12 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-foot"><span>Proxy Conformance · 5.1 (2 of 2)</span><span>2026-07-13</span></div>
 </section>
 
-<!-- ==================== SLIDE 14 · §05.2 已知缺口 ==================== -->
+<!-- ==================== SLIDE 15 · §05.2 已知缺口 ==================== -->
 <section class="slide" aria-label="已知缺口">
   <div class="s-top">
     <span class="doc-no">TD-2607</span>
     <span class="doc-sec">Section 05 — Proxy Conformance</span>
-    <span class="doc-pg">14 / 17</span>
+    <span class="doc-pg">15 / 18</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1204,12 +1303,12 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-foot"><span>Proxy Conformance · 5.2</span><span>2026-07-13</span></div>
 </section>
 
-<!-- ==================== SLIDE 15 · §05.3 代理功能面 ==================== -->
+<!-- ==================== SLIDE 16 · §05.3 代理功能面 ==================== -->
 <section class="slide" aria-label="代理自身功能面">
   <div class="s-top">
     <span class="doc-no">TD-2607</span>
     <span class="doc-sec">Section 05 — Proxy Conformance</span>
-    <span class="doc-pg">15 / 17</span>
+    <span class="doc-pg">16 / 18</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal">
@@ -1255,12 +1354,12 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-foot"><span>Proxy Conformance · 5.3</span><span>2026-07-13</span></div>
 </section>
 
-<!-- ==================== SLIDE 16 · §06 使用建议 ==================== -->
+<!-- ==================== SLIDE 17 · §06 使用建议 ==================== -->
 <section class="slide" aria-label="使用建议">
   <div class="s-top">
     <span class="doc-no">TD-2607</span>
     <span class="doc-sec">Section 06 — Operating Recommendations</span>
-    <span class="doc-pg">16 / 17</span>
+    <span class="doc-pg">17 / 18</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal" style="margin-bottom: 22px;">
@@ -1281,13 +1380,13 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
   <div class="s-foot"><span>Operating Recommendations</span><span>2026-07-13</span></div>
 </section>
 
-<!-- ==================== SLIDE 17 · 尾页 / 出处 ==================== -->
+<!-- ==================== SLIDE 18 · 尾页 / 出处 ==================== -->
 <section class="slide" aria-label="数据来源与方法">
   <div class="crop tl"></div><div class="crop tr"></div><div class="crop bl"></div><div class="crop br"></div>
   <div class="s-top">
     <span class="doc-no">TD-2607</span>
     <span class="doc-sec">Colophon — Sources &amp; Method</span>
-    <span class="doc-pg">17 / 17</span>
+    <span class="doc-pg">18 / 18</span>
   </div>
   <div class="s-body">
     <div class="sec-head reveal" style="margin-bottom: 26px;">
@@ -1315,7 +1414,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
 <!-- 页码指示 + 导航按钮(舞台之外的 UI) -->
 <div class="deck-controls" aria-hidden="true">
   <button id="navPrev" title="上一页 (←)">‹</button>
-  <span id="pageIndicator">01 / 17</span>
+  <span id="pageIndicator">01 / 18</span>
   <button id="navNext" title="下一页 (→)">›</button>
 </div>
 
