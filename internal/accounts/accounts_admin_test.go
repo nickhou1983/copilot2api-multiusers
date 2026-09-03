@@ -51,11 +51,16 @@ func TestSaveConfigEmptyAllowed(t *testing.T) {
 
 func TestSaveConfigRejectsDuplicates(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "accounts.json")
-	err := SaveConfig(path, &Config{Accounts: []AccountConfig{
+	if err := SaveConfig(path, &Config{Accounts: []AccountConfig{
 		{ID: "a", APIKey: "k"}, {ID: "b", APIKey: "k"},
+	}}); err != nil {
+		t.Fatalf("duplicate api keys should create a pool, got: %v", err)
+	}
+	err := SaveConfig(path, &Config{Accounts: []AccountConfig{
+		{ID: "a", APIKey: "k1"}, {ID: "a", APIKey: "k2"},
 	}})
 	if err == nil {
-		t.Fatal("expected duplicate key error")
+		t.Fatal("expected duplicate id error")
 	}
 }
 
@@ -74,9 +79,6 @@ func TestRegistryMutations(t *testing.T) {
 	if err := reg.Add(newTestAccount("alice", "k9")); err == nil {
 		t.Fatal("expected duplicate id error")
 	}
-	if err := reg.Add(newTestAccount("bob", "k1")); err == nil {
-		t.Fatal("expected duplicate key error")
-	}
 	if err := reg.Add(newTestAccount("bob", "k2")); err != nil {
 		t.Fatalf("Add bob: %v", err)
 	}
@@ -88,9 +90,9 @@ func TestRegistryMutations(t *testing.T) {
 		t.Fatalf("Resolve k2 -> %v, %v", a, err)
 	}
 
-	// Rotate alice's key.
-	if err := reg.UpdateKey("alice", "k2"); err == nil {
-		t.Fatal("expected conflict rotating to bob's key")
+	// Rotate alice into bob's key pool, then rotate her out again.
+	if err := reg.UpdateKey("alice", "k2"); err != nil {
+		t.Fatalf("UpdateKey into existing pool: %v", err)
 	}
 	if err := reg.UpdateKey("alice", "k1-new"); err != nil {
 		t.Fatalf("UpdateKey: %v", err)
@@ -234,6 +236,39 @@ func TestManagerCRUD(t *testing.T) {
 	cfg, _ = LoadConfig(cfgPath)
 	if len(cfg.Accounts) != 0 {
 		t.Fatalf("expected empty config after delete, got %+v", cfg.Accounts)
+	}
+}
+
+func TestManagerCreateSharedKeyPool(t *testing.T) {
+	m, cfgPath := newManagerForTest(t)
+	h := m.Handler()
+
+	if w := do(h, "POST", "/admin/api/accounts", `{"id":"alice","api_key":"pool-key"}`); w.Code != http.StatusCreated {
+		t.Fatalf("create alice: %d %s", w.Code, w.Body.String())
+	}
+	if w := do(h, "POST", "/admin/api/accounts", `{"id":"bob","api_key":"pool-key"}`); w.Code != http.StatusCreated {
+		t.Fatalf("create bob in pool: %d %s", w.Code, w.Body.String())
+	}
+
+	cfg, err := LoadConfig(cfgPath)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if len(cfg.Accounts) != 2 || cfg.Accounts[0].APIKey != "pool-key" || cfg.Accounts[1].APIKey != "pool-key" {
+		t.Fatalf("shared key pool not persisted: %+v", cfg.Accounts)
+	}
+
+	r := httptest.NewRequest(http.MethodPost, "/", nil)
+	r.Header.Set("Authorization", "Bearer pool-key")
+	w := httptest.NewRecorder()
+	m.reg.Handler(ProtoOpenAI).ServeHTTP(w, r)
+	if w.Code != http.StatusOK || w.Body.String() != "alice" {
+		t.Fatalf("first pooled dispatch = %d %q, want 200 alice", w.Code, w.Body.String())
+	}
+	w = httptest.NewRecorder()
+	m.reg.Handler(ProtoOpenAI).ServeHTTP(w, r)
+	if w.Code != http.StatusOK || w.Body.String() != "bob" {
+		t.Fatalf("second pooled dispatch = %d %q, want 200 bob", w.Code, w.Body.String())
 	}
 }
 

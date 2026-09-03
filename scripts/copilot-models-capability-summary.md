@@ -134,7 +134,7 @@
 
 ### 5.3 代理自身功能面(与模型能力正交)
 
-多账号(API key ↔ GitHub 账号 1:1,`accounts.json`)、Web 管理台 `/admin/`(Device Flow 认证、key 轮换/自动生成、token 用量统计含缓存命中率、上游模型列表页)、API key 多来源提取(`Authorization: Bearer` / `x-api-key` / `x-goog-api-key` / `?key=`,覆盖 OpenAI / Anthropic / Gemini 客户端)、Gemini `/v1beta` 兼容端点、`/chat/completions` ↔ `/responses` 智能回退。
+多账号 / 账户池(API key 可映射到一个或多个 GitHub 账号,`accounts.json`；共享 key 时轮询并支持显式 Session 粘性)、Web 管理台 `/admin/`(Device Flow 认证、key 轮换/自动生成、token 用量统计含缓存命中率、上游模型列表页)、API key 多来源提取(`Authorization: Bearer` / `x-api-key` / `x-goog-api-key` / `?key=`,覆盖 OpenAI / Anthropic / Gemini 客户端)、Gemini `/v1beta` 兼容端点、`/chat/completions` ↔ `/responses` 智能回退。
 
 ---
 

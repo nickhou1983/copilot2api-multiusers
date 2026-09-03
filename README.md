@@ -15,7 +15,7 @@ A lightweight Go proxy that exposes GitHub Copilot as OpenAI-compatible, Anthrop
 - **AmpCode Compatible**: `/amp/v1/*` routes for chat, `/api/provider/*` for provider-specific calls, management proxied to `ampcode.com`
 - **Streaming Support**: Full SSE streaming for both OpenAI and Anthropic formats
 - **Anthropic Routing**: Uses native `/v1/messages` when the model supports it, otherwise routes via `/responses` or `/chat/completions`. Native passthrough preserves advanced fields such as `context_management` (auto-adding the `context-management-2025-06-27` and `compact-2026-01-12` betas whenever the body carries that field) and `search_result` content blocks. The proxy always sends `interleaved-thinking-2025-05-14` and forwards only client `anthropic-beta` tokens prefixed with `computer-use-`; all other client beta tokens remain filtered.
-- **Multi-Account**: Map API keys to GitHub accounts 1:1 with isolated credential stores (see [Multiple GitHub Accounts](#multiple-github-accounts))
+- **Multi-Account Pools**: Map API keys to one or more GitHub accounts with isolated credential stores, round-robin pooling, and optional session affinity (see [Multiple GitHub Accounts](#multiple-github-accounts))
 - **Web Admin UI**: Manage accounts and view token-usage statistics at `/admin/` (multi-account mode)
 - **Auto Authentication**: GitHub Device Flow OAuth with automatic token refresh (see [Authentication Flow](docs/auth-flow.md))
 - **Usage Monitoring**: Built-in `/usage` endpoint for quota tracking
@@ -77,30 +77,33 @@ The server starts on `http://127.0.0.1:7777` by default. Open the admin UI at **
 
 ## Multiple GitHub Accounts
 
-The proxy always runs in multi-account mode and maps API keys to GitHub accounts 1:1 via an `accounts.json` file in your token directory (`~/.config/copilot2api/accounts.json` by default, or set `COPILOT2API_ACCOUNTS_FILE`). **If the file does not exist it is created automatically as an empty config** (`{"accounts": []}`) on first start, so the admin UI is available out of the box — add and authenticate your accounts there (see [Admin UI](#admin-ui)).
+The proxy always runs in multi-account mode and maps API keys to GitHub accounts via an `accounts.json` file in your token directory (`~/.config/copilot2api/accounts.json` by default, or set `COPILOT2API_ACCOUNTS_FILE`). **If the file does not exist it is created automatically as an empty config** (`{"accounts": []}`) on first start, so the admin UI is available out of the box — add and authenticate your accounts there (see [Admin UI](#admin-ui)).
 
 You can also edit `accounts.json` by hand:
 
 ```json
 {
   "accounts": [
-    { "id": "alice", "api_key": "sk-alice-...", "token_dir": "alice" },
-    { "id": "bob",   "api_key": "sk-bob-...",   "token_dir": "bob" }
+    { "id": "alice", "api_key": "sk-pool-...", "token_dir": "alice" },
+    { "id": "bob",   "api_key": "sk-pool-...", "token_dir": "bob" },
+    { "id": "carol", "api_key": "sk-carol-...", "token_dir": "carol" }
   ]
 }
 ```
 
 - `id` — unique account identifier (used in logs; defaults the token sub-directory name).
-- `api_key` — the key clients must present. Must be unique across accounts.
+- `api_key` — the key clients must present. Reuse the same key across multiple accounts to create a GitHub account pool.
 - `token_dir` — where this account's `credentials.json` is stored. Relative paths resolve under the base token directory; defaults to `id`.
 
 On startup the proxy runs the GitHub Device Flow once **per account** (sequentially) for any account that has no stored token. Each account keeps an isolated credential store and its own models cache, so token refresh and capability-based routing stay independent.
 
-Clients select an account by sending its `api_key`:
+Clients select an account or account pool by sending its `api_key`:
 
 - OpenAI: `Authorization: Bearer <api_key>`
 - Anthropic: `x-api-key: <api_key>`
 - Gemini: `x-goog-api-key: <api_key>` or `?key=<api_key>`
+
+When several accounts share one API key, requests are round-robined across the pool. To keep a conversation on the same GitHub account, send a stable `X-Copilot2API-Session` or `X-Session-ID` header, or a `?session_id=` query parameter; the same session value is consistently routed to the same pooled account.
 
 Requests **must** present a valid key or receive `401 Unauthorized`. Until at least one account is configured (e.g. via the admin UI), every request is rejected with `401`.
 
@@ -109,7 +112,7 @@ Requests **must** present a valid key or receive `401 Unauthorized`. Until at le
 The proxy serves a web UI at **`http://127.0.0.1:7777/admin/`** to maintain the mapping without editing `accounts.json` by hand:
 
 - List accounts and their authentication status.
-- Add an account (id + API key + optional token dir) and authenticate it via a browser-driven GitHub Device Flow (shows the code + verification link, polls until done).
+- Add an account (id + API key + optional token dir) and authenticate it via a browser-driven GitHub Device Flow (shows the code + verification link, polls until done). Reuse an existing API key when adding an account to join that key's pool.
 - Rotate an account's API key, or delete an account.
 - **Stats tab**: view per-account, per-model token counts — input, output, cached (prompt-cache hits), cache-write, and request totals — across all OpenAI, Anthropic, and Gemini endpoints. Usage is persisted to `<token-dir>/stats.json` and survives restarts (backed by `GET /admin/api/stats`, with `DELETE /admin/api/stats/{id}` to reset one account).
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"hash/fnv"
 	"net/http"
 	"strings"
 	"sync"
@@ -62,6 +63,44 @@ type Account struct {
 	Usage     http.Handler
 }
 
+type accountPool struct {
+	accounts []*Account
+	next     int
+}
+
+func (p *accountPool) pick(stickyKey string) *Account {
+	if p == nil || len(p.accounts) == 0 {
+		return nil
+	}
+	if stickyKey != "" {
+		h := fnv.New32a()
+		_, _ = h.Write([]byte(stickyKey))
+		return p.accounts[int(h.Sum32())%len(p.accounts)]
+	}
+	a := p.accounts[p.next%len(p.accounts)]
+	p.next = (p.next + 1) % len(p.accounts)
+	return a
+}
+
+func (p *accountPool) add(a *Account) {
+	p.accounts = append(p.accounts, a)
+}
+
+func (p *accountPool) remove(id string) *Account {
+	for i, a := range p.accounts {
+		if a.ID == id {
+			p.accounts = append(p.accounts[:i], p.accounts[i+1:]...)
+			if len(p.accounts) == 0 {
+				p.next = 0
+			} else if p.next >= len(p.accounts) {
+				p.next = 0
+			}
+			return a
+		}
+	}
+	return nil
+}
+
 func (a *Account) handlerFor(p Protocol) http.Handler {
 	switch p {
 	case ProtoOpenAI:
@@ -78,11 +117,12 @@ func (a *Account) handlerFor(p Protocol) http.Handler {
 }
 
 // Registry routes requests to the right account based on the presented API key.
-// It is safe for concurrent use: request-time reads (Resolve) and admin-time
-// mutations (Add/Remove/UpdateKey) are guarded by an RWMutex.
+// It is safe for concurrent use: request-time selection (Resolve, including
+// round-robin cursor updates) and admin-time mutations (Add/Remove/UpdateKey)
+// are guarded by an RWMutex.
 type Registry struct {
 	mu         sync.RWMutex
-	byKey      map[string]*Account
+	byKey      map[string]*accountPool
 	byID       map[string]*Account
 	def        *Account
 	requireKey bool
@@ -93,7 +133,7 @@ type Registry struct {
 // is allowed (e.g. to bootstrap and add accounts later via the admin API).
 func NewRegistry(accounts []*Account) (*Registry, error) {
 	rg := &Registry{
-		byKey:      make(map[string]*Account, len(accounts)),
+		byKey:      make(map[string]*accountPool, len(accounts)),
 		byID:       make(map[string]*Account, len(accounts)),
 		requireKey: true,
 	}
@@ -107,11 +147,8 @@ func NewRegistry(accounts []*Account) (*Registry, error) {
 		if _, dup := rg.byID[a.ID]; dup {
 			return nil, errors.New("duplicate account id " + a.ID)
 		}
-		if _, dup := rg.byKey[a.APIKey]; dup {
-			return nil, errors.New("duplicate api key for account " + a.ID)
-		}
 		rg.byID[a.ID] = a
-		rg.byKey[a.APIKey] = a
+		rg.addToPoolLocked(a)
 	}
 	return rg, nil
 }
@@ -152,8 +189,8 @@ func (rg *Registry) Get(id string) *Account {
 	return rg.byID[id]
 }
 
-// Add registers a new account. It fails if the id or api key is already taken,
-// or when called on a legacy single-account registry.
+// Add registers a new account. Accounts may share an API key; shared keys form
+// a GitHub account pool that is selected per request.
 func (rg *Registry) Add(a *Account) error {
 	if a == nil || a.ID == "" {
 		return errors.New("account id is required")
@@ -169,11 +206,8 @@ func (rg *Registry) Add(a *Account) error {
 	if _, dup := rg.byID[a.ID]; dup {
 		return errors.New("account id already exists: " + a.ID)
 	}
-	if _, dup := rg.byKey[a.APIKey]; dup {
-		return errors.New("api key already in use")
-	}
 	rg.byID[a.ID] = a
-	rg.byKey[a.APIKey] = a
+	rg.addToPoolLocked(a)
 	return nil
 }
 
@@ -187,11 +221,13 @@ func (rg *Registry) Remove(id string) (*Account, error) {
 		return nil, errors.New("account not found: " + id)
 	}
 	delete(rg.byID, id)
-	delete(rg.byKey, a.APIKey)
+	rg.removeFromPoolLocked(a)
 	return a, nil
 }
 
-// UpdateKey changes an account's API key, keeping the key index consistent.
+// UpdateKey changes an account's API key, keeping the account-pool index
+// consistent. The new key may already be used by other accounts, in which case
+// this account joins that pool.
 func (rg *Registry) UpdateKey(id, newKey string) error {
 	if newKey == "" {
 		return errors.New("api key is required")
@@ -205,12 +241,9 @@ func (rg *Registry) UpdateKey(id, newKey string) error {
 	if a.APIKey == newKey {
 		return nil
 	}
-	if other, dup := rg.byKey[newKey]; dup && other.ID != id {
-		return errors.New("api key already in use")
-	}
-	delete(rg.byKey, a.APIKey)
+	rg.removeFromPoolLocked(a)
 	a.APIKey = newKey
-	rg.byKey[newKey] = a
+	rg.addToPoolLocked(a)
 	return nil
 }
 
@@ -226,12 +259,9 @@ func (rg *Registry) Replace(a *Account) error {
 	if !ok {
 		return errors.New("account not found: " + a.ID)
 	}
-	if other, dup := rg.byKey[a.APIKey]; dup && other.ID != a.ID {
-		return errors.New("api key already in use")
-	}
-	delete(rg.byKey, old.APIKey)
+	rg.removeFromPoolLocked(old)
 	rg.byID[a.ID] = a
-	rg.byKey[a.APIKey] = a
+	rg.addToPoolLocked(a)
 	return nil
 }
 
@@ -244,13 +274,34 @@ func (rg *Registry) Resolve(r *http.Request) (*Account, error) {
 	if key == "" {
 		return nil, ErrMissingKey
 	}
-	rg.mu.RLock()
-	a, ok := rg.byKey[key]
-	rg.mu.RUnlock()
-	if !ok {
+	rg.mu.Lock()
+	pool := rg.byKey[key]
+	a := pool.pick(ExtractSessionKey(r))
+	rg.mu.Unlock()
+	if a == nil {
 		return nil, ErrUnknownKey
 	}
 	return a, nil
+}
+
+func (rg *Registry) addToPoolLocked(a *Account) {
+	pool := rg.byKey[a.APIKey]
+	if pool == nil {
+		pool = &accountPool{}
+		rg.byKey[a.APIKey] = pool
+	}
+	pool.add(a)
+}
+
+func (rg *Registry) removeFromPoolLocked(a *Account) {
+	pool := rg.byKey[a.APIKey]
+	if pool == nil {
+		return
+	}
+	pool.remove(a.ID)
+	if len(pool.accounts) == 0 {
+		delete(rg.byKey, a.APIKey)
+	}
 }
 
 // Handler returns an http.Handler that resolves the account from the request's
@@ -292,6 +343,21 @@ func ExtractAPIKey(r *http.Request) string {
 	}
 	if k := r.URL.Query().Get("key"); k != "" {
 		return strings.TrimSpace(k)
+	}
+	return ""
+}
+
+// ExtractSessionKey returns an optional caller-provided affinity key. When
+// several GitHub accounts share the same API key, requests with the same
+// session key are routed to the same account instead of round-robined.
+func ExtractSessionKey(r *http.Request) string {
+	for _, name := range []string{"X-Copilot2API-Session", "X-Session-ID"} {
+		if v := strings.TrimSpace(r.Header.Get(name)); v != "" {
+			return v
+		}
+	}
+	if v := strings.TrimSpace(r.URL.Query().Get("session_id")); v != "" {
+		return v
 	}
 	return ""
 }

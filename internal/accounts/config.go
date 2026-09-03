@@ -70,7 +70,6 @@ func LoadConfig(path string) (*Config, error) {
 
 func (c *Config) validate() error {
 	seenID := make(map[string]struct{}, len(c.Accounts))
-	seenKey := make(map[string]struct{}, len(c.Accounts))
 	for i := range c.Accounts {
 		a := &c.Accounts[i]
 		if a.ID == "" {
@@ -82,14 +81,10 @@ func (c *Config) validate() error {
 		if _, dup := seenID[a.ID]; dup {
 			return fmt.Errorf("duplicate account id %q", a.ID)
 		}
-		if _, dup := seenKey[a.APIKey]; dup {
-			return fmt.Errorf("duplicate api_key for account %q", a.ID)
-		}
 		if _, err := auth.ParseMode(a.AuthMode); err != nil {
 			return fmt.Errorf("account %q: %w", a.ID, err)
 		}
 		seenID[a.ID] = struct{}{}
-		seenKey[a.APIKey] = struct{}{}
 	}
 	return nil
 }

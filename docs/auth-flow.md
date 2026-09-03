@@ -23,7 +23,7 @@ flowchart LR
 
 | Key / field | Purpose |
 |-------------|---------|
-| `accounts.json` (`id`, `api_key`, `token_dir`, `auth_mode`) | Per-account API key ↔ GitHub account mapping |
+| `accounts.json` (`id`, `api_key`, `token_dir`, `auth_mode`) | Per-account API key to GitHub account mapping; repeated keys form account pools |
 | `COPILOT2API_ACCOUNTS_FILE` | Path to `accounts.json` (default `<token-dir>/accounts.json`) |
 | `COPILOT2API_AUTH_MODE` | Global default auth mode (`exchange` / `direct`) when an account omits it |
 | `COPILOT2API_ADMIN_TOKEN` | Protects the `/admin/` UI and API when set |
@@ -103,10 +103,10 @@ sequenceDiagram
     participant U as upstream.Client
     participant CP as Copilot API
     C->>R: Request + API key (Bearer / x-api-key / x-goog-api-key / ?key)
-    R->>R: ExtractAPIKey → look up account
+    R->>R: ExtractAPIKey → look up account or pooled account
     alt key missing / unknown
         R-->>C: 401 (protocol-specific error body)
-    else account matched
+    else account or pool matched
         R->>H: Dispatch to account handler (attach stats recorder)
         H->>U: Do(ctx, request)
         U->>U: GetToken() → GetValidToken()

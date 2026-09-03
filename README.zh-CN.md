@@ -15,7 +15,7 @@
 - **兼容 AmpCode**：`/amp/v1/*` 路由用于对话，`/api/provider/*` 用于特定 provider 的调用，管理类请求反向代理到 `ampcode.com`
 - **流式支持**：OpenAI 与 Anthropic 格式均支持完整的 SSE 流式输出
 - **Anthropic 智能路由**：模型原生支持时使用 `/v1/messages`，否则通过 `/responses` 或 `/chat/completions` 转发。原生路径会透传高级字段，如 `context_management`（body 含该字段时自动补加 `context-management-2025-06-27` 与 `compact-2026-01-12` beta 头）与 `search_result` 内容块。代理始终向上游发送 `interleaved-thinking-2025-05-14`，并仅转发客户端以 `computer-use-` 开头的 `anthropic-beta` token；其余客户端 beta token 仍会被过滤。
-- **多账号支持**：将 API Key 与 GitHub 账号一对一映射，各账号使用独立的凭据存储（详见 [多 GitHub 账号](#多-github-账号)）
+- **多账号账户池**：将 API Key 映射到一个或多个 GitHub 账号，各账号使用独立凭据存储，并支持轮询池化与可选会话亲和（详见 [多 GitHub 账号](#多-github-账号)）
 - **Web 管理界面**：在 `/admin/` 管理账号并查看 Token 使用统计（多账号模式）
 - **自动认证**：GitHub Device Flow OAuth，自动刷新 Token（详见 [认证流程](docs/auth-flow.zh-CN.md)）
 - **用量监控**：内置 `/usage` 端点用于配额追踪
@@ -77,30 +77,33 @@ docker compose up --build
 
 ## 多 GitHub 账号
 
-代理始终以多账号模式运行，通过 Token 目录下的 `accounts.json` 文件（默认 `~/.config/copilot2api/accounts.json`，或通过 `COPILOT2API_ACCOUNTS_FILE` 指定）将 API Key 与 GitHub 账号一对一映射。**若该文件不存在，首次启动时会自动创建为空配置**（`{"accounts": []}`），因此管理界面开箱即用 —— 直接在界面中新增并认证账号即可（参见 [管理界面](#管理界面)）。
+代理始终以多账号模式运行，通过 Token 目录下的 `accounts.json` 文件（默认 `~/.config/copilot2api/accounts.json`，或通过 `COPILOT2API_ACCOUNTS_FILE` 指定）将 API Key 映射到 GitHub 账号。**若该文件不存在，首次启动时会自动创建为空配置**（`{"accounts": []}`），因此管理界面开箱即用 —— 直接在界面中新增并认证账号即可（参见 [管理界面](#管理界面)）。
 
 你也可以手动编辑 `accounts.json`：
 
 ```json
 {
   "accounts": [
-    { "id": "alice", "api_key": "sk-alice-...", "token_dir": "alice" },
-    { "id": "bob",   "api_key": "sk-bob-...",   "token_dir": "bob" }
+    { "id": "alice", "api_key": "sk-pool-...", "token_dir": "alice" },
+    { "id": "bob",   "api_key": "sk-pool-...", "token_dir": "bob" },
+    { "id": "carol", "api_key": "sk-carol-...", "token_dir": "carol" }
   ]
 }
 ```
 
 - `id` —— 唯一的账号标识（用于日志；默认作为 Token 子目录名）。
-- `api_key` —— 客户端需提供的 Key，各账号之间必须唯一。
+- `api_key` —— 客户端需提供的 Key。多个账号复用同一个 Key 时，会组成一个 GitHub 账户池。
 - `token_dir` —— 该账号 `credentials.json` 的存放位置。相对路径基于基础 Token 目录解析；默认为 `id`。
 
 启动时，代理会对每个尚无存储 Token 的账号**逐个**执行一次 GitHub Device Flow。每个账号拥有独立的凭据存储与模型缓存，因此 Token 刷新与基于能力的路由相互独立。
 
-客户端通过发送对应的 `api_key` 选择账号：
+客户端通过发送对应的 `api_key` 选择账号或账户池：
 
 - OpenAI：`Authorization: Bearer <api_key>`
 - Anthropic：`x-api-key: <api_key>`
 - Gemini：`x-goog-api-key: <api_key>` 或 `?key=<api_key>`
+
+当多个账号共享同一个 API Key 时，请求会在池内轮询分发。若需要让同一段会话稳定落到同一个 GitHub 账号，请发送稳定的 `X-Copilot2API-Session` 或 `X-Session-ID` 请求头，也可使用 `?session_id=` 查询参数；相同 session 值会一致路由到同一个池内账号。
 
 请求**必须**携带有效的 Key，否则返回 `401 Unauthorized`。在尚未配置任何账号之前（例如通过管理界面添加），所有请求都会被拒绝并返回 `401`。
 
@@ -109,7 +112,7 @@ docker compose up --build
 代理会在 **`http://127.0.0.1:7777/admin/`** 提供一个 Web 界面，无需手动编辑 `accounts.json` 即可维护映射：
 
 - 列出账号及其认证状态。
-- 新增账号（id + API Key + 可选 token 目录），并通过浏览器驱动的 GitHub Device Flow 完成认证（显示验证码与验证链接，并轮询直到完成）。
+- 新增账号（id + API Key + 可选 token 目录），并通过浏览器驱动的 GitHub Device Flow 完成认证（显示验证码与验证链接，并轮询直到完成）。新增账号时复用已有 API Key 即可加入该 Key 的账户池。
 - 轮换账号的 API Key，或删除账号。
 - **Stats 标签页**：查看按账号、按模型的 Token 用量 —— 输入、输出、缓存命中（prompt-cache）、缓存写入以及请求总数 —— 覆盖所有 OpenAI、Anthropic、Gemini 端点。用量数据持久化到 `<token-dir>/stats.json`，重启后仍保留（由 `GET /admin/api/stats` 提供，`DELETE /admin/api/stats/{id}` 可重置单个账号）。
 

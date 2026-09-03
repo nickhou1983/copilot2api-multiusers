@@ -6,6 +6,7 @@
 
 ### 新特性
 
+- 允许多个 GitHub 账号共享同一个 API Key，组成账户池。未携带亲和标识的请求会在池内轮询分发；携带 `X-Copilot2API-Session`、`X-Session-ID` 或 `?session_id=` 的请求会使用稳定会话亲和，确保同一会话持续使用同一个池内 GitHub 账号。
 - 原生 `/v1/messages` 流式响应在长推理静默期保持连接存活:当上游持续 `COPILOT2API_SSE_KEEPALIVE_SECONDS` 秒(默认 `15`,设为 `0` 关闭)不发送任何字节时,代理会注入 Anthropic `ping` 事件(`event: ping` / `data: {"type": "ping"}`),避免空闲 SSE 连接被 NAT、CDN、网关或负载均衡器驱逐。ping 只会在 SSE 事件边界注入,因此剔除 ping 后转发的流与上游逐字节一致;符合规范的 Anthropic 客户端会直接丢弃 ping,不会影响消息累加。
 - 为原生 `/v1/messages` 流式响应增加上游静默上限：当上游持续 `COPILOT2API_SSE_MAX_IDLE_SECONDS` 秒（默认 `600`，设为 `0` 关闭）不发送任何字节时，以终止性的 Anthropic `error` 事件中止该流，而非让保活 ping 无限维持连接。上游卡死时可及时释放客户端与上游连接；无论保活是否开启，该上限均生效。
 - 所有 SSE 响应新增 `X-Accel-Buffering: no` 响应头。nginx 默认开启 `proxy_buffering`，会缓冲被代理的响应，导致逐帧 flush 的事件（包括保活 ping）要等到缓冲区写满或流结束才下发。部署在 nginx 及兼容反向代理之后无需额外配置即可正常流式输出；不识别该头的代理会直接忽略。
@@ -14,9 +15,9 @@
 - 原生 `/v1/messages`（及 count_tokens）自动注入 context-management beta：当请求 body 顶层含 `context_management` 字段时，代理在出站 `anthropic-beta` 头中追加 `context-management-2025-06-27` 与 `compact-2026-01-12`（与基础的 `interleaved-thinking-2025-05-14` 并列），客户端无需自带 beta 头即可使用上下文编辑与服务端压缩。
 - 新增原生 Anthropic Token 计数端点：`POST /v1/messages/count_tokens` 现已转发到上游 Copilot 的 Token 计数接口（此前返回 `404`）。请求会与 `/v1/messages` 一样做模型别名解析与 `cache_control.scope` 剥离，并原样返回上游的 `{ "input_tokens": N }` 响应。
 - 在原生 `/v1/messages` 请求上透传 `context_management` 而非剥离它：当请求体包含 `context_management` 字段时，代理会在发往上游的请求体中保留该字段。
-- 新增多账号支持：通过 `accounts.json` 配置文件把 API Key 与 GitHub 账号 1:1 映射。每个账号使用独立的凭证存储与各自的模型缓存，因此 Token 刷新与基于能力的路由都按账号隔离。可用 `COPILOT2API_ACCOUNTS_FILE` 配置文件路径（默认为 `<token-dir>/accounts.json`）。
+- 新增多账号支持：通过 `accounts.json` 配置文件把 API Key 映射到 GitHub 账号。每个账号使用独立的凭证存储与各自的模型缓存，因此 Token 刷新与基于能力的路由都按账号隔离。可用 `COPILOT2API_ACCOUNTS_FILE` 配置文件路径（默认为 `<token-dir>/accounts.json`）。
 - API Key 从 `Authorization: Bearer`、`x-api-key`、`x-goog-api-key` 或 `?key=` 查询参数中提取，覆盖 OpenAI、Anthropic 与 Gemini 客户端。
-- 新增 `/admin/` Web 管理界面（仅多账号模式）用于维护 API Key ↔ GitHub 账号映射：列出、新增、轮换 Key、删除账号，并支持通过浏览器驱动的 GitHub Device Flow 认证账号。改动会保存到 `accounts.json` 并实时生效、无需重启。可选用 `COPILOT2API_ADMIN_TOKEN`（以 `X-Admin-Token` 头或 `?admin_token=` 传入）加以保护。
+- 新增 `/admin/` Web 管理界面（仅多账号模式）用于维护 API Key、GitHub 账号与共享 Key 账户池：列出、新增、轮换 Key、删除账号，并支持通过浏览器驱动的 GitHub Device Flow 认证账号。改动会保存到 `accounts.json` 并实时生效、无需重启。可选用 `COPILOT2API_ADMIN_TOKEN`（以 `X-Admin-Token` 头或 `?admin_token=` 传入）加以保护。
 - 支持从空的 `accounts.json`（`{"accounts":[]}`）引导多账号模式，并完全通过管理界面填充。
 - 在管理界面新增 Token 用量统计页（新增「Stats」标签页），按账号、按模型展示 Token 计数 —— 输入、输出、缓存命中（prompt-cache）、缓存写入以及请求总数 —— 覆盖所有 OpenAI、Anthropic 与 Gemini 端点。用量持久化到 `<token-dir>/stats.json`，重启后仍保留。由新增的 `GET /admin/api/stats` 端点提供，`DELETE /admin/api/stats/{id}` 可重置单个账号。注意：OpenAI Chat Completions 流式仅在客户端发送 `stream_options.include_usage` 时才计入 Token 数；但请求本身始终计数。
 - 在管理界面新增上游模型页（新增「Models」标签页），按所选账号列出 GitHub Copilot 上游支持的模型 —— 模型 ID、厂商、版本、上下文窗口、最大输出 Token 数、支持的端点，以及 preview/picker 标记。由新增的 `GET /admin/api/accounts/{id}/models` 端点提供，返回该账号缓存的上游 `/models` 响应。
@@ -51,7 +52,7 @@
 - 将独立 quick-start deck 重命名为「访问 GitHub 模型注意事项」，并同步调整封面摘要与元数据，使其与 7 页部署和接入范围一致。
 - 将 `docs/copilot-capability-report.html` 从滚动长页报告重新设计为 18 页 16:9 HTML 幻灯片（支持键盘 / 滚轮 / 触摸翻页、打印导出 PDF、页内文本编辑）；报告内容全部保留。
 - 在 `docs/copilot-capability-report.html` 新增 Prompt Cache 命中率页（§03.5），汇总 2026-09-02 的专项实测：`direct` 模式、端点仅 `/v1/messages`、4 个模型全部走 native 路由（204/204 请求成功，无错误）。横向对比 `claude-sonnet-5`、`claude-sonnet-4.6`、`claude-opus-4.8`、`claude-opus-5` 在八个维度的表现：静态重放稳态命中率（99.7–99.8%）、多轮追加命中率（97.7–98.7%）、thinking+tools 多轮命中率（第三轮降至 87.4–92.2%）、最小可缓存前缀、尾部改动失效、流式与非流式一致性，以及两种 TTL 模式。三条结论对线上有直接影响：前缀低于 ~1024 token 时 `cache_control` 会被静默忽略（不报错、按 input 全价计费、命中率恒为 0），`claude-opus-5` 是唯一例外（~950 token 即可命中）；默认 `ephemeral` 的实际存活期短于标称 5 分钟（5–6.3 分钟区间实测 100% miss），跨分钟级复用必须显式声明 `ttl:"1h"`；尾部任何改动都会让命中率直接归零，而非部分失效。
-- 新增 `docs/copilot-claude-enterprise-guide.html` —— 9 页 16:9 独立 HTML 实施指南（与 quick-start deck 同款 TD 档案风格、翻页交互与可打印 PDF 导出），讲解企业内部通过 GitHub Copilot 提供 Claude 模型的三段式链路：（1）创建 GitHub 企业与 Enterprise Team、使用 Copilot Business；少量账户时建议用户自行注册 GitHub 个人账户、由 GitHub 管理员邀请加入企业并分配许可，多账户管理时建议集成 Azure Entra ID 并配置 SSO / SCIM；在模型策略中放行 Claude 模型，账户数按峰值并发测算，额度则按用户 / 成本中心配置 **AI Credits 预算**与告警阈值 —— AI Credits 在计费实体层级共享池化，扩额度要靠预算而不是多开账户；（2）以 Copilot2API 为参考实现部署反向代理，Claude 统一走 Anthropic 原生 `/v1/messages` 端点（OpenAI / Gemini 兼容层会丢 thinking signature 与 `cache_control`，页面中明确标注「不用于 Claude」），并给出「企业需自行开发」对照表 —— 开源代理仅作起点，多账户支持、用量记录、负载均衡、会话保持与故障转移五项均需企业自研；另附账户、用量、均衡、粘性四件套的设计要点；（3）沿用 quick-start 的两类消费场景 —— 开发者严格 1:1 绑定 Key 与账户并统一指向 `/v1/messages`，应用侧走账户池但必须维持 Session 与账户的稳定绑定，且仅对新 Session 做健康度与额度感知的选池。末尾附落地顺序清单、运维红线与关键环境变量。
+- 新增 `docs/copilot-claude-enterprise-guide.html` —— 9 页 16:9 独立 HTML 实施指南（与 quick-start deck 同款 TD 档案风格、翻页交互与可打印 PDF 导出），讲解企业内部通过 GitHub Copilot 提供 Claude 模型的三段式链路：（1）创建 GitHub 企业与 Enterprise Team、使用 Copilot Business；少量账户时建议用户自行注册 GitHub 个人账户、由 GitHub 管理员邀请加入企业并分配许可，多账户管理时建议集成 Azure Entra ID 并配置 SSO / SCIM；在模型策略中放行 Claude 模型，账户数按峰值并发测算，额度则按用户 / 成本中心配置 **AI Credits 预算**与告警阈值 —— AI Credits 在计费实体层级共享池化，扩额度要靠预算而不是多开账户；（2）以 Copilot2API 为参考实现部署反向代理，Claude 统一走 Anthropic 原生 `/v1/messages` 端点（OpenAI / Gemini 兼容层会丢 thinking signature 与 `cache_control`，页面中明确标注「不用于 Claude」），并给出「企业需自行开发」对照表 —— 开源代理仅作起点，已内建基础多账户池、用量记录与显式会话粘性，企业仍需自研健康感知负载、集中用量账本、自动摘除与故障转移；另附账户、用量、均衡、粘性四件套的设计要点；（3）沿用 quick-start 的两类消费场景 —— 开发者走独立 Key 并统一指向 `/v1/messages`，应用侧走账户池但必须维持 Session 与账户的稳定绑定，且仅对新 Session 做健康度与额度感知的选池。末尾附落地顺序清单、运维红线与关键环境变量。
 - 在 `README.md` 与 `README.zh-CN.md` 中记录 `/v1/messages/count_tokens` 端点及原生透传字段（`context_management`、`search_result`）（Features 列表与 API 端点表）。
 - 在 README 中记录多账号、管理界面与 Token 用量统计，并新增简体中文翻译（`README.zh-CN.md`、`CHANGELOG.zh-CN.md`）及语言切换链接。
 - 新增 `scripts/capability-request-response-guide.md` —— 一份基于全量矩阵实测生成的中文学习指南：逐条列出每个能力用例的作用说明、实际发送的请求（端点、beta 头、JSON 请求体）与观测到的响应（解析后的 JSON，流式用例为 SSE 事件样本），并在代理与直连上游行为不同处单独标注。

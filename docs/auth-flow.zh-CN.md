@@ -22,7 +22,7 @@ flowchart LR
 
 | 键 / 字段 | 作用 |
 |-----------|------|
-| `accounts.json`(`id`、`api_key`、`token_dir`、`auth_mode`) | 按账号的 API Key ↔ GitHub 账号映射 |
+| `accounts.json`(`id`、`api_key`、`token_dir`、`auth_mode`) | 按账号配置 API Key 到 GitHub 账号的映射；重复 Key 会组成账户池 |
 | `COPILOT2API_ACCOUNTS_FILE` | `accounts.json` 路径(默认 `<token-dir>/accounts.json`) |
 | `COPILOT2API_AUTH_MODE` | 账号未指定时的全局默认认证模式(`exchange` / `direct`) |
 | `COPILOT2API_ADMIN_TOKEN` | 设置后保护 `/admin/` 界面与 API |
@@ -98,10 +98,10 @@ sequenceDiagram
     participant U as upstream.Client
     participant CP as Copilot API
     C->>R: 请求 + API Key (Bearer / x-api-key / x-goog-api-key / ?key)
-    R->>R: ExtractAPIKey → 查找账号
+    R->>R: ExtractAPIKey → 查找账号或池内账号
     alt key 缺失 / 未知
         R-->>C: 401(按协议返回错误体)
-    else 命中账号
+    else 命中账号或账户池
         R->>H: 分发到账号 handler(挂载 stats recorder)
         H->>U: Do(ctx, request)
         U->>U: GetToken() → GetValidToken()

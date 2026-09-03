@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>copilot2api · Accounts</title>
+<title>copilot2api · Account Pools</title>
 <style>
   :root {
     --bg: #0f1115; --panel: #181b22; --border: #2a2f3a; --text: #e6e8eb;
@@ -73,8 +73,8 @@
 </head>
 <body>
 <header>
-  <h1>copilot2api · API Key ↔ GitHub Account</h1>
-  <p>Maintain the mapping between API keys and GitHub accounts. Changes are saved to <code>accounts.json</code> and applied live.</p>
+  <h1>copilot2api · API Key ↔ GitHub Account Pools</h1>
+  <p>Maintain GitHub accounts and optional shared-key pools. Accounts with the same API key are load-balanced automatically. Changes are saved to <code>accounts.json</code> and applied live.</p>
 </header>
 <nav class="tabs">
   <button id="tab-accounts" class="active" data-view="accounts">Accounts</button>
@@ -87,7 +87,7 @@
     <h2>Add account</h2>
     <div class="row">
       <div class="field"><label>Account ID</label><input id="new-id" placeholder="alice" /></div>
-      <div class="field"><label>API Key (auto-generated if empty)</label><div style="display:flex;gap:6px"><input id="new-key" placeholder="sk-..." /><button class="ghost" id="gen-key-btn" type="button">Generate</button></div></div>
+      <div class="field"><label>API Key (reuse to join a pool; auto-generated if empty)</label><div style="display:flex;gap:6px"><input id="new-key" placeholder="sk-..." /><button class="ghost" id="gen-key-btn" type="button">Generate</button></div></div>
       <div class="field"><label>Token dir (optional)</label><input id="new-dir" placeholder="defaults to ID" /></div>
       <div class="field"><label>Auth mode</label><select id="new-mode"><option value="">exchange (default)</option><option value="direct">direct</option></select></div>
       <button id="add-btn">Add</button>

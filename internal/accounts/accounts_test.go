@@ -147,12 +147,56 @@ func TestRegistryRejectsUnknownAndMissingKey(t *testing.T) {
 }
 
 func TestRegistryDuplicateKey(t *testing.T) {
-	_, err := NewRegistry([]*Account{
+	reg, err := NewRegistry([]*Account{
 		newTestAccount("alice", "dup"),
 		newTestAccount("bob", "dup"),
 	})
-	if err == nil {
-		t.Fatal("expected error for duplicate api key")
+	if err != nil {
+		t.Fatalf("NewRegistry duplicate key pool: %v", err)
+	}
+
+	r := httptest.NewRequest(http.MethodPost, "/", nil)
+	r.Header.Set("Authorization", "Bearer dup")
+	w := httptest.NewRecorder()
+	reg.Handler(ProtoOpenAI).ServeHTTP(w, r)
+	if w.Code != http.StatusOK {
+		t.Fatalf("pooled key status = %d", w.Code)
+	}
+	if got := w.Body.String(); got != "alice:openai" {
+		t.Fatalf("first pooled request = %q, want alice:openai", got)
+	}
+
+	w = httptest.NewRecorder()
+	reg.Handler(ProtoOpenAI).ServeHTTP(w, r)
+	if got := w.Body.String(); got != "bob:openai" {
+		t.Fatalf("second pooled request = %q, want bob:openai", got)
+	}
+}
+
+func TestRegistrySessionAffinityForPooledKey(t *testing.T) {
+	reg, err := NewRegistry([]*Account{
+		newTestAccount("alice", "pool"),
+		newTestAccount("bob", "pool"),
+		newTestAccount("carol", "pool"),
+	})
+	if err != nil {
+		t.Fatalf("NewRegistry: %v", err)
+	}
+
+	r := httptest.NewRequest(http.MethodPost, "/?session_id=session-a", nil)
+	r.Header.Set("Authorization", "Bearer pool")
+	first, err := reg.Resolve(r)
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	for i := 0; i < 10; i++ {
+		got, err := reg.Resolve(r)
+		if err != nil {
+			t.Fatalf("Resolve repeat: %v", err)
+		}
+		if got.ID != first.ID {
+			t.Fatalf("sticky resolve changed from %q to %q", first.ID, got.ID)
+		}
 	}
 }
 
@@ -216,10 +260,9 @@ func TestLoadConfigValid(t *testing.T) {
 func TestLoadConfigInvalid(t *testing.T) {
 	dir := t.TempDir()
 	cases := map[string]string{
-		"missing id":    `{"accounts":[{"api_key":"k"}]}`,
-		"missing key":   `{"accounts":[{"id":"a"}]}`,
-		"duplicate id":  `{"accounts":[{"id":"a","api_key":"k1"},{"id":"a","api_key":"k2"}]}`,
-		"duplicate key": `{"accounts":[{"id":"a","api_key":"k"},{"id":"b","api_key":"k"}]}`,
+		"missing id":   `{"accounts":[{"api_key":"k"}]}`,
+		"missing key":  `{"accounts":[{"id":"a"}]}`,
+		"duplicate id": `{"accounts":[{"id":"a","api_key":"k1"},{"id":"a","api_key":"k2"}]}`,
 	}
 	for name, content := range cases {
 		t.Run(name, func(t *testing.T) {

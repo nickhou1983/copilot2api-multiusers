@@ -21,8 +21,9 @@ var adminIndexHTML []byte
 // so newly added accounts can be created before the user authorizes them.
 type AccountFactory func(cfg AccountConfig) (*Account, error)
 
-// Manager exposes an HTTP admin API + UI to maintain the API key ↔ GitHub
-// account mapping. It keeps the live Registry and accounts.json in sync.
+// Manager exposes an HTTP admin API + UI to maintain API key mappings and
+// shared-key GitHub account pools. It keeps the live Registry and accounts.json
+// in sync.
 type Manager struct {
 	mu         sync.Mutex
 	reg        *Registry

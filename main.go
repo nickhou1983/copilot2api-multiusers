@@ -125,7 +125,7 @@ func main() {
 	mux.Handle("/v1beta/models/", geminiHandler)
 	mux.Handle("/usage", usageHandler)
 
-	// Admin UI for maintaining the API key ↔ GitHub account mapping (multi-account mode only).
+	// Admin UI for maintaining API key mappings and shared-key account pools.
 	if adminManager != nil {
 		mux.Handle("/admin/", adminManager.Handler())
 		mux.HandleFunc("/admin", func(w http.ResponseWriter, r *http.Request) {

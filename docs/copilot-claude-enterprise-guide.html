@@ -491,8 +491,8 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
         <div class="rm-d">以 Copilot2API 为例，把 Copilot 上游收敛成一个 Anthropic 原生 <code>/v1/messages</code> 端点。</div>
         <ul class="guide-list">
           <li>统一 <strong>/v1/messages</strong> 原生端点</li>
-          <li>开箱即有：<strong>协议转换 · 单账户直连</strong></li>
-          <li>需自研：<strong>多账户 · 用量 · 均衡 · 粘性</strong></li>
+          <li>开箱即有：<strong>协议转换 · 多账户池 · 用量统计 · 显式粘性</strong></li>
+          <li>需自研：<strong>健康感知均衡 · 集中账本 · 故障转移</strong></li>
         </ul>
       </article>
       <div class="rm-wire">Unified API</div>
@@ -742,7 +742,7 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
         <h2>开源代理给到哪一步，企业还要补什么</h2>
       </div>
     </div>
-    <p class="sec-lede reveal">Copilot2API 的设计前提是「<strong>一个 Key 固定对应一个账户</strong>」，它给到的是一个<strong>可用的起点</strong>而非企业级底座：账户是静态配置、用量是单机文件，更不存在账户池、负载均衡与 Session 概念。<strong>多账户、用量记录、负载均衡、会话保持、故障转移这五项都要企业自研</strong>——补的是调度与治理层，不是重写协议层。</p>
+    <p class="sec-lede reveal">Copilot2API 给到的是一个<strong>可用的起点</strong>而非企业级底座：账户仍是静态配置，用量是单机文件；基础账户池支持同一 API Key 下的轮询分发与显式 Session 粘性，但<strong>健康感知负载、集中用量账本、自动摘除与故障转移仍要企业自研</strong>——补的是调度与治理层，不是重写协议层。</p>
     <div class="panel reveal">
       <table>
         <thead>
@@ -751,8 +751,8 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
         <tbody>
           <tr>
             <td><strong>多账户支持</strong></td>
-            <td><span class="badge no">✕ 需自研</span></td>
-            <td><code>accounts.json</code> 静态映射 API Key 与 GitHub 账户，一对一、手工维护；每账户独立凭据与模型缓存。</td>
+            <td><span class="badge ok">✓ 基础内建</span></td>
+            <td><code>accounts.json</code> 静态映射 API Key 与 GitHub 账户；多个账户复用同一 Key 时组成池；每账户独立凭据与模型缓存。</td>
             <td>与企业身份系统（SSO/IAM）打通；<strong>账户注册表与生命周期</strong>；Key 的批量下发、自动轮换与吊销；账户健康探活与自动摘除。</td>
           </tr>
           <tr>
@@ -763,15 +763,15 @@ body.editing [contenteditable="true"] { outline: 1.5px dashed var(--orange); out
           </tr>
           <tr>
             <td><strong>负载均衡</strong></td>
-            <td><span class="badge no">✕ 需自研</span></td>
-            <td>无账户池概念：一个 API Key 只会命中它绑定的那一个 GitHub 账户，不会在多个账户间分发。</td>
-            <td><strong>账户池 + 调度器</strong>：基于健康度、在途并发、剩余额度与缓存亲和的加权选择；避免无状态轮询打散上下文。</td>
+            <td><span class="badge warn">△ 基础内建</span></td>
+            <td>同一 API Key 可绑定多个 GitHub 账户；未携带 Session 亲和标识时按池内轮询分发。</td>
+            <td><strong>健康感知调度器</strong>：基于健康度、在途并发、剩余额度与缓存亲和的加权选择；避免单纯轮询打散上下文。</td>
           </tr>
           <tr>
             <td><strong>会话保持</strong></td>
-            <td><span class="badge no">✕ 需自研</span></td>
-            <td>代理是无状态转发，不维护 Session 与账户的绑定关系。</td>
-            <td><strong>Session → 账户</strong>粘性映射与 TTL；粘性失效后的迁移策略；保持 prompt cache 亲和以免缓存命中率归零。</td>
+            <td><span class="badge warn">△ 基础内建</span></td>
+            <td>请求携带 <code>X-Copilot2API-Session</code>、<code>X-Session-ID</code> 或 <code>?session_id=</code> 时，会稳定路由到同一个池内账户。</td>
+            <td><strong>Session → 账户</strong>生命周期与 TTL；粘性失效后的迁移策略；保持 prompt cache 亲和以免缓存命中率归零。</td>
           </tr>
           <tr>
             <td><strong>故障转移</strong></td>
