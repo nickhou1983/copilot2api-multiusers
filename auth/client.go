@@ -257,8 +257,8 @@ type UsageInfo struct {
 	Individual           bool        `json:"individual"`
 	LimitedUserQuotas    interface{} `json:"limited_user_quotas"`
 	LimitedUserResetDate interface{} `json:"limited_user_reset_date"`
-	EnterpriseList       []int       `json:"enterprise_list,omitempty"`
-	OrganizationList     []string    `json:"organization_list,omitempty"`
+	EnterpriseList       interface{} `json:"enterprise_list,omitempty"`
+	OrganizationList     interface{} `json:"organization_list,omitempty"`
 
 	// Fields returned by copilot_internal/user in direct mode.
 	CopilotPlan       string                 `json:"copilot_plan,omitempty"`
@@ -291,8 +291,8 @@ func (u UsageInfo) MarshalJSON() ([]byte, error) {
 		Individual           bool        `json:"individual"`
 		LimitedUserQuotas    interface{} `json:"limited_user_quotas"`
 		LimitedUserResetDate interface{} `json:"limited_user_reset_date"`
-		EnterpriseList       []int       `json:"enterprise_list,omitempty"`
-		OrganizationList     []string    `json:"organization_list,omitempty"`
+		EnterpriseList       interface{} `json:"enterprise_list,omitempty"`
+		OrganizationList     interface{} `json:"organization_list,omitempty"`
 	}{
 		SKU:                  u.SKU,
 		Individual:           u.Individual,

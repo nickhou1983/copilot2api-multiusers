@@ -22,9 +22,11 @@
 - 在管理界面新增上游模型页（新增「Models」标签页），按所选账号列出 GitHub Copilot 上游支持的模型 —— 模型 ID、厂商、版本、上下文窗口、最大输出 Token 数、支持的端点，以及 preview/picker 标记。由新增的 `GET /admin/api/accounts/{id}/models` 端点提供，返回该账号缓存的上游 `/models` 响应。
 - 在管理界面 Models 标签页新增手动更新模型列表功能：新增「Update from upstream」按钮，强制绕过缓存 TTL 从上游重新拉取 `/models` 响应，并替换该账号用于能力路由的模型缓存。由新增的 `POST /admin/api/accounts/{id}/models/refresh` 端点提供。原有「Refresh」按钮仍为重新读取缓存列表。
 - 在管理界面 Stats 标签页新增「Cache hit」列，按模型与账号合计展示提示词缓存命中率，计算公式为 cached / (input + cached + cache write)（基于输入侧 Token）。无输入 Token 记录时显示"—"。
+- 在管理界面 Accounts 标签页新增 Credits 列，按已认证账号展示 GitHub Copilot Premium Interactions 的已用额度、剩余额度、总额度和百分比；由新增的 `GET /admin/api/accounts/{id}/usage` 端点获取，查询失败时显示错误状态。
 
 ### Bug 修复
 
+- 修复 GitHub Copilot 上游将 `organization_list` / `enterprise_list` 返回为对象数组时，`/usage` 与 Admin Credits 查询因严格数组类型解析失败的问题；现在兼容上游的可变列表结构。
 - 修复原生 `/v1/messages` 流式响应把 HTTP 响应头扣留到上游首字节到达的问题。现在上游流建立后会立即 flush 响应头(含 `Content-Type: text/event-stream`),长推理静默期不会再在产出任何数据之前就触发客户端与中间层的「响应头超时」。此行为与 OpenAI、Gemini 流式路径原本的做法一致。
 - 修复原生 `/v1/messages` 流在客户端断开后仍继续读完上游响应的问题。现在请求 context 被取消(或写入失败)时会立即中止并释放上游连接,不再继续读取剩余响应 —— 长流场景下此前可能白白多跑数分钟。
 - 修复 `POST /v1/responses` 对所有上游不原生支持 Responses API 的模型（如 `claude-*`、`gemini-*`、`kimi-k2.7-code`)一律返回 `400 "Invalid JSON in request body"` 的问题。Responses→Chat Completions 转换路径此前只把 `input` 解析为数组，导致 OpenAI 官方文档中的字符串简写形式（`"input": "hello"`）解析失败。现在 `input` 同时接受纯字符串与输入项数组。

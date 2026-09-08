@@ -75,6 +75,7 @@ func (m *Manager) Handler() http.Handler {
 	mux.HandleFunc("POST /admin/api/accounts/{id}/auth/start", m.handleAuthStart)
 	mux.HandleFunc("GET /admin/api/accounts/{id}/auth/status", m.handleAuthStatus)
 	mux.HandleFunc("GET /admin/api/accounts/{id}/tokens", m.handleTokens)
+	mux.HandleFunc("GET /admin/api/accounts/{id}/usage", m.handleUsage)
 	mux.HandleFunc("GET /admin/api/accounts/{id}/models", m.handleModels)
 	mux.HandleFunc("POST /admin/api/accounts/{id}/models/refresh", m.handleModelsRefresh)
 	mux.HandleFunc("GET /admin/api/generate-key", m.handleGenerateKey)
@@ -354,6 +355,22 @@ func (m *Manager) handleTokens(w http.ResponseWriter, r *http.Request) {
 		"copilot_usable":     info.CopilotUsable,
 		"base_url":           info.BaseURL,
 	})
+}
+
+func (m *Manager) handleUsage(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	acct := m.reg.Get(id)
+	if acct == nil || acct.Auth == nil {
+		writeError(w, http.StatusNotFound, "account not found: "+id)
+		return
+	}
+
+	info, err := acct.Auth.GetUsageInfo(r.Context())
+	if err != nil {
+		writeError(w, http.StatusBadGateway, "failed to fetch usage: "+err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, info)
 }
 
 // handleModels proxies the account's cached upstream /models response so the

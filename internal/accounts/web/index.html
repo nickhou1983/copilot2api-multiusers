@@ -97,8 +97,8 @@
   <section class="panel">
     <h2>Accounts</h2>
     <table>
-      <thead><tr><th>ID</th><th>API Key</th><th>Token dir</th><th>Mode</th><th>Status</th><th>Actions</th></tr></thead>
-      <tbody id="rows"><tr><td colspan="6" class="muted">Loading…</td></tr></tbody>
+      <thead><tr><th>ID</th><th>API Key</th><th>Token dir</th><th>Mode</th><th>Status</th><th>Credits</th><th>Actions</th></tr></thead>
+      <tbody id="rows"><tr><td colspan="7" class="muted">Loading…</td></tr></tbody>
     </table>
   </section>
   </div>
@@ -189,12 +189,37 @@ function statusBadge(a) {
   return '<span class="badge no">needs auth</span>';
 }
 
+function creditsCell(usage) {
+  if (!usage) return '<span class="muted">—</span>';
+  const snapshots = usage.quota_snapshots || usage.limited_user_quotas || {};
+  const q = snapshots.premium_interactions || snapshots.credits || snapshots.ai_credits;
+  if (q && q.remaining !== undefined && q.entitlement !== undefined) {
+    const pct = q.percent_remaining !== undefined ? ` (${q.percent_remaining}%)` : "";
+    const used = q.credits_used !== undefined ? q.credits_used : Math.max(0, q.entitlement - q.remaining);
+    return `<strong>${fmtNum(used)} used</strong>
+      <div class="small muted" title="Remaining / entitlement">${fmtNum(q.remaining)} / ${fmtNum(q.entitlement)} left${pct}</div>`;
+  }
+  return '<span class="muted" title="No Credits data returned">unavailable</span>';
+}
+
+async function loadAccountUsage(id, cell) {
+  if (!cell) return;
+  try {
+    const usage = await api("GET", "/admin/api/accounts/" + encodeURIComponent(id) + "/usage");
+    cell.innerHTML = creditsCell(usage);
+    if (usage.quota_reset_date) cell.title = "Resets: " + usage.quota_reset_date;
+  } catch (e) {
+    cell.innerHTML = '<span class="badge no">error</span>';
+    cell.title = e.message;
+  }
+}
+
 async function load() {
   const rows = document.getElementById("rows");
   try {
     const accounts = await api("GET", "/admin/api/accounts");
     if (!accounts.length) {
-      rows.innerHTML = '<tr><td colspan="6" class="muted">No accounts yet. Add one above.</td></tr>';
+      rows.innerHTML = '<tr><td colspan="7" class="muted">No accounts yet. Add one above.</td></tr>';
       return;
     }
     rows.innerHTML = accounts.map(a => `
@@ -204,6 +229,7 @@ async function load() {
         <td>${a.token_dir ? `<code>${a.token_dir}</code>` : '<span class="muted">'+a.id+'</span>'}</td>
         <td><code>${a.auth_mode || "exchange"}</code></td>
         <td>${statusBadge(a)}</td>
+        <td class="credits-cell"><span class="muted">${a.authenticated ? "Loading…" : "—"}</span></td>
         <td class="actions">
           <button class="ghost" data-act="token">Token</button>
           <button class="ghost" data-act="rekey">Rotate key</button>
@@ -211,8 +237,12 @@ async function load() {
           <button class="danger" data-act="delete">Delete</button>
         </td>
       </tr>`).join("");
+  accounts.filter(a => a.authenticated).forEach(a => {
+    const row = rows.querySelector(`tr[data-id="${CSS.escape(a.id)}"]`);
+    loadAccountUsage(a.id, row && row.querySelector(".credits-cell"));
+  });
   } catch (e) {
-    rows.innerHTML = `<tr><td colspan="6" class="badge no">${e.message}</td></tr>`;
+  rows.innerHTML = `<tr><td colspan="7" class="badge no">${e.message}</td></tr>`;
   }
 }
 

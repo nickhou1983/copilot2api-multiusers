@@ -35,6 +35,22 @@ func newDirectClient(t *testing.T, githubToken string) *Client {
 	return c
 }
 
+func newExchangeClient(t *testing.T, githubToken string) *Client {
+	t.Helper()
+	dir := t.TempDir()
+	if githubToken != "" {
+		creds := `{"github_token":"` + githubToken + `"}`
+		if err := os.WriteFile(filepath.Join(dir, "credentials.json"), []byte(creds), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	c, err := NewClient(dir, ModeExchange)
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	return c
+}
+
 func TestDirectMode_GetTokenReturnsGitHubToken(t *testing.T) {
 	c := newDirectClient(t, "gho_direct123")
 	tok, err := c.GetToken(context.Background())
@@ -102,6 +118,7 @@ func TestDirectMode_GetUsageInfo(t *testing.T) {
 			if req.URL.String() != CopilotUserURL {
 				t.Errorf("URL = %q, want %q", req.URL.String(), CopilotUserURL)
 			}
+
 			if got := req.Header.Get("Authorization"); got != "token gho_direct123" {
 				t.Errorf("Authorization = %q, want direct OAuth token", got)
 			}
@@ -150,5 +167,48 @@ func TestDirectMode_GetUsageInfo(t *testing.T) {
 	}
 	if strings.Contains(string(encoded), `"sku"`) {
 		t.Errorf("direct usage response includes exchange-only fields: %s", encoded)
+	}
+}
+
+func TestExchangeMode_GetUsageInfoAcceptsObjectOrganizations(t *testing.T) {
+	oldHTTPClient := sharedHTTPClient
+	t.Cleanup(func() {
+		sharedHTTPClient = oldHTTPClient
+	})
+
+	sharedHTTPClient = &http.Client{
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			if req.URL.String() != CopilotTokenURL {
+				t.Errorf("URL = %q, want %q", req.URL.String(), CopilotTokenURL)
+			}
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     make(http.Header),
+				Body: io.NopCloser(strings.NewReader(`{
+					"sku": "copilot_for_business_seat",
+					"individual": false,
+					"limited_user_quotas": {
+						"premium_interactions": {
+							"entitlement": 300,
+							"remaining": 250
+						}
+					},
+					"organization_list": [{"login": "example-org"}],
+					"enterprise_list": [{"slug": "example-enterprise"}]
+				}`)),
+			}, nil
+		}),
+	}
+
+	c := newExchangeClient(t, "ghu_exchange123")
+	info, err := c.GetUsageInfo(context.Background())
+	if err != nil {
+		t.Fatalf("GetUsageInfo: %v", err)
+	}
+	if info.OrganizationList == nil || info.EnterpriseList == nil {
+		t.Fatalf("organization data missing: %+v", info)
+	}
+	if info.LimitedUserQuotas == nil {
+		t.Fatal("limited_user_quotas missing")
 	}
 }
